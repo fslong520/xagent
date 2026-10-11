@@ -46,8 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [projection, setProjection] = useState<AuthSessionProjection | null>(() => currentProjection())
   const [isLoading, setIsLoading] = useState(true)
   const [lastCheck, setLastCheck] = useState<{ key: string | null; at: number }>({ key: null, at: 0 })
-  const [inTeam, setInTeam] = useState(false)
-  const [teamRole, setTeamRole] = useState<TeamRole>(null)
+  // This repository ships no team model: the backend exposes no
+  // /api/teams/my-team route (only /api/agents/<id>/promote-team), so the
+  // call that used to live here 404'd on every login and was swallowed by the
+  // catch below. Team-gated controls stay hidden until a team model exists,
+  // so the value is a constant rather than a fetch result.
+  const inTeam = false
+  const teamRole: TeamRole = null
   const mountedRef = useRef(true)
   const initializationRef = useRef(0)
   const operationRef = useRef(0)
@@ -76,20 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener(AUTH_TOKEN_UPDATED_EVENT, handler); window.addEventListener("storage", handler)
     return () => { window.removeEventListener(AUTH_TOKEN_UPDATED_EVENT, handler); window.removeEventListener("storage", handler) }
   }, [sync])
-  useEffect(() => {
-    setInTeam(false); setTeamRole(null)
-    if (!token) return
-    let active = true
-    void (async () => {
-      try {
-        const response = await apiRequest(`${getApiUrl()}/api/teams/my-team`)
-        if (!active || !response.ok) return
-        const team = await response.json()
-        if (active) { setInTeam(true); setTeamRole(team?.team_role === "admin" ? "admin" : "member") }
-      } catch { /* no team context */ }
-    })()
-    return () => { active = false }
-  }, [token])
   useEffect(() => {
     if (!projection || !session.refreshToken) return
     const interval = setInterval(() => {

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -24,6 +24,7 @@ from ...context.execution import (
     note_compaction_evidence_loss,
     tool_evidence_state,
 )
+from ...context.memory_tool import StoreMemoryTool
 from ...context.skill_tool import (
     LOAD_SKILL_TOOL_NAME,
     LOADED_SKILLS_METADATA_KEY,
@@ -82,6 +83,12 @@ class AutoDecision:
     existing_context_sufficient: bool = True
     evidence_basis: str = ""
     missing_verification: str = ""
+    #: Stable facts from the conversation worth remembering for later tasks
+    #: (names, identifiers, budgets, decisions, preferences). The routing call
+    #: already runs one LLM pass per turn, so it answers this in the same call
+    #: instead of paying for a separate extraction pass. Empty for ordinary
+    #: conversational turns; the answer text itself is never stored.
+    durable_facts: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         payload = {
@@ -96,6 +103,8 @@ class AutoDecision:
         }
         if self.answer is not None:
             payload["answer"] = self.answer
+        if self.durable_facts:
+            payload["durable_facts"] = list(self.durable_facts)
         return payload
 
     @classmethod
@@ -119,6 +128,7 @@ class AutoDecision:
             ),
             evidence_basis=str(payload.get("evidence_basis", "")),
             missing_verification=str(payload.get("missing_verification", "")),
+            durable_facts=_coerce_str_list(payload.get("durable_facts")),
         )
 
 
@@ -157,6 +167,29 @@ def _coerce_bool(value: Any, *, default: bool) -> bool:
     if value is None:
         return default
     return bool(value)
+
+
+def _coerce_str_list(value: Any) -> list[str]:
+    """Normalize the router's ``durable_facts`` field to a clean string list.
+
+    The field is optional in the decision schema, so anything unparseable
+    degrades to "nothing to remember" rather than failing the routing decision
+    the user is waiting on.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items: list[Any] = [value]
+    elif isinstance(value, (list, tuple)):
+        items = list(value)
+    else:
+        return []
+    facts: list[str] = []
+    for item in items:
+        text = str(item or "").strip()
+        if text:
+            facts.append(text)
+    return facts
 
 
 @dataclass
@@ -602,6 +635,11 @@ class AutoPattern(AgentPattern):
                 await final_answer_stream.finish(answer)
             if answer:
                 context.add_assistant_message(answer)
+            await self._persist_durable_facts(
+                memory_store=memory_store,
+                runtime=runtime,
+                context=context,
+            )
             self.status = "completed"
             result = PatternResult(
                 success=True,
@@ -652,6 +690,45 @@ class AutoPattern(AgentPattern):
         self.last_result = dict(result)
         await runtime.checkpoint("auto_after_child", context=context, pattern=self)
         return result
+
+    async def _persist_durable_facts(
+        self,
+        *,
+        memory_store: Any | None,
+        runtime: PatternRuntime,
+        context: Any,
+    ) -> None:
+        """Store the facts the router marked durable (§10.4).
+
+        A direct ``final_answer`` used to leave nothing behind, so a business
+        fact mentioned in passing was lost. The router now answers "is any of
+        this worth remembering" inside the routing call it already makes, and
+        each fact goes through ``store_memory``'s judged write (merge /
+        attach / create) rather than a blind insert.
+
+        Storage is best effort: the user's answer is already settled, and a
+        memory failure must not turn a successful reply into an error.
+        """
+        if memory_store is None or self.decision is None:
+            return
+        facts = _coerce_str_list(self.decision.durable_facts)
+        if not facts:
+            return
+        task_text = ""
+        try:
+            task_text = context.current_user_request_text(prefer_display=True)
+        except Exception:
+            task_text = ""
+        tool = StoreMemoryTool(
+            memory_store=memory_store,
+            task=task_text,
+            runtime=runtime,
+        )
+        for fact in facts:
+            try:
+                await tool.execute(fact, kind="domain_insight")
+            except Exception:
+                logger.exception("AutoPattern failed to persist a durable fact")
 
     async def _interrupt_if_requested(
         self,
@@ -1284,6 +1361,16 @@ class AutoPattern(AgentPattern):
             if memory_tools_available
             else ""
         )
+        durable_rule = (
+            "Independently of the action, list in durable_facts any stable "
+            "facts from this conversation that future tasks should remember "
+            "(client or project names, identifiers, budgets, deadlines, "
+            "decisions, lasting preferences), each as a self-contained "
+            "statement. Use an empty array when nothing is durable; the "
+            "answer text itself is never a durable fact. "
+            if memory_tools_available
+            else ""
+        )
         # Both the count and the name list leave out the stored-result reader
         # (see _execution_tool_names), so its exclusion changes neither.
         tool_count = sum(
@@ -1348,6 +1435,7 @@ class AutoPattern(AgentPattern):
             "react; do not choose final_answer merely to restate or paraphrase the "
             "requested tool action. "
             f"{memory_rule}"
+            f"{durable_rule}"
             "A final answer means the latest user request is already complete and "
             "no tool or other work will happen after this routing decision. If the "
             "user-facing answer would describe a future tool action, ask the user "
@@ -1499,6 +1587,20 @@ class AutoPattern(AgentPattern):
                                 "Use an empty string when no verification is missing."
                             ),
                         },
+                        "durable_facts": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Stable facts from this conversation that future "
+                                "tasks should remember, each a self-contained "
+                                "statement (client or project names, identifiers, "
+                                "budgets, deadlines, decisions, lasting "
+                                "preferences). Use an empty array when nothing is "
+                                "durable, and never include transient chat, the "
+                                "final answer itself, or secrets, credentials and "
+                                "personal data that is not meant to persist."
+                            ),
+                        },
                     },
                     "required": [
                         "action",
@@ -1508,6 +1610,7 @@ class AutoPattern(AgentPattern):
                         "existing_context_sufficient",
                         "evidence_basis",
                         "missing_verification",
+                        "durable_facts",
                     ],
                     "additionalProperties": False,
                 },

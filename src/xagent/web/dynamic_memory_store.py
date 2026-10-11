@@ -21,8 +21,10 @@ import threading
 from dataclasses import dataclass
 from typing import Optional, Union
 
+from ..core.memory.base import MemoryStore
 from ..core.memory.in_memory import InMemoryMemoryStore
 from ..core.memory.lancedb import LanceDBMemoryStore
+from ..core.memory.remote import RemoteMemoryStore
 from .memory_lifecycle import (
     AdmissionResult,
     AuthorityCredentialUnavailable,
@@ -33,6 +35,7 @@ from .memory_lifecycle import (
     credential_failure_result,
     default_similarity_threshold,
     log_operator_guidance,
+    remote_admission_result,
 )
 from .models.database import get_db
 from .revocable_memory_store import RevocableMemoryStore, unwrap_memory_store
@@ -50,6 +53,7 @@ logger = logging.getLogger(__name__)
 MemoryStoreType = Union[
     InMemoryMemoryStore,
     LanceDBMemoryStore,
+    RemoteMemoryStore,
     UserIsolatedMemoryStore,
     RevocableMemoryStore,
 ]
@@ -153,8 +157,13 @@ class DynamicMemoryStoreManager:
         self._publication = publication
         self._generation += 1
 
-    def _revocable(self, store: MemoryStoreType) -> MemoryStoreType:
-        """Bind ``store`` to the generation it is about to be published under."""
+    def _revocable(self, store: MemoryStore) -> RevocableMemoryStore:
+        """Bind ``store`` to the generation it is about to be published under.
+
+        Accepts any ``MemoryStore`` because admission may publish a store the
+        local type alias does not enumerate (the remote adapter), and returns
+        the revocation wrapper the manager always publishes.
+        """
         return RevocableMemoryStore(store, self, self._generation + 1)
 
     def admit(self, *, writers_quiesced: bool = True) -> MemoryLifecycleStatus:
@@ -184,26 +193,33 @@ class DynamicMemoryStoreManager:
 
     def _admit_locked(self, *, writers_quiesced: bool) -> None:
         previous_publication = self._publication
-        try:
-            snapshot = _read_authority_snapshot()
-        except AuthorityCredentialUnavailable:
-            result = credential_failure_result()
-        except AuthorityUnreadable:
-            logger.warning(
-                "Persistent memory authority could not be read; admission deferred"
-            )
-            result = AdmissionResult(
-                MemoryLifecycleStatus(MemoryLifecycleState.RETRYABLE_UNAVAILABLE)
-            )
-        else:
-            if snapshot is None:
-                self._publish_in_memory_locked()
-                return
-            result = admit_authority_storage(
-                snapshot,
-                similarity_threshold=self._similarity_threshold,
-                writers_quiesced=writers_quiesced,
-            )
+        # Backend selection (方案 §3.3 table row 3, 裁决⑨). This runs before the
+        # authority read because remote mode has no authority row at all: the
+        # memory service owns the vector space. ``remote_admission_result``
+        # returns ``None`` unless XAGENT_MEMORY_BACKEND selects remote, so the
+        # local path below stays byte-for-byte unchanged.
+        result: Optional[AdmissionResult] = remote_admission_result()
+        if result is None:
+            try:
+                snapshot = _read_authority_snapshot()
+            except AuthorityCredentialUnavailable:
+                result = credential_failure_result()
+            except AuthorityUnreadable:
+                logger.warning(
+                    "Persistent memory authority could not be read; admission deferred"
+                )
+                result = AdmissionResult(
+                    MemoryLifecycleStatus(MemoryLifecycleState.RETRYABLE_UNAVAILABLE)
+                )
+            else:
+                if snapshot is None:
+                    self._publish_in_memory_locked()
+                    return
+                result = admit_authority_storage(
+                    snapshot,
+                    similarity_threshold=self._similarity_threshold,
+                    writers_quiesced=writers_quiesced,
+                )
 
         if result.store is None:
             # A failed admission publishes nothing and takes nothing away: a

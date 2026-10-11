@@ -558,6 +558,29 @@ export function processTraceEvents(
         }
       }
 
+      if (event.event_type === 'task_end_memory_retrieve') {
+        // Automatic memory recall happens before the run's own step does, so
+        // this event has no step of its own; give the default group a name so
+        // the filter below keeps it. One status line is the whole trace: the
+        // user sees that memory was consulted and how much came back.
+        const count = typeof eventData.memories_count === 'number'
+          ? eventData.memories_count
+          : Array.isArray(eventData.memories)
+            ? eventData.memories.length
+            : 0;
+        if (!step.stepName) {
+          step.stepName = t('traceEventRenderer.taskExecution');
+        }
+        step.actions.push({
+          id: eventId,
+          type: 'info',
+          title: t('traceEventRenderer.memoryRetrieved', { count }),
+          status: 'completed',
+          timestamp,
+          data: { statusLine: true },
+        });
+      }
+
       if (event.event_type === 'workforce_delegation_start') {
         lastCompletedWorkforceStepId = null;
         const workerName = String(

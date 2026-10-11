@@ -3694,6 +3694,7 @@ Build when you need.`,
   traceEventRenderer: {
     skillSelected: "Selected Skill",
     taskExecution: "Thinking",
+    memoryRetrieved: "Searched memory ({count} found)",
     thoughtProcess: "Thought process",
     showProcess: "Show process",
     hideProcess: "Hide process",

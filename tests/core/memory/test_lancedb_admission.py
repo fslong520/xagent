@@ -196,6 +196,10 @@ def test_failed_manager_replacement_preserves_all_previous_state(monkeypatch):
     )
     # Model a manager that is serving but still owes an admission attempt.
     manager._status = MemoryLifecycleStatus(MemoryLifecycleState.RETRYABLE_UNAVAILABLE)
+    # This test exercises the *local* admission path; pin that premise so a
+    # developer .env selecting the remote backend cannot divert _admit_locked
+    # into the remote branch (T14 backend selection runs before the authority read).
+    monkeypatch.setattr(dynamic_memory_store, "remote_admission_result", lambda: None)
     monkeypatch.setattr(
         dynamic_memory_store,
         "_read_authority_snapshot",

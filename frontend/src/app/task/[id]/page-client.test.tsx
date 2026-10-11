@@ -11,6 +11,7 @@ const navigation = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useParams: () => navigation.params,
+  usePathname: () => `/task/${navigation.params.id}`,
   useRouter: () => ({ push: navigation.push }),
 }))
 
@@ -42,7 +43,7 @@ vi.mock("@/contexts/app-context-chat", async (importOriginal) => {
   }
 })
 
-import TaskDetailPage from "./page-client"
+import TaskDetailPage, { STATIC_EXPORT_SHELL_PARAM, resolveTaskIdFromUrl } from "./page-client"
 
 function baseState(overrides: Partial<AppState> = {}): Partial<AppState> {
   return {
@@ -382,5 +383,28 @@ describe("TaskDetailPage child inspector", () => {
     app.state = baseState({ taskId: 2 })
     rerender(<I18nProvider initialLocale="en"><TaskDetailPage /></I18nProvider>)
     expect(screen.queryByTestId("child-drawer")).not.toBeInTheDocument()
+  })
+})
+
+describe("resolveTaskIdFromUrl", () => {
+  it("reads the real id from the URL when the static-export shell hardcodes its placeholder param", () => {
+    // Next derives useParams() from the prerendered flight payload, which the
+    // static export emits with "__shell__" for every real id (page.tsx's
+    // generateStaticParams). The pathname is the only truthful source there.
+    expect(resolveTaskIdFromUrl("/task/35", { id: STATIC_EXPORT_SHELL_PARAM })).toBe("35")
+  })
+
+  it("falls back to the route param when the pathname is unavailable", () => {
+    expect(resolveTaskIdFromUrl(null, { id: "23" })).toBe("23")
+  })
+
+  it("keeps the standalone deployment's real param and ignores url noise", () => {
+    expect(resolveTaskIdFromUrl("/task/23/", { id: "23" })).toBe("23")
+    expect(resolveTaskIdFromUrl("/task/agent", { id: "agent" })).toBe("agent")
+  })
+
+  it("returns undefined when neither the pathname nor the param names an id", () => {
+    expect(resolveTaskIdFromUrl("/task", {})).toBeUndefined()
+    expect(resolveTaskIdFromUrl(`/task/${STATIC_EXPORT_SHELL_PARAM}`, { id: STATIC_EXPORT_SHELL_PARAM })).toBe(STATIC_EXPORT_SHELL_PARAM)
   })
 })

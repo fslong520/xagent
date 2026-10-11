@@ -1425,12 +1425,17 @@ class ExecutionContext:
                 "You have memory tools for knowledge that should outlive this "
                 "task. While working, use store_memory when you notice a "
                 "stable user preference or a correction the user gave you, a "
-                "non-obvious mistake you made and how you fixed it, or a "
-                "reusable lesson about this domain or its tools; do not store "
-                "routine task completions or widely known facts. If a "
-                "retrieved memory contradicts what you observe now, correct "
-                "it with update_memory or remove it with delete_memory "
-                "(find memory ids via search_memory)."
+                "non-obvious mistake you made and how you fixed it, a reusable "
+                "lesson about this domain or its tools, or a durable business "
+                "or project fact that a later task would need (a client or "
+                "project name, an identifier, a budget, a deadline, a "
+                "decision, or a lasting constraint), written as a "
+                "self-contained statement. Do not store routine task "
+                "completions, transient chatter, the answer you just "
+                "produced, widely known facts, or secrets and credentials. "
+                "If a retrieved memory contradicts what you observe now, "
+                "correct it with update_memory or remove it with "
+                "delete_memory (find memory ids via search_memory)."
             )
         skill_index = self.metadata.get(SKILL_INDEX_METADATA_KEY)
         if isinstance(skill_index, list) and skill_index:

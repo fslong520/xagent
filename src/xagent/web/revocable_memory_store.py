@@ -118,6 +118,25 @@ class RevocableMemoryStore(MemoryStore):
     def list_scope_dimension_values(self, dim_key: str) -> set[str]:
         return self._live().list_scope_dimension_values(dim_key)
 
+    def remember(self, note: MemoryNote, *, force: bool = False) -> MemoryResponse:
+        """Forward the judged write (§10.4) to the live delegate.
+
+        ``remember`` is an optional capability, not part of the ``MemoryStore``
+        ABC: only the remote adapter offers it. Forwarding it here (through
+        ``_live``, so a revoked reference still fails closed) keeps the wrapper
+        from hiding the capability -- an unwrapped remote store would be judged
+        but a wrapped one would silently fall back to a plain add.
+
+        A delegate without the capability raises ``AttributeError`` so the
+        caller's duck-typed probe can treat it as "not supported" instead of
+        mistaking the wrapper for an implementation.
+        """
+        delegate = self._live()
+        remember = getattr(delegate, "remember", None)
+        if not callable(remember):
+            raise AttributeError("memory store does not support remember")
+        return remember(note, force=force)
+
 
 def unwrap_memory_store(store: Any) -> Any:
     """Peel the revocation and user-isolation wrappers off ``store``.

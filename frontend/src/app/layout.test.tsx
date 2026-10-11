@@ -106,9 +106,11 @@ describe("RootLayout provider boundary", () => {
     render(<RootLayout><AuthProbe /></RootLayout>)
 
     await waitFor(() => {
-      expect(apiRequest).toHaveBeenCalledWith(expect.stringContaining("/api/teams/my-team"))
       expect(apiRequest).toHaveBeenCalledWith(expect.stringContaining("/api/mcp/apps"))
     })
+    // The provider must not call the team endpoint: this repository ships no
+    // /api/teams/my-team route, so the old call only ever 404'd.
+    expect(apiRequest).not.toHaveBeenCalledWith(expect.stringContaining("/api/teams/my-team"))
     expect(screen.getByTestId("auth-guard")).toBeInTheDocument()
     expect(screen.getByTestId("layout-content")).toBeInTheDocument()
     expect(screen.getByTestId("voice-controller")).toBeInTheDocument()

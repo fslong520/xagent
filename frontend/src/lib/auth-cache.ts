@@ -396,7 +396,11 @@ async function withMutationLock<T>(conditional: boolean, action: (context: AuthM
   const storage = getAuthStorage()
   if (!storage) return { status: "unavailable", reason: "storage_unavailable" }
   const locks = typeof navigator === "undefined" ? undefined : navigator.locks
-  if (!locks && conditional) return { status: "unavailable", reason: "coordination_unavailable" }
+  // Without Web Locks (non-secure contexts such as a LAN http:// address,
+  // where navigator.locks is not exposed) fall through to the lockless run()
+  // branch below: same-tab snapshot/rollback still applies, only the
+  // cross-tab mutual exclusion is skipped. Blocking sign-in entirely there
+  // would lock users out of plain-HTTP deployments.
   let shouldDispatch = false
   const run = async (): Promise<AuthMutationAttempt<T>> => {
     let snapshot: Map<string, string | null> | null = null

@@ -80,7 +80,13 @@ async def test_store_memory_adds_note_with_metadata() -> None:
         content="User prefers reports in Chinese.", kind="user_preference"
     )
 
-    assert result == {"success": True, "stored": True, "memory_id": "mem-1"}
+    assert result == {
+        "success": True,
+        "stored": True,
+        "action": "create",
+        "memory_id": "mem-1",
+        "message": "Stored as a new memory (mem-1).",
+    }
     note = store.added[0]
     assert note.content == "User prefers reports in Chinese."
     assert note.category == "react_memory"
@@ -91,17 +97,24 @@ async def test_store_memory_adds_note_with_metadata() -> None:
 
 
 @pytest.mark.asyncio
-async def test_store_memory_skips_duplicate() -> None:
-    store = RecordingMemoryStore(search_results=[object()])
+async def test_store_memory_merges_into_a_similar_note() -> None:
+    """A similar hit is folded into the existing note, never dropped.
+
+    The old behaviour skipped the write ("stored": false) and lost the new
+    fact; the judged path keeps both by updating the note in place.
+    """
+    store = CrudMemoryStore({"mem-1": _note("mem-1", "Same insight.")})
     tool = StoreMemoryTool(memory_store=store, task="task")
 
-    result = await tool.execute(content="Same insight again.")
+    result = await tool.execute(content="Same insight, refined.")
 
     assert result["success"] is True
-    assert result["stored"] is False
-    assert store.added == []
+    assert result["stored"] is True
+    assert result["action"] == "update"
+    assert store.updated[0].id == "mem-1"
+    assert "Same insight, refined." in str(store.updated[0].content)
     assert store.searches[0]["filters"] == {"category": "react_memory"}
-    assert tool.stored_count == 0
+    assert tool.stored_count == 1
 
 
 @pytest.mark.asyncio
@@ -435,3 +448,101 @@ async def test_search_memory_coerces_invalid_limit() -> None:
 
     assert result["success"] is True
     assert store.searches[0]["k"] == 5
+
+
+@pytest.mark.asyncio
+async def test_store_memory_falls_back_when_the_judged_write_is_unsupported() -> None:
+    """A wrapper exposing ``remember`` over a local store must not fail the write."""
+
+    class UnsupportedRememberStore(RecordingMemoryStore):
+        def remember(self, note: MemoryNote) -> MemoryResponse:
+            raise AttributeError("memory store does not support remember")
+
+    store = UnsupportedRememberStore()
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="An insight.")
+
+    assert result["success"] is True
+    assert result["action"] == "create"
+    assert len(store.added) == 1
+
+
+class JudgedMemoryStore(RecordingMemoryStore):
+    """Store exposing the judged ``remember`` write of the remote adapter."""
+
+    def __init__(
+        self, *, action: str, parent_id: str | None = None, success: bool = True
+    ) -> None:
+        super().__init__()
+        self.action = action
+        self.parent_id = parent_id
+        self.success = success
+        self.remembered: list[MemoryNote] = []
+
+    def remember(self, note: MemoryNote) -> MemoryResponse:
+        self.remembered.append(note)
+        if not self.success:
+            return MemoryResponse(success=False, error="judged write refused")
+        return MemoryResponse(
+            success=True,
+            memory_id="mem-judged",
+            metadata={"action": self.action, "parent_id": self.parent_id},
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("action", "parent_id", "message_fragment"),
+    [
+        ("merge", None, "Merged into an existing similar memory"),
+        ("parent", "mem-parent", "Attached as a child of a related memory"),
+        ("create", None, "Stored as a new memory"),
+    ],
+)
+async def test_store_memory_dispatches_the_judged_branch(
+    action: str, parent_id: str | None, message_fragment: str
+) -> None:
+    """All three branches of the judged write are reported, none is dropped."""
+    store = JudgedMemoryStore(action=action, parent_id=parent_id)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["stored"] is True
+    assert result["action"] == action
+    assert result["memory_id"] == "mem-judged"
+    assert message_fragment in result["message"]
+    assert store.remembered[0].content == "A durable business fact."
+    assert store.remembered[0].metadata["source"] == "store_memory"
+    if action == "parent":
+        assert result["parent_id"] == "mem-parent"
+    assert tool.stored_count == 1
+
+
+@pytest.mark.asyncio
+async def test_store_memory_reports_a_failed_judged_write() -> None:
+    store = JudgedMemoryStore(action="create", success=False)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["success"] is False
+    assert result["error"] == "judged write refused"
+    assert tool.stored_count == 0
+    assert store.added == []
+
+
+@pytest.mark.asyncio
+async def test_store_memory_emits_the_branch_in_the_store_trace() -> None:
+    tracer = TraceEventRecorder()
+    store = JudgedMemoryStore(action="parent", parent_id="mem-parent")
+    tool = StoreMemoryTool(
+        memory_store=store, task="task", runtime=FakeRuntime(tracer=tracer)
+    )
+
+    await tool.execute(content="A durable fact.")
+
+    assert tracer.events[-1]["data"]["storage_action"] == "parent"
+    assert tracer.events[-1]["data"]["storage_success"] is True

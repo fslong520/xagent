@@ -1104,6 +1104,46 @@ describe("TraceEventRenderer", () => {
     )
   })
 
+  it("surfaces an automatic memory recall as one status line", () => {
+    // Automatic recall runs before any step of the run does, so this event
+    // carries no step; the renderer must still show that memory was consulted
+    // instead of silently dropping the event.
+    render(
+      <TraceEventRenderer
+        events={[
+          {
+            event_id: "mem-start",
+            event_type: "task_start_memory_retrieve",
+            timestamp: 1000,
+            data: { query: "apex review", category: "react_memory" },
+          },
+          {
+            event_id: "mem-end",
+            event_type: "task_end_memory_retrieve",
+            timestamp: 1100,
+            data: {
+              query: "apex review",
+              category: "react_memory",
+              memories_count: 3,
+              found: true,
+            },
+          },
+        ]}
+      />,
+    )
+
+    const stepToggles = screen.getAllByRole("button", {
+      name: /traceEventRenderer\.taskExecution/,
+    })
+    expect(stepToggles).toHaveLength(1)
+
+    fireEvent.click(stepToggles[0])
+
+    expect(
+      screen.getByText("traceEventRenderer.memoryRetrieved:3"),
+    ).toBeInTheDocument()
+  })
+
   it("keeps trace event ordering stable when timestamps are invalid", () => {
     render(
       <TraceEventRenderer

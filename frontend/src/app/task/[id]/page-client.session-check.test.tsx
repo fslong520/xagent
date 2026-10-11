@@ -11,6 +11,7 @@ import type { AppState } from "@/contexts/app-context-chat"
 const navigation = vi.hoisted(() => ({ params: { id: "1" } as { id: string } }))
 vi.mock("next/navigation", () => ({
   useParams: () => navigation.params,
+  usePathname: () => `/task/${navigation.params.id}`,
   useRouter: () => ({ push: vi.fn() }),
 }))
 

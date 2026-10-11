@@ -2,7 +2,7 @@
 
 import React, { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   ReactFlow,
   Background,
@@ -37,6 +37,7 @@ import type {
 } from "@/types/workforce"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { resolveDynamicRouteParam } from "@/lib/static-export-route"
 import { apiRequest } from "@/lib/api-wrapper"
 
 // ─── Flow panel node components ───────────────────────────────────────────────
@@ -273,10 +274,11 @@ export default function WorkforceRunPage() {
 function WorkforceRunPageInner() {
   const { t } = useI18n()
   const params = useParams()
+  const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { sendMessage, setTaskId, closeFilePreview, dispatch, state } = useApp()
-  const id = Array.isArray(params.id) ? params.id[0] : params.id
+  const id = resolveDynamicRouteParam(pathname, params, "id", "/workforces/:id/run")
   const runParam = searchParams.get("run")
 
   const [workforce, setWorkforce] = useState<WorkforceDetail | null>(null)

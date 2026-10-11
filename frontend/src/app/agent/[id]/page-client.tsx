@@ -1,9 +1,10 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, usePathname, useRouter } from "next/navigation"
 import { apiRequest } from "@/lib/api-wrapper"
 import { getApiUrl } from "@/lib/utils"
+import { resolveDynamicRouteParam } from "@/lib/static-export-route"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Bot } from "lucide-react"
 import { useI18n } from "@/contexts/i18n-context"
@@ -35,8 +36,9 @@ export default function AgentChatPage() {
   const { t } = useI18n()
   const { dispatch, sendMessage } = useApp()
   const params = useParams()
+  const pathname = usePathname()
   const router = useRouter()
-  const agentId = params.id as string
+  const agentId = resolveDynamicRouteParam(pathname, params, "id", "/agent/:id")
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
@@ -52,6 +54,10 @@ export default function AgentChatPage() {
   // Load agent
   useEffect(() => {
     const fetchAgent = async () => {
+      if (!agentId) {
+        setLoading(false)
+        return
+      }
       try {
         setLoading(true)
         const response = await apiRequest(`${getApiUrl()}/api/agents/${agentId}`)
@@ -89,7 +95,7 @@ export default function AgentChatPage() {
     setIsSending(true)
 
     try {
-      const parsedAgentId = parseInt(agentId, 10)
+      const parsedAgentId = parseInt(agentId ?? "", 10)
       if (Number.isNaN(parsedAgentId)) {
         throw new Error(t('builds.list.chat.notFound'))
       }

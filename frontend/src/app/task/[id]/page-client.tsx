@@ -2,7 +2,7 @@
 
 import React, { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { ArrowLeft, Loader2, PanelRight } from "lucide-react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { TaskConversationPanel } from "@/components/task/task-conversation-panel"
 import { TaskAgentExecutionDrawer } from "@/components/task/task-agent-execution-drawer"
@@ -43,13 +43,39 @@ export function nextSessionCheck(
   return { next: { viewed: stateTaskId, reconnects: now.reconnects }, check: { taskId: stateTaskId, cause: "opened" } }
 }
 
+// The placeholder id the static export renders /task/[id] under
+// (see page.tsx's generateStaticParams). FastAPI serves that one shell for
+// every real id.
+export const STATIC_EXPORT_SHELL_PARAM = "__shell__"
+
+// Which task the URL names. The shell's prerendered flight payload hardcodes
+// the placeholder for the `id` segment, and Next derives useParams() from that
+// payload rather than from the address bar - so on the static export (the
+// single-process pip/uvx deployment) useParams() reports "__shell__" for
+// /task/35 and the page never sets a task id (no socket, no history, no
+// model). Read the real id from the pathname, and keep the param as the
+// fallback for the Docker/standalone deployment, where the server renders the
+// route under its actual id.
+export function resolveTaskIdFromUrl(
+  pathname: string | null | undefined,
+  params: unknown,
+): string | undefined {
+  const fromParams = params && typeof params === "object" ? (params as { id?: unknown }).id : undefined
+  const match = typeof pathname === "string" ? /^\/task\/([^/?#]+)\/?$/.exec(pathname) : null
+  const fromPath = match ? decodeURIComponent(match[1]) : undefined
+  if (fromPath && fromPath !== STATIC_EXPORT_SHELL_PARAM) return fromPath
+  if (typeof fromParams === "string" && fromParams !== STATIC_EXPORT_SHELL_PARAM) return fromParams
+  return fromPath
+}
+
 function TaskDetailContent() {
   const { state, setTaskId, closeFilePreview, sameTaskReconnects } = useApp()
   const { openSessionCheck } = useConnectorRuntimeDialogActions()
   const { t } = useI18n()
   const params = useParams()
+  const pathname = usePathname()
   const router = useRouter()
-  const taskIdFromUrl = params.id
+  const taskIdFromUrl = resolveTaskIdFromUrl(pathname, params)
   const [progressPanelOpen, setProgressPanelOpen] = useState(false)
   const [agentExecution, setAgentExecution] = useState<{ taskId: number; selection: AgentExecutionSummary } | null>(null)
   const dismissedProgressRunKeyRef = useRef<string | null>(null)

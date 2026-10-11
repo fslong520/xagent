@@ -294,6 +294,14 @@ TOOL_MAX_FIELD_COUNT = "XAGENT_TOOL_MAX_FIELD_COUNT"
 MAX_TRACE_PAYLOAD_BYTES = "XAGENT_MAX_TRACE_PAYLOAD_BYTES"
 INLINE_FILE_DELIVERY_MAX_BYTES = "XAGENT_INLINE_FILE_DELIVERY_MAX_BYTES"
 
+# Remote memory backend (memory SaaS adapter, docs/方案-xagent记忆SaaS.md §3.3).
+# When selected, xagent publishes a RemoteMemoryStore instead of the local
+# LanceDB store; the service URL and bearer key are required together.
+MEMORY_BACKEND = "XAGENT_MEMORY_BACKEND"
+MEMORY_SERVICE_URL = "XAGENT_MEMORY_SERVICE_URL"
+MEMORY_SERVICE_KEY = "XAGENT_MEMORY_SERVICE_KEY"
+MEMORY_AGENT_SEATS = "XAGENT_MEMORY_AGENT_SEATS"
+
 WEB_SEARCH_PROVIDERS = {"auto", "google", "tavily", "exa", "zhipu"}
 
 
@@ -3959,3 +3967,48 @@ def get_retention_batch_pause_seconds() -> float:
     """
     value = _get_positive_float_env(RETENTION_BATCH_PAUSE_SECONDS, None)
     return 5.0 if value is None else value
+
+
+def get_memory_backend() -> str:
+    """Return the selected persistent-memory backend name.
+
+    ``""`` (the default) keeps the local LanceDB lifecycle. ``"remote"``
+    selects the memory SaaS adapter
+    (``xagent.core.memory.remote.RemoteMemoryStore``). The value is
+    normalized to lower case; an unknown name is returned as-is so the
+    selection point can report it instead of silently falling back.
+    """
+    return os.getenv(MEMORY_BACKEND, "").strip().lower()
+
+
+def get_memory_service_url() -> str | None:
+    """Return the memory SaaS base URL, or ``None`` when unset."""
+    value = os.getenv(MEMORY_SERVICE_URL)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def get_memory_service_key() -> str | None:
+    """Return the memory SaaS bearer key, or ``None`` when unset.
+
+    Read from the environment only: the key must never be written into the
+    repository or a log (方案 §3.4.2).
+    """
+    value = os.getenv(MEMORY_SERVICE_KEY)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def get_memory_agent_seats_enabled() -> bool:
+    """Whether a delegated child may run under its own agent seat (T14 §0.2).
+
+    On by default. The switch only gates the identity override: the memory
+    service still decides whether the seat exists (the adapter probes it), and
+    both a disabled switch and a failed probe keep the historical behaviour of
+    the child running under the parent's identity.
+    """
+    return _get_bool_env(MEMORY_AGENT_SEATS, True)

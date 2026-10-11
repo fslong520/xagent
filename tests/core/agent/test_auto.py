@@ -36,6 +36,7 @@ from xagent.core.model.chat.tool_protocol import (
     tool_protocol_error_response,
 )
 from xagent.core.model.chat.types import ChunkType, StreamChunk
+from xagent.core.memory.core import MemoryResponse
 
 DAG_COMPLETION_TOOL_NAME = "assess_dag_completion"
 
@@ -338,6 +339,7 @@ def decision_tool_response(
     existing_context_sufficient: bool = True,
     evidence_basis: str = "current conversation",
     missing_verification: str = "",
+    durable_facts: list[str] | None = None,
 ) -> dict[str, Any]:
     arguments: dict[str, Any] = {
         "action": action,
@@ -346,6 +348,7 @@ def decision_tool_response(
         "existing_context_sufficient": existing_context_sufficient,
         "evidence_basis": evidence_basis,
         "missing_verification": missing_verification,
+        "durable_facts": list(durable_facts or []),
     }
     if answer is not None:
         arguments["answer"] = answer
@@ -1426,6 +1429,114 @@ async def test_auto_pattern_passes_memory_to_child_pattern() -> None:
     assert child.kwargs is not None
     assert child.kwargs["memory_store"] is memory_store
     assert child.kwargs["memory_similarity_threshold"] == 0.42
+
+
+class JudgedAutoMemoryStore(FakeMemoryStore):
+    """Auto-routing store that exposes the judged ``remember`` write."""
+
+    def __init__(
+        self,
+        *,
+        action: str = "create",
+        parent_id: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        super().__init__()
+        self.action = action
+        self.parent_id = parent_id
+        self.error = error
+        self.remembered: list[Any] = []
+
+    def remember(self, note: Any) -> MemoryResponse:
+        self.remembered.append(note)
+        if self.error is not None:
+            raise RuntimeError(self.error)
+        return MemoryResponse(
+            success=True,
+            memory_id="mem-auto",
+            metadata={"action": self.action, "parent_id": self.parent_id},
+        )
+
+
+@pytest.mark.asyncio
+async def test_auto_final_answer_persists_durable_facts() -> None:
+    """A direct final answer must not drop a stable business fact.
+
+    The router names the durable facts in its own decision call, so no extra
+    LLM pass is paid; the facts then go through the judged write (never a
+    blind insert), which is what makes auto mode store anything at all.
+    """
+    store = JudgedAutoMemoryStore(action="parent", parent_id="mem-parent")
+    llm = FakeLLM(
+        [
+            decision_tool_response(
+                AutoAction.FINAL_ANSWER.value,
+                "Simple confirmation.",
+                "记下了，评审定在周四。",
+                durable_facts=["客户 Apex 的季度评审定在周四。"],
+            )
+        ]
+    )
+    pattern = AutoPattern()
+    context = ExecutionContext()
+    context.add_user_message("记一下，Apex 的季度评审定在周四")
+
+    result = await pattern.run(context=context, tools=[], llm=llm, memory_store=store)
+
+    assert result["success"] is True
+    assert result["output"] == "记下了，评审定在周四。"
+    assert len(store.remembered) == 1
+    assert store.remembered[0].content == "客户 Apex 的季度评审定在周四。"
+    assert result["auto_decision"]["durable_facts"] == [
+        "客户 Apex 的季度评审定在周四。"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_auto_final_answer_stores_nothing_without_durable_facts() -> None:
+    store = JudgedAutoMemoryStore()
+    llm = FakeLLM(
+        [
+            decision_tool_response(
+                AutoAction.FINAL_ANSWER.value,
+                "Simple arithmetic.",
+                "2",
+            )
+        ]
+    )
+    pattern = AutoPattern()
+    context = ExecutionContext()
+    context.add_user_message("1+1 等于几？只答数字")
+
+    result = await pattern.run(context=context, tools=[], llm=llm, memory_store=store)
+
+    assert result["success"] is True
+    assert store.remembered == []
+    assert "durable_facts" not in result["auto_decision"]
+
+
+@pytest.mark.asyncio
+async def test_auto_final_answer_survives_a_memory_store_failure() -> None:
+    """Storage is best effort: the user's answer is already settled."""
+    store = JudgedAutoMemoryStore(error="memory service down")
+    llm = FakeLLM(
+        [
+            decision_tool_response(
+                AutoAction.FINAL_ANSWER.value,
+                "Simple confirmation.",
+                "好的。",
+                durable_facts=["客户 Apex 的评审定在周四。"],
+            )
+        ]
+    )
+    pattern = AutoPattern()
+    context = ExecutionContext()
+    context.add_user_message("记一下 Apex 评审时间")
+
+    result = await pattern.run(context=context, tools=[], llm=llm, memory_store=store)
+
+    assert result["success"] is True
+    assert result["output"] == "好的。"
 
 
 @pytest.mark.asyncio

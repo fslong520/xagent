@@ -6,6 +6,7 @@ const apiRequestMock = vi.hoisted(() => vi.fn());
 const toastErrorMock = vi.hoisted(() => vi.fn());
 const routerPushMock = vi.hoisted(() => vi.fn());
 const paramsMock = vi.hoisted(() => ({ value: { id: "sales-email-lead-response-agent" } }));
+const pathnameMock = vi.hoisted(() => ({ value: "/templates/sales-email-lead-response-agent" }));
 const hireAgentFromTemplateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api-wrapper", async () => {
@@ -27,6 +28,7 @@ vi.mock("sonner", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPushMock, replace: vi.fn() }),
   useParams: () => paramsMock.value,
+  usePathname: () => pathnameMock.value,
 }));
 
 vi.mock("@/contexts/i18n-context", () => ({
@@ -94,11 +96,28 @@ beforeEach(() => {
   routerPushMock.mockReset();
   hireAgentFromTemplateMock.mockReset();
   paramsMock.value = { id: "sales-email-lead-response-agent" };
+  pathnameMock.value = "/templates/sales-email-lead-response-agent";
 });
 
 afterEach(cleanup);
 
 describe("TemplateDetailPage", () => {
+  it("reads the template id from the pathname when the static export placeholder is in params", async () => {
+    paramsMock.value = { id: "__shell__" };
+    pathnameMock.value = "/templates/sales-email-lead-response-agent";
+    apiRequestMock.mockResolvedValueOnce(jsonResponse(makeTemplate()));
+
+    render(<TemplateDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Leo")).toBeInTheDocument();
+    });
+    expect(apiRequestMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/templates/sales-email-lead-response-agent")
+    );
+    expect(apiRequestMock).not.toHaveBeenCalledWith(expect.stringContaining("__shell__"));
+  });
+
   it("renders the persona header, WHAT IT DOES, and WHAT'S INCLUDED from the fetched template", async () => {
     apiRequestMock.mockResolvedValueOnce(jsonResponse(makeTemplate()));
 

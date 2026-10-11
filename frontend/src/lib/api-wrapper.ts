@@ -60,7 +60,15 @@ async function withRefreshLock<T>(session: AuthSessionSnapshot, action: () => Pr
   const lockName = refreshLockName(session)
   const locks = typeof navigator === "undefined" ? undefined : navigator.locks
   if (!lockName) return { status: "unavailable", reason: "operation_failed" }
-  if (!locks) return { status: "unavailable", reason: "coordination_unavailable" }
+  if (!locks) {
+    // Non-secure contexts (LAN http://) expose no Web Locks; run the refresh
+    // without cross-tab coordination instead of failing sign-in outright.
+    try {
+      return { status: "completed", value: await action() }
+    } catch {
+      return { status: "unavailable", reason: "operation_failed" }
+    }
+  }
   try {
     return { status: "completed", value: await locks.request(lockName, action) }
   } catch {

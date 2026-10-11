@@ -1,16 +1,19 @@
 "use client"
 
-import { useParams } from "next/navigation"
+import React from "react"
+import { useParams, usePathname } from "next/navigation"
 import { PublicAgentChatPage } from "@/components/widget/public-agent-chat-page"
+import { resolveDynamicRouteParam } from "@/lib/static-export-route"
 
 export default function ShareChatPage() {
   const params = useParams()
-  const token = params.token as string
+  const pathname = usePathname()
+  const token = resolveDynamicRouteParam(pathname, params, "token", "/share/:token")
 
   return (
     <PublicAgentChatPage
       authMode="share"
-      routeToken={token}
+      routeToken={token ?? ""}
     />
   )
 }

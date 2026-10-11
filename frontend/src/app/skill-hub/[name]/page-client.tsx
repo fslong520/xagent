@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useCallback, useEffect, useState } from "react";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -22,6 +22,7 @@ import { badgeForSource, ScanBadge } from "@/components/skill-hub/badges";
 import { useI18n } from "@/contexts/i18n-context";
 import { apiRequest } from "@/lib/api-wrapper";
 import { cn, getApiUrl } from "@/lib/utils";
+import { resolveDynamicRouteParam } from "@/lib/static-export-route";
 import type {
   RegistrySkillDetail,
   SkillDetail,
@@ -43,7 +44,9 @@ type ViewMode = "installed" | "registry";
 
 export default function SkillDetailPage() {
   const params = useParams<{ name: string }>();
+  const pathname = usePathname();
   const router = useRouter();
+  const name = resolveDynamicRouteParam(pathname, params, "name", "/skill-hub/:name");
   const apiBase = getApiUrl();
   const { t } = useI18n();
 
@@ -68,7 +71,6 @@ export default function SkillDetailPage() {
   const [loading, setLoading] = useState(true);
 
   const loadSkill = useCallback(async () => {
-    const name = params?.name;
     if (!name) return;
     setLoading(true);
     setError(null);
@@ -107,7 +109,7 @@ export default function SkillDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [params?.name, apiBase]);
+  }, [name, apiBase]);
 
   useEffect(() => {
     loadSkill();

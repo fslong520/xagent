@@ -52,6 +52,11 @@ const translateMock = vi.hoisted(
 
 vi.mock("next/navigation", () => ({
   useParams: () => paramsMock,
+  usePathname: () => {
+    const raw = paramsMock.id
+    const id = Array.isArray(raw) ? raw[0] : raw
+    return id ? `/workforces/${id}` : "/workforces"
+  },
   useRouter: () => ({ push: routerPushMock, replace: routerReplaceMock }),
   useSearchParams: () => searchParamsMock,
 }))

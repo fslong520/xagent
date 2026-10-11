@@ -5589,6 +5589,22 @@ export function AppProvider({
                 }
               })
 
+              // Also record the recall on the turn's trace: the placeholder
+              // bubble above never renders (the timeline keeps only user
+              // messages, results and system notices), so this is the one
+              // line that tells the user memory was consulted - see
+              // TraceEventRenderer's task_end_memory_retrieve branch.
+              dispatch({
+                type: "ADD_TRACE_EVENT",
+                payload: {
+                  event_id: generateMessageId(`memory-retrieve-end-${stepId}`),
+                  event_type: eventType,
+                  step_id: eventData.step_id,
+                  timestamp: message.timestamp,
+                  data: eventData,
+                }
+              })
+
               // Memory retrieval end event
               dispatch({
                 type: "ADD_MESSAGE",

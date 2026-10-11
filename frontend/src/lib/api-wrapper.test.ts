@@ -394,14 +394,20 @@ describe("api-wrapper auth refresh", () => {
     expect(readAuthCache()).toBeNull()
   })
 
-  it("does not issue a conditional refresh without Web Locks while explicit logout remains available", async () => {
+  it("issues a refresh without Web Locks via lockless degradation while logout stays available", async () => {
     writeAuthCache(user, "old-access", "old-refresh", 120, 240)
     Object.defineProperty(navigator, "locks", { configurable: true, value: undefined })
-    const fetchMock = vi.spyOn(globalThis, "fetch")
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      access_token: "new-access",
+      refresh_token: "new-refresh",
+      expires_in: 120,
+      refresh_expires_in: 240,
+    }), { status: 200, headers: { "Content-Type": "application/json" } }))
 
-    await expect(refreshStoredAccessToken(readAuthSessionSnapshot())).resolves.toEqual({ status: "unavailable", accessToken: null, reason: "coordination_unavailable" })
+    await expect(refreshStoredAccessToken(readAuthSessionSnapshot())).resolves.toMatchObject({ status: "refreshed", accessToken: "new-access" })
     await expect(clearStoredAuth()).resolves.toMatchObject({ status: "cleared", credentialsCleared: true })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalled()
   })
 
   it("returns rejected without making a refresh request when the captured session has no refresh credential", async () => {

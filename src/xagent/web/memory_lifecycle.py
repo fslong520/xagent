@@ -30,6 +30,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
+from ..config import (
+    MEMORY_SERVICE_KEY,
+    MEMORY_SERVICE_URL,
+    get_memory_backend,
+)
 from ..core.memory import (
     DormantLanceDBMemoryHandle,
     MemoryStorageCapabilities,
@@ -38,10 +43,17 @@ from ..core.memory import (
     StorageAdmissionState,
     admit_lancedb_memory_storage,
 )
+from ..core.memory.base import MemoryStore
 from ..core.memory.lancedb import LanceDBMemoryStore
 from ..core.memory.lancedb_maintenance import (
     DEFAULT_LOCK_TIMEOUT,
     validate_lock_timeout,
+)
+from ..core.memory.remote import (
+    READINESS_UNAVAILABLE_REASON,
+    RemoteMemoryStoreConfigurationError,
+    remote_memory_ready,
+    remote_memory_store_from_config,
 )
 from ..core.memory.vector_compatibility import (
     canonical_embedding_identity,
@@ -56,6 +68,11 @@ from ..providers.vector_store.lancedb import get_connection
 from .services.global_memory_embedding_authority import (
     AuthorityCredentialUnavailable,
     GlobalMemoryEmbeddingAuthoritySnapshot,
+)
+from .services.memory_policy import (
+    MemoryPolicyDecision,
+    MemoryPolicyRequest,
+    set_trusted_memory_policy_resolver,
 )
 from .user_isolated_memory import UserIsolatedMemoryStore
 
@@ -202,7 +219,7 @@ class AdmissionResult:
     """
 
     status: MemoryLifecycleStatus
-    store: Optional[UserIsolatedMemoryStore] = None
+    store: Optional[MemoryStore] = None
     vector_space_fingerprint: Optional[str] = None
 
 
@@ -303,6 +320,47 @@ def _admit_once(
     )
 
 
+def remote_admission_result() -> Optional[AdmissionResult]:
+    """Admission result for the remote memory backend, or ``None`` if unused.
+
+    Remote mode has nothing to admit locally (方案 §3.3): the service owns the
+    vector space, the ACL and the embedding identity, so there is no authority
+    row, no LanceDB admission lock and no identity to certify. The store is
+    published READY on a complete configuration alone; connectivity failures
+    surface per operation as ``RemoteMemoryStoreError`` (§3.5.1) and are
+    acknowledged by the caller's fail-closed path, not by an admission state.
+
+    A ``remote`` backend missing its URL or key is a deployment fault that a
+    retry cannot clear, so it reports ``restart_required`` (fix the
+    configuration, then restart every worker) instead of silently falling back
+    to the local store.
+    """
+    if get_memory_backend() != "remote":
+        return None
+    try:
+        store = remote_memory_store_from_config()
+    except RemoteMemoryStoreConfigurationError:
+        logger.error(
+            "Memory backend is remote but %s / %s is missing; persistent "
+            "memory stays closed until the configuration is fixed and every "
+            "worker is restarted",
+            MEMORY_SERVICE_URL,
+            MEMORY_SERVICE_KEY,
+        )
+        return AdmissionResult(
+            MemoryLifecycleStatus(MemoryLifecycleState.RESTART_REQUIRED)
+        )
+    return AdmissionResult(
+        MemoryLifecycleStatus(
+            MemoryLifecycleState.READY,
+            mode=MemoryStorageMode.VECTOR,
+            vector_search=True,
+        ),
+        store=store,
+        vector_space_fingerprint=None,
+    )
+
+
 def admit_authority_storage(
     snapshot: GlobalMemoryEmbeddingAuthoritySnapshot,
     *,
@@ -318,6 +376,13 @@ def admit_authority_storage(
     published, which is the only moment at which ``writers_quiesced`` is
     truthfully ``True`` for this process.
     """
+    # Remote backend (方案 §3.3, 裁决⑨): the memory service is the only store,
+    # so nothing local is admitted, no admission lock is taken and no
+    # embedding identity is checked -- the service owns the vector space.
+    remote_result = remote_admission_result()
+    if remote_result is not None:
+        return remote_result
+
     # A caller that asks for an unbounded wait has a bug; surface it here
     # rather than letting the admission primitive raise mid-flow, where the
     # broad handler below would report it as a transient backend failure.
@@ -444,6 +509,67 @@ def credential_failure_result() -> AdmissionResult:
     )
 
 
+# ---------------------------------------------------------------------------
+# T14 §B1-3: the trusted memory policy for the remote backend
+# ---------------------------------------------------------------------------
+
+
+def resolve_remote_memory_policy(
+    request: MemoryPolicyRequest,
+) -> MemoryPolicyDecision:
+    """Trusted memory policy for the tasks the native rule leaves closed.
+
+    Native xagent disables memory for every task bound to an ``agent_id``
+    (``agent_service_manager.resolve_agent_service_memory_policy``), and the
+    only native switch is this host hook. Delegated, posted and
+    agent-addressed work is exactly that case, and on the remote backend --
+    which owns the shared space and the access control -- those tasks run with
+    memory enabled.
+
+    Every other request gets a decision that reproduces the native rule
+    exactly (``enabled = not preview and no agent_id``, availability left to
+    the published-store path): a registered resolver must always answer -- the
+    hook treats a ``None`` return as a failure -- and a resolver that decided
+    for ordinary tasks would change behaviour it was not asked to change.
+
+    For the tasks it does decide, availability is the service's own ``/readyz``
+    answer, cached per process. An unavailable service yields ``enabled=False``
+    as well: the policy is validated fail-closed, and a task must not be handed
+    memory tools that can only fail.
+    """
+    if (
+        get_memory_backend() != "remote"
+        or request.is_preview
+        or request.agent_id is None
+    ):
+        return MemoryPolicyDecision(
+            enabled=not request.is_preview and request.agent_id is None,
+            available=True,
+        )
+    available, reason = remote_memory_ready()
+    if not available:
+        return MemoryPolicyDecision(
+            enabled=False,
+            available=False,
+            reason=reason or READINESS_UNAVAILABLE_REASON,
+        )
+    return MemoryPolicyDecision(enabled=True, available=True)
+
+
+def register_remote_memory_policy() -> None:
+    """Install :func:`resolve_remote_memory_policy` as the host resolver.
+
+    Called at import time so every entry point -- the FastAPI app and the
+    shared task worker, both of which import this module while admitting
+    memory -- resolves memory policy the same way, with no change to
+    ``agent_service_manager``.
+    """
+    set_trusted_memory_policy_resolver(resolve_remote_memory_policy)
+
+
+register_remote_memory_policy()
+
+
 __all__ = [
     "AUTHORITY_CONFIG_ID",
     "FENCED_DETAIL",
@@ -463,4 +589,7 @@ __all__ = [
     "default_similarity_threshold",
     "log_operator_guidance",
     "memory_store_dir",
+    "register_remote_memory_policy",
+    "remote_admission_result",
+    "resolve_remote_memory_policy",
 ]

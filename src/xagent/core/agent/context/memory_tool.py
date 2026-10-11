@@ -34,7 +34,7 @@ MEMORY_TOOLS_METADATA_KEY = "memory_tools_enabled"
 DEFAULT_MAX_STORES_PER_RUN = 5
 # Cosine distance passed to search(similarity_threshold=...): lower = stricter
 # dedup (fewer results count as duplicates).
-DEFAULT_DEDUP_DISTANCE_THRESHOLD = 0.9
+DEFAULT_DEDUP_DISTANCE_THRESHOLD = 0.1
 DEFAULT_SEARCH_LIMIT = 5
 MAX_SEARCH_LIMIT = 20
 
@@ -55,8 +55,13 @@ Use this when you notice a UNIQUE, NON-OBVIOUS insight worth remembering, such a
 - A non-obvious failure and how it was fixed
 - A reusable strategy that is not routine
 - A domain-specific insight that is hard to obtain otherwise
+- A durable business or project fact a later task would need (a client or
+  project name, an identifier, a budget, a deadline, a decision)
 
-Do NOT store routine task completions, generic tool usage, common facts, or obvious strategies. Most tasks do not need any memory stored. Write the content as a self-contained statement understandable without this conversation."""
+Do NOT store routine task completions, generic tool usage, common facts, obvious strategies, transient chatter, or secrets and credentials. Most tasks do not need any memory stored. Write the content as a self-contained statement understandable without this conversation.
+
+If a similar memory already exists, the write is not dropped: it is merged
+into that memory or attached under it, and the result says which happened."""
 
 
 class StoreMemoryArgs(BaseModel):
@@ -137,31 +142,23 @@ class StoreMemoryTool:
                     },
                 )
 
-            duplicate = await asyncio.to_thread(self._find_similar, content)
-            if duplicate is not None:
-                if tracer is not None and task_id:
-                    await trace_memory_store_end(
-                        tracer,
-                        task_id,
-                        data={
-                            "storage_success": False,
-                            "decision": "duplicate_skipped",
-                            "source": STORE_MEMORY_TOOL_NAME,
-                            "step_id": step_id,
-                        },
+            duplicate_aware = getattr(self.memory_store, "remember", None)
+            if callable(duplicate_aware):
+                outcome = await asyncio.to_thread(self._remember, content, kind)
+                if outcome.get("unsupported"):
+                    # A wrapper can expose the method while its delegate has no
+                    # judged write; fall back rather than fail the store.
+                    outcome = await asyncio.to_thread(
+                        self._remember_locally, content, kind
                     )
-                return {
-                    "success": True,
-                    "stored": False,
-                    "message": (
-                        "A very similar memory already exists; skipped storing a duplicate."
-                    ),
-                }
-
-            memory_id = await asyncio.to_thread(self._add, content, kind)
-            if memory_id:
+            else:
+                outcome = await asyncio.to_thread(self._remember_locally, content, kind)
+            action = str(outcome.get("action") or "create")
+            memory_id = outcome.get("memory_id")
+            if outcome.get("stored"):
                 # Account for the created resource before any further await so
                 # trace delivery cannot reopen capacity after a cancellation.
+                # A merged or attached write is still one stored fact.
                 self.stored_count += 1
 
             if tracer is not None and task_id:
@@ -169,17 +166,156 @@ class StoreMemoryTool:
                     tracer,
                     task_id,
                     data={
-                        "storage_success": bool(memory_id),
+                        "storage_success": bool(outcome.get("stored")),
                         "memory_id": memory_id,
+                        "storage_action": action,
                         "source": STORE_MEMORY_TOOL_NAME,
                         "step_id": step_id,
                     },
                 )
 
-            if not memory_id:
-                return {"success": False, "error": "Failed to store memory."}
+            if not outcome.get("stored"):
+                return {
+                    "success": False,
+                    "error": str(outcome.get("error") or "Failed to store memory."),
+                }
 
-            return {"success": True, "stored": True, "memory_id": memory_id}
+            return {
+                "success": True,
+                "stored": True,
+                "action": action,
+                "memory_id": memory_id,
+                **self._action_feedback(action, memory_id, outcome.get("parent_id")),
+            }
+
+    @staticmethod
+    def _action_feedback(
+        action: str, memory_id: Any, parent_id: Any
+    ) -> dict[str, Any]:
+        """Tell the model which branch the judgement took (§10.4).
+
+        Reusing an existing memory is a success, not a skip: the caller must
+        see whether the new text replaced/merged an old note or was attached
+        under a related one, so it does not report "skipped as duplicate".
+        """
+        if action == "merge":
+            return {
+                "message": (
+                    "Merged into an existing similar memory "
+                    f"({memory_id}); the new text was combined into that note "
+                    "instead of creating a duplicate."
+                )
+            }
+        if action == "parent":
+            return {
+                "parent_id": parent_id,
+                "message": (
+                    f"Attached as a child of a related memory ({parent_id}); "
+                    f"the stored note is {memory_id}."
+                ),
+            }
+        if action == "update":
+            return {
+                "message": (
+                    f"Updated an existing similar memory in place ({memory_id})."
+                )
+            }
+        return {
+            "message": f"Stored as a new memory ({memory_id}).",
+        }
+
+    def _remember(self, content: str, kind: str) -> dict[str, Any]:
+        """Judged write through a store that offers ``remember`` (§10.4).
+
+        The store (the remote adapter) asks the service to pick merge /
+        parent / create from the candidate similarity and reports the branch
+        back, so one call replaces the old "search then skip" pair.
+        """
+        note = MemoryNote(
+            content=content,
+            category=self.category,
+            metadata={
+                "kind": kind,
+                "source": STORE_MEMORY_TOOL_NAME,
+            },
+        )
+        try:
+            response = self.memory_store.remember(note)
+        except (AttributeError, NotImplementedError):
+            # The store advertises the method but does not support it (a
+            # wrapper over a local store); the caller falls back.
+            return {"unsupported": True}
+        except Exception:
+            logger.exception("store_memory judged write failed")
+            return {
+                "stored": False,
+                "action": "failed",
+                "error": "Failed to store memory.",
+            }
+        if not getattr(response, "success", False):
+            return {
+                "stored": False,
+                "action": "failed",
+                "error": str(
+                    getattr(response, "error", None) or "Failed to store memory."
+                ),
+            }
+        response_metadata = getattr(response, "metadata", None) or {}
+        return {
+            "stored": True,
+            "action": str(response_metadata.get("action") or "create"),
+            "memory_id": getattr(response, "memory_id", None),
+            "parent_id": response_metadata.get("parent_id"),
+            "error": None,
+        }
+
+    def _remember_locally(self, content: str, kind: str) -> dict[str, Any]:
+        """Duplicate-aware fallback for stores without a judged write.
+
+        The local LanceDB store has no candidate scoring and no parent
+        relation on a note, so a similar hit is folded into the existing note
+        (an in-place update) rather than dropped: the memory is never lost,
+        which is the point of the change.
+        """
+        existing = self._find_similar(content)
+        if existing is not None:
+            updated = self._merge_existing(existing, content)
+            if updated:
+                return {
+                    "stored": True,
+                    "action": "update",
+                    "memory_id": getattr(existing, "id", None),
+                    "parent_id": None,
+                    "error": None,
+                }
+        memory_id = self._add(content, kind)
+        if not memory_id:
+            return {
+                "stored": False,
+                "action": "failed",
+                "error": "Failed to store memory.",
+            }
+        return {
+            "stored": True,
+            "action": "create",
+            "memory_id": memory_id,
+            "parent_id": None,
+            "error": None,
+        }
+
+    def _merge_existing(self, existing: Any, content: str) -> bool:
+        """Fold new text into an existing note, keeping the visible history."""
+        try:
+            old_content = str(getattr(existing, "content", "") or "").strip()
+            if content not in old_content:
+                existing.content = (
+                    f"{old_content}\n{content}" if old_content else content
+                )
+            response = self.memory_store.update(existing)
+        except Exception:
+            logger.exception("store_memory failed to merge into a similar memory")
+            return False
+        return bool(getattr(response, "success", False))
 
     def _find_similar(self, content: str) -> Any | None:
         search = getattr(self.memory_store, "search", None)
