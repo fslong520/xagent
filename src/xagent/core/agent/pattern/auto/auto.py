@@ -1366,8 +1366,12 @@ class AutoPattern(AgentPattern):
             "facts from this conversation that future tasks should remember "
             "(client or project names, identifiers, budgets, deadlines, "
             "decisions, lasting preferences), each as a self-contained "
-            "statement. Use an empty array when nothing is durable; the "
-            "answer text itself is never a durable fact. "
+            "statement. Emit one entry per fact: a turn that names a deadline, "
+            "an owner and an amount yields three entries, never one combined "
+            "sentence and never a partial selection — every fact stated must "
+            "appear, because each entry is stored separately and anything you "
+            "omit is forgotten. Use an empty array when nothing is durable; "
+            "the answer text itself is never a durable fact. "
             if memory_tools_available
             else ""
         )
@@ -1595,10 +1599,16 @@ class AutoPattern(AgentPattern):
                                 "tasks should remember, each a self-contained "
                                 "statement (client or project names, identifiers, "
                                 "budgets, deadlines, decisions, lasting "
-                                "preferences). Use an empty array when nothing is "
-                                "durable, and never include transient chat, the "
-                                "final answer itself, or secrets, credentials and "
-                                "personal data that is not meant to persist."
+                                "preferences). Enumerate every distinct durable "
+                                "fact as its own entry: if the turn states a "
+                                "deadline, an owner and an amount, return three "
+                                "entries — never collapse several facts into one "
+                                "combined entry and never drop one, because each "
+                                "entry is stored separately and an omitted fact "
+                                "is lost forever. Use an empty array when nothing "
+                                "is durable, and never include transient chat, "
+                                "the final answer itself, or secrets, credentials "
+                                "and personal data that is not meant to persist."
                             ),
                         },
                     },

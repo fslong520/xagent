@@ -15,6 +15,7 @@ from typing import Any, Literal, get_args
 from pydantic import BaseModel, Field
 
 from ...memory.core import MemoryNote
+from ...memory.remote import _unwrap_remote_store
 from ..trace import (
     trace_memory_retrieve_end,
     trace_memory_retrieve_start,
@@ -28,6 +29,8 @@ STORE_MEMORY_TOOL_NAME = "store_memory"
 SEARCH_MEMORY_TOOL_NAME = "search_memory"
 UPDATE_MEMORY_TOOL_NAME = "update_memory"
 DELETE_MEMORY_TOOL_NAME = "delete_memory"
+DELIVER_MEMORY_TOOL_NAME = "deliver_memory"
+CHECK_INBOX_TOOL_NAME = "check_inbox"
 MEMORY_TOOLS_METADATA_KEY = "memory_tools_enabled"
 # Cap per ReAct run. Each DAG step runs its own ReActPattern, so a DAG
 # task gets a fresh cap per step rather than one shared task-wide cap.
@@ -58,7 +61,11 @@ Use this when you notice a UNIQUE, NON-OBVIOUS insight worth remembering, such a
 - A durable business or project fact a later task would need (a client or
   project name, an identifier, a budget, a deadline, a decision)
 
-Do NOT store routine task completions, generic tool usage, common facts, obvious strategies, transient chatter, or secrets and credentials. Most tasks do not need any memory stored. Write the content as a self-contained statement understandable without this conversation.
+Call this once per fact. When one message states several durable facts (a deadline, an owner, an amount, a place), issue one call per fact instead of packing them into a single entry — each stored line is retrieved on its own, so a combined entry makes its parts unfindable, and an omitted fact is lost. When a message does carry durable facts, store all of them rather than a representative one.
+
+If the material you are storing opens with a [to:<recipient>] delivery marker, copy that marker verbatim to the very start of the content parameter and keep the rest of the text intact. The marker is the delivery address: dropping or rewording it files the memory in your own store instead of the intended teammate's. Opening it with [share:dept] or [share:company] instead plants the note in the shared layer — your department's, or everyone's — rather than your own memory; both markers sit at the very start and are consumed by the service.
+
+Do NOT store routine task completions, generic tool usage, common facts, obvious strategies, transient chatter, or secrets and credentials. Write the content as a self-contained statement understandable without this conversation.
 
 If a similar memory already exists, the write is not dropped: it is merged
 into that memory or attached under it, and the result says which happened."""
@@ -371,8 +378,13 @@ class SearchMemoryTool:
     description = (
         "Search stored memories from previous tasks. Use this when earlier "
         "insights, user preferences, or known failure patterns could help the "
-        "current step. Results include each memory's id, which update_memory "
-        "and delete_memory take."
+        "current step. Query with the concrete keywords you need — a name, a "
+        "date, an amount, a place — rather than the whole question, since "
+        "fuzzy matching favours short exact terms. Facts from one message are "
+        "stored as separate lines, so search each fact you need on its own. "
+        "If a query returns nothing, retry once with different keywords "
+        "before concluding the fact was never stored. Results include each "
+        "memory's id, which update_memory and delete_memory take."
     )
     args_schema = SearchMemoryArgs
 
@@ -518,9 +530,10 @@ class DeleteMemoryTool:
 
     name = DELETE_MEMORY_TOOL_NAME
     description = (
-        "Permanently delete a stored memory. Use this only when a memory is "
-        "plainly wrong or harmful and cannot be fixed by update_memory. Find "
-        "the memory's id with search_memory first."
+        "Permanently delete a stored memory. Use this when a memory is "
+        "plainly wrong or harmful and cannot be fixed by update_memory, and "
+        "whenever the user explicitly asks you to forget, drop or remove "
+        "something you stored. Find the memory's id with search_memory first."
     )
     args_schema = DeleteMemoryArgs
 
@@ -545,6 +558,199 @@ class DeleteMemoryTool:
                 "error": str(getattr(response, "error", None) or "Delete failed."),
             }
         return {"success": True, "memory_id": memory_id}
+
+
+class DeliverMemoryArgs(BaseModel):
+    target: str = Field(
+        description=(
+            "Who receives it: a teammate's username, external id or agent "
+            "name, for example t10-probe."
+        )
+    )
+    content: str = Field(
+        description=(
+            "The note to hand over — one self-contained statement, the same "
+            "shape as store_memory content."
+        )
+    )
+    attach: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Memories to ride along as quoted attachments: memory ids when "
+            "you have them, or short keywords to look them up. The quoted "
+            "text is appended to the delivery so the recipient can read it "
+            "without a second lookup — treat it like quoting a document in a "
+            "message."
+        ),
+    )
+
+
+class DeliverMemoryTool:
+    """Execution-scoped ``deliver_memory`` tool bound to a memory store."""
+
+    name = DELIVER_MEMORY_TOOL_NAME
+    description = (
+        "Hand a note to a teammate's own memory instead of keeping it in "
+        "yours: the recipient's agents retrieve it as if they had stored it "
+        "themselves. Use it to pass a fact, decision or instruction to the "
+        "agent or user who will act on it, addressed by username, external id "
+        "or agent name. It lands in their inbox (read back with check_inbox), "
+        "is rate-limited per recipient, and never exposes who else is copied. "
+        "For your own durable facts use store_memory instead."
+    )
+    args_schema = DeliverMemoryArgs
+
+    def __init__(self, *, memory_store: Any) -> None:
+        self.memory_store = memory_store
+
+    async def execute(
+        self, target: str, content: str, attach: list[str] | None = None
+    ) -> dict[str, Any]:
+        target = str(target or "").strip()
+        content = str(content or "").strip()
+        if not target:
+            return {
+                "success": False,
+                "error": "target must be a non-empty recipient id.",
+            }
+        if not content:
+            return {
+                "success": False,
+                "error": "content must be a non-empty statement.",
+            }
+        # production hands this tool a wrapper chain (revocation / user isolation)
+        # over the real adapter — a class-name check would always miss it, the
+        # same trap that broke the seat override (bounded unwrap instead).
+        if _unwrap_remote_store(self.memory_store) is None:
+            return {
+                "success": False,
+                "error": (
+                    "delivery needs the remote memory service; the active "
+                    "store has no teammate inbox."
+                ),
+            }
+        quoted = await self._quote_attachments(attach or [])
+        if quoted:
+            content = f"{content}\n\n— attached memories —\n{quoted}"
+        note = MemoryNote(content=f"[to:{target}] {content}")
+        try:
+            response = await asyncio.to_thread(self.memory_store.add, note)
+        except Exception:
+            logger.exception("deliver_memory failed")
+            return {"success": False, "error": "Failed to deliver the note."}
+        if not getattr(response, "success", False):
+            return {
+                "success": False,
+                "error": str(getattr(response, "error", None) or "Delivery failed."),
+            }
+        return {
+            "success": True,
+            "memory_id": getattr(response, "memory_id", None),
+            "delivered_to": target,
+        }
+
+    async def _quote_attachments(self, refs: list[str]) -> str:
+        """Resolve each attachment ref into quoted memory text.
+
+        A ref that looks like an id is fetched directly; anything else is
+        looked up by its wording. Unresolvable refs are skipped rather than
+        failing the delivery — a message with a stale quote still carries its
+        own text.
+        """
+        lines: list[str] = []
+        seen: set[str] = set()
+        for ref in list(refs)[:8]:
+            ref = str(ref or "").strip()
+            if not ref or ref in seen:
+                continue
+            seen.add(ref)
+            note = None
+            if len(ref) >= 32 and "-" in ref:
+                get = getattr(self.memory_store, "get", None)
+                if callable(get):
+                    try:
+                        response = await asyncio.to_thread(get, ref)
+                        if getattr(response, "success", False):
+                            candidate = getattr(response, "content", None)
+                            if candidate is not None:
+                                note = candidate
+                    except Exception:
+                        logger.debug("attachment id lookup failed", exc_info=True)
+            if note is None:
+                search = getattr(self.memory_store, "search", None)
+                if callable(search):
+                    try:
+                        results = await asyncio.to_thread(search, ref, 1)
+                        note = results[0] if results else None
+                    except Exception:
+                        logger.debug("attachment keyword lookup failed", exc_info=True)
+            if note is None:
+                continue
+            text = str(getattr(note, "content", "") or "").strip()
+            if text:
+                lines.append(f"- {text}")
+        return "\n".join(lines)
+
+
+class CheckInboxArgs(BaseModel):
+    limit: int = Field(
+        default=20,
+        description="How many of the most recent deliveries to return (1-50).",
+    )
+
+
+class CheckInboxTool:
+    """Execution-scoped ``check_inbox`` tool bound to a memory store."""
+
+    name = CHECK_INBOX_TOOL_NAME
+    description = (
+        "Read the notes teammates have delivered to you — things other "
+        "agents or users handed over for you to act on. Use this when the "
+        "user asks what you were told, when a task refers to a handover, or "
+        "before acting on an instruction that did not come from this "
+        "conversation. Returns the newest deliveries first, each with its "
+        "content, sender and time. Facts stored by your own past tasks are "
+        "found with search_memory instead."
+    )
+    args_schema = CheckInboxArgs
+
+    def __init__(self, *, memory_store: Any) -> None:
+        self.memory_store = memory_store
+
+    async def execute(self, limit: int = 20) -> dict[str, Any]:
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            limit = 20
+        limit = max(1, min(limit, 50))
+        list_all = getattr(self.memory_store, "list_all", None)
+        if not callable(list_all):
+            return {
+                "success": False,
+                "error": "the active memory store cannot list an inbox.",
+            }
+        try:
+            notes = await asyncio.to_thread(
+                list_all, {"metadata": {"deliver": True}}
+            )
+        except Exception:
+            logger.exception("check_inbox failed")
+            return {"success": False, "error": "Failed to read the inbox."}
+        ordered = sorted(
+            notes, key=lambda n: str(getattr(n, "timestamp", "") or ""), reverse=True
+        )
+        items = []
+        for note in ordered[:limit]:
+            metadata = getattr(note, "metadata", None) or {}
+            items.append(
+                {
+                    "id": getattr(note, "id", None),
+                    "content": str(getattr(note, "content", "") or ""),
+                    "from_user": metadata.get("from_user"),
+                    "timestamp": str(getattr(note, "timestamp", "") or ""),
+                }
+            )
+        return {"success": True, "count": len(items), "deliveries": items}
 
 
 def build_store_memory_tool(
@@ -587,6 +793,8 @@ def build_memory_tools(
         SearchMemoryTool(memory_store=memory_store, runtime=runtime),
         UpdateMemoryTool(memory_store=memory_store),
         DeleteMemoryTool(memory_store=memory_store),
+        DeliverMemoryTool(memory_store=memory_store),
+        CheckInboxTool(memory_store=memory_store),
     ]
     if tools and context is not None and hasattr(context, "metadata"):
         context.metadata[MEMORY_TOOLS_METADATA_KEY] = True

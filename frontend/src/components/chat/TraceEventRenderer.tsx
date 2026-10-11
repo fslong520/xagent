@@ -581,6 +581,27 @@ export function processTraceEvents(
         });
       }
 
+      if (event.event_type === 'task_end_memory_store') {
+        // The write is as much a memory moment as the read: without this line
+        // a stored fact appears nowhere in the timeline and the user cannot
+        // tell that anything was remembered. One status line per store.
+        const stored = eventData.storage_success !== false;
+        const action = String(eventData.storage_action || (stored ? 'stored' : ''));
+        if (!step.stepName) {
+          step.stepName = t('traceEventRenderer.taskExecution');
+        }
+        step.actions.push({
+          id: eventId,
+          type: 'info',
+          title: stored
+            ? t('traceEventRenderer.memoryStored', { action })
+            : t('traceEventRenderer.memoryStoreFailed'),
+          status: 'completed',
+          timestamp,
+          data: { statusLine: true },
+        });
+      }
+
       if (event.event_type === 'workforce_delegation_start') {
         lastCompletedWorkforceStepId = null;
         const workerName = String(

@@ -5437,6 +5437,7 @@ export function AppProvider({
                   action: t('agent.logs.event.actions.task_end_memory_store'),
                   message: '🧠 ' + t('agent.logs.event.actions.task_end_memory_store'),
                   storage_success: eventData.storage_success,
+                  storage_action: eventData.storage_action,
                   reason: eventData.reason,
                   decision: eventData.decision,
                 }
@@ -5447,6 +5448,20 @@ export function AppProvider({
               const storageSuccess = eventData.storage_success || false
               const reason = eventData.reason || ""
               const decision = eventData.decision || "unknown"
+
+              // Same trap as the retrieve event: a bubble dispatched through
+              // ADD_MESSAGE never reaches the timeline (the panel keeps only
+              // user/result/system rows), so also put the write on the trace
+              // stream - auto-mode stores arrive here with no step_id.
+              dispatch({
+                type: "ADD_TRACE_EVENT",
+                payload: {
+                  event_id: generateMessageId(`memory-store-end-${taskId}`),
+                  event_type: eventType,
+                  timestamp: message.timestamp,
+                  data: eventData,
+                }
+              })
 
               dispatch({
                 type: "ADD_MESSAGE",
