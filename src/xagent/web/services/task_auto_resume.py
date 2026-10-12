@@ -29,28 +29,22 @@ owner lease, whose acquisition and release do not move ``state_version``;
 
 A dispatch is one transaction: the CAS to ``dispatched``, its event, and the
 command (staged last, as ``stage_task_command`` requires). The dispatcher is
-notified after the commit. The CAS sets ``next_attempt_at`` to when the
-dispatch is due a check (``DISPATCH_CHECK_GRACE_SECONDS`` later).
+notified after the commit. ``dispatched`` rows reuse ``next_attempt_at`` as
+the time housekeeping next checks the dispatch, and clear it once the fence
+has moved (the resume took effect or a person acted).
 
-Nothing checks ``dispatched`` rows yet: confirming them once the resume took
-effect, or closing them when their command failed or did not resume the
-task, is follow-up housekeeping. Meanwhile such a row simply stays
-``dispatched``, the tick never looks at it, and its TriggerRun stays RUNNING
-until the run settles. It still reads as "resumed by the sweeper" to episode
-bookkeeping, which is what it is. It cannot inflate the in-flight count:
-that counts a row only while its run is RUNNING or its command is still
-queued (:func:`count_inflight`).
-
-With ``XAGENT_TASK_AUTO_RESUME_ENABLED`` off the tick does nothing; only the
-claim-time guard acts, dropping a queued command into ``manual``. Not yet
-handled while off: ``scheduled`` rows wait (and would dispatch once the
-switch is back on).
+With ``XAGENT_TASK_AUTO_RESUME_ENABLED`` off nothing is dispatched and
+nothing waits for the switch to come back: the tick drains ``scheduled``
+rows to ``manual(auto_resume_disabled)`` and closes ``dispatched`` rows whose
+command already ended the same way, failing their TriggerRun; a command
+still queued is dropped by the claim-time guard.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -58,9 +52,9 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from ...config import (
     get_task_auto_resume_enabled,
@@ -95,10 +89,13 @@ from .task_auto_recovery import (
 from .task_auto_recovery_policy import (
     auto_resume_limit,
     auto_resume_recovery_state,
+    next_auto_resume_at,
     scheduled_trigger_superseded,
 )
 from .task_command_transport import (
     AUTO_RESUME_COMMAND_PREFIX,
+    COMMAND_COMPLETED,
+    COMMAND_FAILED,
     COMMAND_PENDING,
     COMMAND_PROCESSING,
     COMMAND_TERMINAL,
@@ -112,7 +109,8 @@ from .task_lease_service import utc_now
 
 logger = logging.getLogger(__name__)
 
-# A dispatched row is due a check this long after dispatch.
+# A dispatched command is checked again this long after dispatch (and after
+# every check that finds it still queued).
 DISPATCH_CHECK_GRACE_SECONDS = 60
 # A full admission queue pushes the candidate this far out.
 ADMISSION_FULL_DELAY_SECONDS = 30
@@ -136,6 +134,10 @@ TASK_AUTO_RESUME_SUPERSEDED_TRIGGER_ERROR = (
     "Task paused after a system interruption and was superseded by a later "
     "scheduled run."
 )
+TASK_AUTO_RESUME_DISPATCH_FAILED_TRIGGER_ERROR = (
+    "Task paused after a system interruption; automatic resume could not be "
+    "started. Manual resume is required."
+)
 TASK_AUTO_RESUME_DISABLED_TRIGGER_ERROR = (
     "Task paused after a system interruption; automatic resume is disabled. "
     "Manual resume is required."
@@ -145,6 +147,9 @@ TASK_AUTO_RESUME_DISABLED_TRIGGER_ERROR = (
 # off, and the ``why`` of a claim skipped for it.
 AUTO_RESUME_DISABLED_DETAIL = "auto_resume_disabled"
 CHANNEL_HOLD_PENDING_DETAIL = "channel_hold_pending"
+
+# Module-level so tests can seed it; drawn only by housekeeping reschedules.
+_AUTO_RESUME_RNG = random.Random()
 
 # Cached by each tick that measures it, for the in-flight gauge.
 _last_inflight = 0
@@ -255,6 +260,10 @@ _STOPS: dict[TaskAutoRecoveryState, tuple[TaskRecoveryEventType, str | None]] = 
         TaskRecoveryEventType.SUPERSEDED,
         TASK_AUTO_RESUME_SUPERSEDED_TRIGGER_ERROR,
     ),
+    TaskAutoRecoveryState.DISPATCH_FAILED: (
+        TaskRecoveryEventType.DISPATCH_FAILED,
+        TASK_AUTO_RESUME_DISPATCH_FAILED_TRIGGER_ERROR,
+    ),
     TaskAutoRecoveryState.INELIGIBLE: (
         TaskRecoveryEventType.INELIGIBLE,
         TASK_INTERRUPTION_PAUSED_TRIGGER_ERROR,
@@ -275,6 +284,10 @@ class _Outcome(str, Enum):
     DISPATCHED = "dispatched"
     GAVE_UP = "gave_up"
     STALE = "stale"
+    RESCHEDULED = "rescheduled"
+    CONFIRMED = "confirmed"
+    # Housekeeping found the command still queued; checked again later.
+    REARMED = "rearmed"
     # Nothing written: the row moved, or a CAS lost.
     RACED = "raced"
     # Nothing written: a dispatch was due but the budget is spent.
@@ -306,11 +319,13 @@ def _give_up_no_commit(
     state_detail: str | None = None,
     event_detail: dict[str, Any] | None = None,
     stop: tuple[TaskRecoveryEventType, str | None] | None = None,
+    fenced: bool | None = None,
 ) -> _CandidateResult:
     """Stop automatic recovery of ``row`` in ``new_state``; no commit.
 
     The CAS re-checks the fence except for ``stale``, which exists because
-    the fence no longer holds. TriggerRun: a give-up fails a PENDING/RUNNING
+    the fence no longer holds; ``fenced`` overrides that for a caller that
+    has already established why the fence moved. TriggerRun: a give-up fails a PENDING/RUNNING
     run with the state's message; ``stale`` only mirrors a task that already
     ended, since otherwise a person resumed or changed it and that run's own
     settlement reports the real outcome. ``stop`` overrides the state's
@@ -324,7 +339,11 @@ def _give_up_no_commit(
     updated = _rowcount(
         db.execute(
             update(TaskAutoRecovery)
-            .where(*_row_cas(row, from_state, fenced=not stale))
+            .where(
+                *_row_cas(
+                    row, from_state, fenced=not stale if fenced is None else fenced
+                )
+            )
             .values(
                 state=new_state.value, state_detail=state_detail, next_attempt_at=None
             )
@@ -642,6 +661,251 @@ def _postpone_after_admission_full(
 
 
 # --------------------------------------------------------------------------
+# Housekeeping of dispatched rows
+# --------------------------------------------------------------------------
+
+
+def _housekeep_candidate_no_commit(
+    db: Session, task_id: int, *, now: datetime, enabled: bool = True
+) -> _CandidateResult:
+    """Check one ``dispatched`` row whose check time has come.
+
+    While the task still rests ``paused`` on the same run, nothing has
+    resumed it, whatever the version: a rolled-back resume moves the version
+    by two. So at that state a queued or failed command is never taken for
+    a confirmation:
+
+    - command queued (including a retry waiting out its backoff after a
+      rollback, which the claim guard normally re-arms): check again after
+      the grace period (with the switch off, the claim-time guard drops it);
+    - command failed: the resume itself failed. A person acting first makes
+      the claim guard complete the command as ``auto_skipped``, so a failed
+      one is the resume failing -- rare after a rollback, since the claim
+      guard re-arms the first retry, so only when every attempt failed;
+    - fence otherwise moved: the resume took effect or a person acted;
+      confirm by clearing ``next_attempt_at`` (no event);
+    - switch off, command ended (or missing), the resume not having taken
+      effect: the row rests in ``manual(auto_resume_disabled)``, as a
+      drained row does;
+    - command failed or missing otherwise: ``dispatch_failed``;
+    - command completed at an unchanged fence (e.g. ``already_in_progress``):
+      the resume did not happen; schedule it again unless a limit stops it.
+    """
+
+    task, row = _load_locked_no_commit(db, task_id)
+    if (
+        task is None
+        or row is None
+        or row.state != _DISPATCHED.value
+        or row.next_attempt_at is None
+        or _utc(row.next_attempt_at) > now
+    ):
+        return _RACED
+    command = (
+        db.query(TaskExecutionCommand)
+        .filter(
+            TaskExecutionCommand.task_id == task_id,
+            TaskExecutionCommand.command_id == row.last_command_id,
+        )
+        .one_or_none()
+        if row.last_command_id is not None
+        else None
+    )
+    at_fence = _fence_mismatch(task, row) is None
+    fence_moved = not at_fence
+    paused_on_run = (
+        task.status == TaskStatus.PAUSED
+        and task.control_state == TaskControlState.PAUSED.value
+        and task.run_id == row.run_id
+    )
+    queued = command is not None and command.status not in COMMAND_TERMINAL
+    failed = command is not None and command.status == COMMAND_FAILED
+    if fence_moved and paused_on_run and (queued or failed):
+        fence_moved = False
+    if fence_moved or queued:
+        # Confirmed, or still queued: only the next check time changes.
+        updated = _rowcount(
+            db.execute(
+                update(TaskAutoRecovery)
+                .where(*_row_cas(row, _DISPATCHED, fenced=at_fence))
+                .values(
+                    next_attempt_at=(
+                        None
+                        if fence_moved
+                        else now + timedelta(seconds=DISPATCH_CHECK_GRACE_SECONDS)
+                    )
+                )
+                .execution_options(synchronize_session=False)
+            )
+        )
+        if updated != 1:
+            return _RACED
+        if fence_moved:
+            logger.info(
+                "component=auto-resume task_id=%s run_id=%s reason=%s state=%s "
+                "attempt=%s next_attempt_at=None confirmed",
+                row.task_id,
+                row.run_id,
+                row.reason,
+                _DISPATCHED.value,
+                row.total_resumes,
+            )
+            increment_counter("xagent.task.auto_resume.confirmed")
+            return _CandidateResult(_Outcome.CONFIRMED)
+        # A growing count means dispatched commands sit in the queue.
+        increment_counter("xagent.task.auto_resume.rearmed")
+        return _CandidateResult(_Outcome.REARMED)
+    if not enabled:
+        return _give_up_no_commit(
+            db,
+            task,
+            row,
+            TaskAutoRecoveryState.MANUAL,
+            from_state=_DISPATCHED,
+            at="drain",
+            state_detail=AUTO_RESUME_DISABLED_DETAIL,
+            stop=_DISABLED_STOP,
+            fenced=at_fence,
+        )
+    command_result: dict[str, Any] = (
+        command.result
+        if command is not None and isinstance(command.result, dict)
+        else {}
+    )
+    if command is None or command.status == COMMAND_FAILED:
+        rejection = command_result.get("rejection_reason")
+        return _give_up_no_commit(
+            db,
+            task,
+            row,
+            TaskAutoRecoveryState.DISPATCH_FAILED,
+            from_state=_DISPATCHED,
+            at="housekeeping",
+            event_detail={
+                "command": "missing" if command is None else "failed",
+                "rejection_reason": (rejection if isinstance(rejection, str) else None),
+            },
+            # A failed resume that rolled back moved the version; the row's
+            # own CAS still pins this dispatch.
+            fenced=at_fence,
+        )
+
+    assert command.status == COMMAND_COMPLETED
+    resume_outcome = command_result.get("resume_outcome")
+    after = resume_outcome if isinstance(resume_outcome, str) else "unknown"
+    return _reschedule_dispatched_no_commit(
+        db, task, row, now=now, at="housekeeping", after=after
+    )
+
+
+def _reschedule_dispatched_no_commit(
+    db: Session,
+    task: Task,
+    row: TaskAutoRecovery,
+    *,
+    now: datetime,
+    at: str,
+    after: str,
+) -> _CandidateResult:
+    """A dispatch that did not resume the task: schedule it again or stop.
+
+    The counters stand: the dispatch happened, and the limits are what keep
+    this from looping.
+    """
+
+    limit_state = _limit_state(row, auto_recovery_eligibility(db, task).kind, now)
+    if limit_state is not None:
+        return _give_up_no_commit(
+            db,
+            task,
+            row,
+            limit_state,
+            from_state=_DISPATCHED,
+            at=at,
+            event_detail={"after": after},
+        )
+    next_attempt_at = next_auto_resume_at(
+        row.reason, int(row.no_progress_resumes or 0), now, _AUTO_RESUME_RNG
+    )
+    updated = _rowcount(
+        db.execute(
+            update(TaskAutoRecovery)
+            .where(*_row_cas(row, _DISPATCHED, fenced=True))
+            .values(
+                state=_SCHEDULED.value,
+                state_detail=None,
+                next_attempt_at=next_attempt_at,
+            )
+            .execution_options(synchronize_session=False)
+        )
+    )
+    if updated != 1:
+        return _RACED
+    attempt = int(row.total_resumes or 0) + 1
+    db.add(
+        TaskRecoveryEvent(
+            task_id=int(row.task_id),
+            run_id=row.run_id,
+            event=TaskRecoveryEventType.SCHEDULED.value,
+            reason=row.reason,
+            attempt=attempt,
+            next_attempt_at=next_attempt_at,
+            detail={"at": at, "after": after},
+        )
+    )
+    db.flush()
+    increment_counter(
+        "xagent.task.auto_resume.rescheduled", attributes={"outcome": after}
+    )
+    logger.info(
+        "component=auto-resume task_id=%s run_id=%s reason=%s state=%s "
+        "attempt=%s next_attempt_at=%s after=%s",
+        row.task_id,
+        row.run_id,
+        row.reason,
+        _SCHEDULED.value,
+        attempt,
+        next_attempt_at,
+        after,
+    )
+    return _CandidateResult(_Outcome.RESCHEDULED)
+
+
+def _drain_candidate_no_commit(db: Session, task_id: int) -> _CandidateResult:
+    """Stop one ``scheduled`` row because automatic resume is switched off.
+
+    Not retroactive: a row stays stopped when the switch comes back. A row
+    whose fence already moved is ``stale`` like at dispatch.
+    """
+
+    task, row = _load_locked_no_commit(db, task_id)
+    if task is None or row is None or row.state != _SCHEDULED.value:
+        return _RACED
+    mismatch = _fence_mismatch(task, row)
+    if mismatch is not None:
+        return _give_up_no_commit(
+            db,
+            task,
+            row,
+            TaskAutoRecoveryState.STALE,
+            from_state=_SCHEDULED,
+            at="drain",
+            state_detail=f"drain:{mismatch}",
+            event_detail={"mismatch": mismatch},
+        )
+    return _give_up_no_commit(
+        db,
+        task,
+        row,
+        TaskAutoRecoveryState.MANUAL,
+        from_state=_SCHEDULED,
+        at="drain",
+        state_detail=AUTO_RESUME_DISABLED_DETAIL,
+        stop=_DISABLED_STOP,
+    )
+
+
+# --------------------------------------------------------------------------
 # Candidate selection
 # --------------------------------------------------------------------------
 
@@ -769,6 +1033,9 @@ class AutoResumeTickReport:
     dispatched: int = 0
     gave_up: int = 0
     stale: int = 0
+    rescheduled: int = 0
+    confirmed: int = 0
+    rearmed: int = 0
     raced: int = 0
     failed: int = 0
     staged_commands: int = 0
@@ -782,6 +1049,9 @@ class AutoResumeTickReport:
             _Outcome.DISPATCHED: "dispatched",
             _Outcome.GAVE_UP: "gave_up",
             _Outcome.STALE: "stale",
+            _Outcome.RESCHEDULED: "rescheduled",
+            _Outcome.CONFIRMED: "confirmed",
+            _Outcome.REARMED: "rearmed",
             _Outcome.RACED: "raced",
         }.get(result.outcome)
         if field_name is not None:
@@ -833,16 +1103,53 @@ def _settle_candidate(
     return result
 
 
-def has_due_work(db: Session, now: datetime) -> bool:
-    """One ``EXISTS`` over the due index: is a ``scheduled`` row due?"""
+def housekeep_dispatched(
+    now: datetime, report: AutoResumeTickReport, *, limit: int, enabled: bool = True
+) -> None:
+    """Check up to ``limit`` dispatched rows whose check time has come."""
 
+    for db, task_id in _candidates(_DISPATCHED, now=now, limit=limit):
+        _settle_candidate(
+            db,
+            task_id,
+            report,
+            lambda: _housekeep_candidate_no_commit(
+                db, task_id, now=now, enabled=enabled
+            ),
+        )
+
+
+def drain_disabled_rows(report: AutoResumeTickReport, *, limit: int) -> None:
+    """Stop up to ``limit`` scheduled rows, due or not, with the switch off."""
+
+    for db, task_id in _candidates(_SCHEDULED, now=None, limit=limit):
+        _settle_candidate(
+            db, task_id, report, lambda: _drain_candidate_no_commit(db, task_id)
+        )
+
+
+def has_due_work(db: Session, now: datetime, *, enabled: bool = True) -> bool:
+    """One ``EXISTS`` over the due index: is there anything for a tick to do?
+
+    Due ``dispatched`` rows need housekeeping either way; ``scheduled`` rows
+    need dispatching once due, or draining (due or not) with the switch off.
+    """
+
+    scheduled = TaskAutoRecovery.state == _SCHEDULED.value
+    if enabled:
+        scheduled = and_(scheduled, TaskAutoRecovery.next_attempt_at <= now)
     return bool(
         db.execute(
             select(
                 select(TaskAutoRecovery.task_id)
                 .where(
-                    TaskAutoRecovery.state == _SCHEDULED.value,
-                    TaskAutoRecovery.next_attempt_at <= now,
+                    or_(
+                        scheduled,
+                        and_(
+                            TaskAutoRecovery.state == _DISPATCHED.value,
+                            TaskAutoRecovery.next_attempt_at <= now,
+                        ),
+                    )
                 )
                 .exists()
             )
@@ -854,14 +1161,35 @@ def count_inflight(db: Session) -> int:
     """Automatic resumes in flight across every process.
 
     A: auto-resumed runs still RUNNING (driven from the task status index);
-    bounded by the running tasks, and a row leaves it when its run stops.
+    bounded by the running tasks, and a row leaves it when its run stops. A
+    confirmed row stays ``dispatched``, so a run some person paused and
+    resumed by hand since -- a command other than the sweeper's after the
+    dispatch -- is not counted: it is not an automatic resume any more.
     B: dispatches whose command is still queued (pending claim, waiting for
     admission or deferred) at an unchanged fence. A row whose command has
-    ended stops counting even if nothing confirms or closes it, so B cannot
+    ended stops counting even before housekeeping closes it, so B cannot
     grow with unconfirmed rows. The two never overlap: a running resumed run
     has moved past the fence version.
     """
 
+    dispatch = aliased(TaskExecutionCommand)
+    later = aliased(TaskExecutionCommand)
+    person_acted = exists().where(
+        later.task_id == Task.id,
+        later.id
+        > select(dispatch.id)
+        .where(
+            dispatch.task_id == Task.id,
+            dispatch.command_id == TaskAutoRecovery.last_command_id,
+        )
+        .scalar_subquery(),
+        # Exact, case-sensitive prefix, as the transport reserves it.
+        ~and_(
+            later.kind == "resume",
+            func.substr(later.command_id, 1, len(AUTO_RESUME_COMMAND_PREFIX))
+            == AUTO_RESUME_COMMAND_PREFIX,
+        ),
+    )
     running = db.execute(
         select(func.count())
         .select_from(Task)
@@ -875,6 +1203,7 @@ def count_inflight(db: Session) -> int:
         .where(
             task_status_predicate.eq(TaskStatus.RUNNING),
             TaskAutoRecovery.state == _DISPATCHED.value,
+            ~person_acted,
         )
     ).scalar_one()
     queued = db.execute(
@@ -949,10 +1278,11 @@ def scan_due(
 def run_auto_resume_tick(*, now: datetime | None = None) -> AutoResumeTickReport:
     """One sweeper pass; synchronous, for a worker thread.
 
-    With the switch off it does nothing (see the module docstring). Then one
-    ``EXISTS``: with nothing due (always, until something records
-    ``scheduled`` rows) the tick ends there. Otherwise due rows are
-    dispatched within
+    One ``EXISTS`` first: with nothing due (always, until something records
+    ``scheduled`` rows) the tick ends there. With the switch off it drains
+    ``scheduled`` rows and closes ended ``dispatched`` ones (see the module
+    docstring). Otherwise housekeeping runs first (it frees in-flight
+    slots), then due rows are dispatched within
     ``min(MAX_PER_TICK, MAX_INFLIGHT - inflight)``. The dispatcher is
     notified once, after the dispatches have committed, even if the tick
     then fails.
@@ -962,14 +1292,21 @@ def run_auto_resume_tick(*, now: datetime | None = None) -> AutoResumeTickReport
     from ..models.database import get_session_local
 
     report = AutoResumeTickReport()
-    if not get_task_auto_resume_enabled():
-        return report
     now = _utc(now or utc_now())
     max_per_tick = get_task_auto_resume_max_per_tick()
+    enabled = get_task_auto_resume_enabled()
     try:
+        if not enabled:
+            # Nothing is dispatched while off; queued commands meet the guard.
+            _last_inflight = 0
         with get_session_local()() as db:
-            if not has_due_work(db, now):
+            if not has_due_work(db, now, enabled=enabled):
                 return report
+        if not enabled:
+            drain_disabled_rows(report, limit=max_per_tick)
+            housekeep_dispatched(now, report, limit=max_per_tick, enabled=False)
+            return report
+        housekeep_dispatched(now, report, limit=max_per_tick)
         with get_session_local()() as db:
             inflight = count_inflight(db)
         _last_inflight = inflight
@@ -1119,7 +1456,8 @@ def check_auto_resume_claim_sync(
     - Otherwise skip: ``auto_resume_disabled`` at the fence (the row rests
       in ``manual`` and a RUNNING TriggerRun fails), else ``stale`` (a
       person moved the task on; WAITING_FOR_USER and PAUSE_REQUESTED land
-      here).
+      here) -- except a retry after this command's own resume was rolled
+      back, which is scheduled again (``rolled_back``).
     """
 
     if not is_auto_resume_command_id(command_id) or not _valid_auto_resume_payload(
@@ -1130,8 +1468,9 @@ def check_auto_resume_claim_sync(
     expected_version = int(auto_resume["expected_state_version"])
     task_status = TaskStatus(status)
     version = int(state_version or 0)
+    retry = int(attempt_count or 0) > 1
     own_retry = (
-        int(attempt_count or 0) > 1
+        retry
         and task_status is TaskStatus.PAUSED
         and control_state == TaskControlState.RESUME_REQUESTED.value
         and run_id == expected_run_id
@@ -1145,7 +1484,9 @@ def check_auto_resume_claim_sync(
     )
     proceed = own_retry or (at_fence and get_task_auto_resume_enabled())
     why = None if proceed else AUTO_RESUME_DISABLED_DETAIL if at_fence else "stale"
-    decision = _settle_claim(task_id=task_id, command_id=command_id, why=why)
+    decision = _settle_claim(
+        task_id=task_id, command_id=command_id, why=why, retry=retry
+    )
     if not decision.proceed:
         logger.info(
             "auto resume skipped task_id=%s run_id=%s why=%s component=auto-resume",
@@ -1157,7 +1498,7 @@ def check_auto_resume_claim_sync(
 
 
 def _settle_claim(
-    *, task_id: int, command_id: str, why: str | None
+    *, task_id: int, command_id: str, why: str | None, retry: bool
 ) -> AutoResumeClaimDecision:
     """Check the recovery row behind a claim; close it when the claim skips.
 
@@ -1194,6 +1535,9 @@ def _settle_claim(
                     state_detail=AUTO_RESUME_DISABLED_DETAIL,
                     stop=_DISABLED_STOP,
                 )
+            elif retry and _rolled_back_by_this_claim(db, task, row, command_id):
+                why = "rolled_back"
+                result = _refence_rolled_back_claim_no_commit(db, task, row)
             else:
                 mismatch = _fence_mismatch(task, row)
                 result = _give_up_no_commit(
@@ -1214,3 +1558,61 @@ def _settle_claim(
             db.rollback()
             raise
     return AutoResumeClaimDecision(proceed=False, why=why)
+
+
+def _rolled_back_by_this_claim(
+    db: Session, task: Task, row: TaskAutoRecovery, command_id: str
+) -> bool:
+    """Whether the task is back at PAUSED only because this command undid it.
+
+    ``resume_task`` writes RESUME_REQUESTED (+1) and, if starting the resumed
+    run then fails, writes PAUSED back (+1). Nothing else ran in between:
+    commands are serialized and no user command reached the task since the
+    dispatch.
+    """
+
+    from .task_auto_recovery import _user_command_since_dispatch
+
+    return bool(
+        task.status == TaskStatus.PAUSED
+        and task.control_state == TaskControlState.PAUSED.value
+        and task.run_id == row.run_id
+        and int(task.state_version or 0) == int(row.paused_state_version) + 2
+        and not _user_command_since_dispatch(db, int(task.id), command_id)
+    )
+
+
+def _refence_rolled_back_claim_no_commit(
+    db: Session, task: Task, row: TaskAutoRecovery
+) -> _CandidateResult:
+    """Move the row to the task's current fence, then schedule it again.
+
+    With the switch off it stops instead, as a drained row does, so turning
+    the switch back on never resumes it retroactively.
+    """
+
+    updated = _rowcount(
+        db.execute(
+            update(TaskAutoRecovery)
+            .where(*_row_cas(row, _DISPATCHED, fenced=False))
+            .values(paused_state_version=int(task.state_version or 0))
+            .execution_options(synchronize_session=False)
+        )
+    )
+    if updated != 1:
+        return _RACED
+    db.refresh(row)
+    if not get_task_auto_resume_enabled():
+        return _give_up_no_commit(
+            db,
+            task,
+            row,
+            TaskAutoRecoveryState.MANUAL,
+            from_state=_DISPATCHED,
+            at="claim",
+            state_detail=AUTO_RESUME_DISABLED_DETAIL,
+            stop=_DISABLED_STOP,
+        )
+    return _reschedule_dispatched_no_commit(
+        db, task, row, now=utc_now(), at="claim", after="resume_rolled_back"
+    )
