@@ -1,0 +1,178 @@
+"""Isolated memory prompt texts (xagent-memory-saas overlay).
+
+All memory-related prompt wording lives in this one file so upstream syncs,
+edits and migrations only touch here. Consumption points:
+
+- core/agent/context/execution.py   -> MEMORY_PERSISTENCE_GUIDE
+- core/agent/pattern/auto/auto.py   -> AUTO_MEMORY_RULE, AUTO_DURABLE_RULE,
+                                        AUTO_DURABLE_FACTS_SCHEMA_DESCRIPTION
+- core/agent/context/memory_tool.py -> STORE/SEARCH/UPDATE/DELETE/DELIVER/
+                                        CHECK_INBOX _DESCRIPTION
+
+Texts are byte-identical copies of the original inline segments; do not
+reword here without re-running the extraction equality check.
+"""
+
+MEMORY_PERSISTENCE_GUIDE = (
+"Memory persistence:\n"
+"You have memory tools for knowledge that should outlive this "
+"task. While working, use store_memory when you notice a "
+"stable user preference or a correction the user gave you, a "
+"non-obvious mistake you made and how you fixed it, a reusable "
+"lesson about this domain or its tools, or a durable business "
+"or project fact that a later task would need (a client or "
+"project name, an identifier, a budget, a deadline, a "
+"decision, or a lasting constraint), written as a "
+"self-contained statement. Call store_memory once per fact: "
+"when one sentence carries a deadline, an owner and an amount, "
+"make three separate calls — never merge several facts into a "
+"single entry, because a later search for any one of them must "
+"find it on its own. When recalling, search with the concrete "
+"keywords of what you need (names, dates, amounts, places), "
+"not with the whole question, and issue a second query with "
+"different keywords when the first returns nothing. Do not "
+"store routine task completions, transient chatter, the answer "
+"you just produced, widely known facts, or secrets and "
+"credentials. To hand a fact, decision or instruction to a "
+"teammate, call deliver_memory with the recipient and the "
+"note — it lands in their own memory and their agents "
+"retrieve it as if they had stored it themselves; when the "
+"handover depends on context you already hold, pass those "
+"memory ids or keywords in attach so the quoted text rides "
+"along in the same message, the way a person forwards a "
+"document instead of describing it. When a delivery or inbox "
+"entry carries an — attached memories — block, treat those "
+"quotes as material handed to you with the message: use them "
+"to answer and act on the request they arrived with, carry "
+"out any instruction they state instead of merely "
+"acknowledging it, and say in your reply how many attachments "
+"you took in. Call check_inbox when an "
+"instruction may have been handed to you "
+"from another agent or user. When you keep a delivery marker "
+"inside store_memory content instead, copy it verbatim at the "
+"very start — the [to:<recipient>] marker is the delivery "
+"address, and rewriting it away files the memory under your "
+"own store instead of theirs. To write where the rest of "
+"the team can see it, open the content with a share marker "
+"— [share:dept] for your own department, [share:company] for "
+"the whole organisation, [share:dept:<id>] for one "
+"department — so the note lands in the shared layer instead "
+"of your own memory. Retrieval needs no marker: every search "
+"already folds in the shared layers you are allowed to read. "
+"If a retrieved memory "
+"contradicts what you "
+"observe now, correct it with update_memory or remove it with "
+"delete_memory (find memory ids via search_memory). When the "
+"user asks you to forget, drop, reset or re-record something, "
+"search_memory for it and delete_memory or update it in the "
+"same turn — never tell the user a stored memory cannot be "
+"removed, and never leave a stale fact in place after they "
+"asked for it to go."
+)
+
+AUTO_MEMORY_RULE = (
+"If the latest user message asks to remember, store, forget, or "
+"update personal information or preferences for future tasks, "
+"choose react so the memory tools can persist the change; never "
+"claim via final_answer that something was remembered, because "
+"final_answer cannot store anything. Likewise, if the user asks "
+"what they previously told you or what you remember about them "
+"and the retrieved context does not already contain the answer, "
+"choose react and look it up with the search_memory tool before "
+"concluding that nothing was recorded. "
+)
+
+AUTO_DURABLE_RULE = (
+"Independently of the action, list in durable_facts any stable "
+"facts from this conversation that future tasks should remember "
+"(client or project names, identifiers, budgets, deadlines, "
+"decisions, lasting preferences), each as a self-contained "
+"statement. Emit one entry per fact: a turn that names a deadline, "
+"an owner and an amount yields three entries, never one combined "
+"sentence and never a partial selection — every fact stated must "
+"appear, because each entry is stored separately and anything you "
+"omit is forgotten. Use an empty array when nothing is durable; "
+"the answer text itself is never a durable fact. "
+)
+
+AUTO_DURABLE_FACTS_SCHEMA_DESCRIPTION = (
+"Stable facts from this conversation that future "
+"tasks should remember, each a self-contained "
+"statement (client or project names, identifiers, "
+"budgets, deadlines, decisions, lasting "
+"preferences). Enumerate every distinct durable "
+"fact as its own entry: if the turn states a "
+"deadline, an owner and an amount, return three "
+"entries — never collapse several facts into one "
+"combined entry and never drop one, because each "
+"entry is stored separately and an omitted fact "
+"is lost forever. Use an empty array when nothing "
+"is durable, and never include transient chat, "
+"the final answer itself, or secrets, credentials "
+"and personal data that is not meant to persist."
+)
+
+STORE_MEMORY_DESCRIPTION = """Store a durable memory for future tasks.
+
+Use this when you notice a UNIQUE, NON-OBVIOUS insight worth remembering, such as:
+- A clear user preference or stable behavior pattern
+- A non-obvious failure and how it was fixed
+- A reusable strategy that is not routine
+- A domain-specific insight that is hard to obtain otherwise
+- A durable business or project fact a later task would need (a client or
+  project name, an identifier, a budget, a deadline, a decision)
+
+Call this once per fact. When one message states several durable facts (a deadline, an owner, an amount, a place), issue one call per fact instead of packing them into a single entry — each stored line is retrieved on its own, so a combined entry makes its parts unfindable, and an omitted fact is lost. When a message does carry durable facts, store all of them rather than a representative one.
+
+If the material you are storing opens with a [to:<recipient>] delivery marker, copy that marker verbatim to the very start of the content parameter and keep the rest of the text intact. The marker is the delivery address: dropping or rewording it files the memory in your own store instead of the intended teammate's. Opening it with [share:dept] or [share:company] instead plants the note in the shared layer — your department's, or everyone's — rather than your own memory; both markers sit at the very start and are consumed by the service.
+
+Do NOT store routine task completions, generic tool usage, common facts, obvious strategies, transient chatter, or secrets and credentials. Write the content as a self-contained statement understandable without this conversation.
+
+If a similar memory already exists, the write is not dropped: it is merged
+into that memory or attached under it, and the result says which happened."""
+
+SEARCH_MEMORY_DESCRIPTION = (
+"Search stored memories from previous tasks. Use this when earlier "
+"insights, user preferences, or known failure patterns could help the "
+"current step. Query with the concrete keywords you need — a name, a "
+"date, an amount, a place — rather than the whole question, since "
+"fuzzy matching favours short exact terms. Facts from one message are "
+"stored as separate lines, so search each fact you need on its own. "
+"If a query returns nothing, retry once with different keywords "
+"before concluding the fact was never stored. Results include each "
+"memory's id, which update_memory and delete_memory take."
+)
+
+UPDATE_MEMORY_DESCRIPTION = (
+"Replace the content of a stored memory. Use this when a memory turns "
+"out to be outdated or contradicts what you observe now. Find the "
+"memory's id with search_memory first."
+)
+
+DELETE_MEMORY_DESCRIPTION = (
+"Permanently delete a stored memory. Use this when a memory is "
+"plainly wrong or harmful and cannot be fixed by update_memory, and "
+"whenever the user explicitly asks you to forget, drop or remove "
+"something you stored. Find the memory's id with search_memory first."
+)
+
+DELIVER_MEMORY_DESCRIPTION = (
+"Hand a note to a teammate's own memory instead of keeping it in "
+"yours: the recipient's agents retrieve it as if they had stored it "
+"themselves. Use it to pass a fact, decision or instruction to the "
+"agent or user who will act on it, addressed by username, external id "
+"or agent name. It lands in their inbox (read back with check_inbox), "
+"is rate-limited per recipient, and never exposes who else is copied. "
+"For your own durable facts use store_memory instead."
+)
+
+CHECK_INBOX_DESCRIPTION = (
+"Read the notes teammates have delivered to you — things other "
+"agents or users handed over for you to act on. Use this when the "
+"user asks what you were told, when a task refers to a handover, or "
+"before acting on an instruction that did not come from this "
+"conversation. Returns the newest deliveries first, each with its "
+"content, sender and time. Facts stored by your own past tasks are "
+"found with search_memory instead."
+)
+

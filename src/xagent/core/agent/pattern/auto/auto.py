@@ -24,6 +24,11 @@ from ...context.execution import (
     note_compaction_evidence_loss,
     tool_evidence_state,
 )
+from ...context.memory_prompts import (
+    AUTO_DURABLE_FACTS_SCHEMA_DESCRIPTION,
+    AUTO_DURABLE_RULE,
+    AUTO_MEMORY_RULE,
+)
 from ...context.memory_tool import StoreMemoryTool
 from ...context.skill_tool import (
     LOAD_SKILL_TOOL_NAME,
@@ -1349,31 +1354,10 @@ class AutoPattern(AgentPattern):
         evidence_state: EvidenceState,
     ) -> str:
         memory_rule = (
-            "If the latest user message asks to remember, store, forget, or "
-            "update personal information or preferences for future tasks, "
-            "choose react so the memory tools can persist the change; never "
-            "claim via final_answer that something was remembered, because "
-            "final_answer cannot store anything. Likewise, if the user asks "
-            "what they previously told you or what you remember about them "
-            "and the retrieved context does not already contain the answer, "
-            "choose react and look it up with the search_memory tool before "
-            "concluding that nothing was recorded. "
-            if memory_tools_available
-            else ""
+            AUTO_MEMORY_RULE if memory_tools_available else ""
         )
         durable_rule = (
-            "Independently of the action, list in durable_facts any stable "
-            "facts from this conversation that future tasks should remember "
-            "(client or project names, identifiers, budgets, deadlines, "
-            "decisions, lasting preferences), each as a self-contained "
-            "statement. Emit one entry per fact: a turn that names a deadline, "
-            "an owner and an amount yields three entries, never one combined "
-            "sentence and never a partial selection — every fact stated must "
-            "appear, because each entry is stored separately and anything you "
-            "omit is forgotten. Use an empty array when nothing is durable; "
-            "the answer text itself is never a durable fact. "
-            if memory_tools_available
-            else ""
+            AUTO_DURABLE_RULE if memory_tools_available else ""
         )
         # Both the count and the name list leave out the stored-result reader
         # (see _execution_tool_names), so its exclusion changes neither.
@@ -1594,22 +1578,7 @@ class AutoPattern(AgentPattern):
                         "durable_facts": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": (
-                                "Stable facts from this conversation that future "
-                                "tasks should remember, each a self-contained "
-                                "statement (client or project names, identifiers, "
-                                "budgets, deadlines, decisions, lasting "
-                                "preferences). Enumerate every distinct durable "
-                                "fact as its own entry: if the turn states a "
-                                "deadline, an owner and an amount, return three "
-                                "entries — never collapse several facts into one "
-                                "combined entry and never drop one, because each "
-                                "entry is stored separately and an omitted fact "
-                                "is lost forever. Use an empty array when nothing "
-                                "is durable, and never include transient chat, "
-                                "the final answer itself, or secrets, credentials "
-                                "and personal data that is not meant to persist."
-                            ),
+                            "description": AUTO_DURABLE_FACTS_SCHEMA_DESCRIPTION,
                         },
                     },
                     "required": [

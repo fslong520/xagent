@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import tiktoken
 
+from .memory_prompts import MEMORY_PERSISTENCE_GUIDE
 from ....config import (
     get_checkpoint_gate_stall_warning_seconds,
     get_compact_threshold_ratio,
@@ -1420,62 +1421,7 @@ class ExecutionContext:
                 "execution strategy yourself."
             )
         if self.metadata.get(MEMORY_TOOLS_METADATA_KEY):
-            parts.append(
-                "Memory persistence:\n"
-                "You have memory tools for knowledge that should outlive this "
-                "task. While working, use store_memory when you notice a "
-                "stable user preference or a correction the user gave you, a "
-                "non-obvious mistake you made and how you fixed it, a reusable "
-                "lesson about this domain or its tools, or a durable business "
-                "or project fact that a later task would need (a client or "
-                "project name, an identifier, a budget, a deadline, a "
-                "decision, or a lasting constraint), written as a "
-                "self-contained statement. Call store_memory once per fact: "
-                "when one sentence carries a deadline, an owner and an amount, "
-                "make three separate calls — never merge several facts into a "
-                "single entry, because a later search for any one of them must "
-                "find it on its own. When recalling, search with the concrete "
-                "keywords of what you need (names, dates, amounts, places), "
-                "not with the whole question, and issue a second query with "
-                "different keywords when the first returns nothing. Do not "
-                "store routine task completions, transient chatter, the answer "
-                "you just produced, widely known facts, or secrets and "
-                "credentials. To hand a fact, decision or instruction to a "
-                "teammate, call deliver_memory with the recipient and the "
-                "note — it lands in their own memory and their agents "
-                "retrieve it as if they had stored it themselves; when the "
-                "handover depends on context you already hold, pass those "
-                "memory ids or keywords in attach so the quoted text rides "
-                "along in the same message, the way a person forwards a "
-                "document instead of describing it. When a delivery or inbox "
-                "entry carries an — attached memories — block, treat those "
-                "quotes as material handed to you with the message: use them "
-                "to answer and act on the request they arrived with, carry "
-                "out any instruction they state instead of merely "
-                "acknowledging it, and say in your reply how many attachments "
-                "you took in. Call check_inbox when an "
-                "instruction may have been handed to you "
-                "from another agent or user. When you keep a delivery marker "
-                "inside store_memory content instead, copy it verbatim at the "
-                "very start — the [to:<recipient>] marker is the delivery "
-                "address, and rewriting it away files the memory under your "
-                "own store instead of theirs. To write where the rest of "
-                "the team can see it, open the content with a share marker "
-                "— [share:dept] for your own department, [share:company] for "
-                "the whole organisation, [share:dept:<id>] for one "
-                "department — so the note lands in the shared layer instead "
-                "of your own memory. Retrieval needs no marker: every search "
-                "already folds in the shared layers you are allowed to read. "
-                "If a retrieved memory "
-                "contradicts what you "
-                "observe now, correct it with update_memory or remove it with "
-                "delete_memory (find memory ids via search_memory). When the "
-                "user asks you to forget, drop, reset or re-record something, "
-                "search_memory for it and delete_memory or update it in the "
-                "same turn — never tell the user a stored memory cannot be "
-                "removed, and never leave a stale fact in place after they "
-                "asked for it to go."
-            )
+            parts.append(MEMORY_PERSISTENCE_GUIDE)
         skill_index = self.metadata.get(SKILL_INDEX_METADATA_KEY)
         if isinstance(skill_index, list) and skill_index:
             loaded_skills = self.metadata.get(LOADED_SKILLS_METADATA_KEY)

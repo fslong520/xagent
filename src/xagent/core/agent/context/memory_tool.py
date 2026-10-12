@@ -14,6 +14,14 @@ from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, Field
 
+from .memory_prompts import (
+    CHECK_INBOX_DESCRIPTION,
+    DELETE_MEMORY_DESCRIPTION,
+    DELIVER_MEMORY_DESCRIPTION,
+    SEARCH_MEMORY_DESCRIPTION,
+    STORE_MEMORY_DESCRIPTION,
+    UPDATE_MEMORY_DESCRIPTION,
+)
 from ...memory.core import MemoryNote
 from ...memory.remote import _unwrap_remote_store
 from ..trace import (
@@ -51,24 +59,6 @@ MemoryKind = Literal[
 ]
 _MEMORY_KINDS = frozenset(get_args(MemoryKind))
 
-_STORE_MEMORY_DESCRIPTION = """Store a durable memory for future tasks.
-
-Use this when you notice a UNIQUE, NON-OBVIOUS insight worth remembering, such as:
-- A clear user preference or stable behavior pattern
-- A non-obvious failure and how it was fixed
-- A reusable strategy that is not routine
-- A domain-specific insight that is hard to obtain otherwise
-- A durable business or project fact a later task would need (a client or
-  project name, an identifier, a budget, a deadline, a decision)
-
-Call this once per fact. When one message states several durable facts (a deadline, an owner, an amount, a place), issue one call per fact instead of packing them into a single entry — each stored line is retrieved on its own, so a combined entry makes its parts unfindable, and an omitted fact is lost. When a message does carry durable facts, store all of them rather than a representative one.
-
-If the material you are storing opens with a [to:<recipient>] delivery marker, copy that marker verbatim to the very start of the content parameter and keep the rest of the text intact. The marker is the delivery address: dropping or rewording it files the memory in your own store instead of the intended teammate's. Opening it with [share:dept] or [share:company] instead plants the note in the shared layer — your department's, or everyone's — rather than your own memory; both markers sit at the very start and are consumed by the service.
-
-Do NOT store routine task completions, generic tool usage, common facts, obvious strategies, transient chatter, or secrets and credentials. Write the content as a self-contained statement understandable without this conversation.
-
-If a similar memory already exists, the write is not dropped: it is merged
-into that memory or attached under it, and the result says which happened."""
 
 
 class StoreMemoryArgs(BaseModel):
@@ -88,7 +78,7 @@ class StoreMemoryTool:
     """Execution-scoped ``store_memory`` tool bound to a memory store."""
 
     name = STORE_MEMORY_TOOL_NAME
-    description = _STORE_MEMORY_DESCRIPTION
+    description = STORE_MEMORY_DESCRIPTION
     args_schema = StoreMemoryArgs
 
     def __init__(
@@ -375,17 +365,7 @@ class SearchMemoryTool:
     """Execution-scoped ``search_memory`` tool bound to a memory store."""
 
     name = SEARCH_MEMORY_TOOL_NAME
-    description = (
-        "Search stored memories from previous tasks. Use this when earlier "
-        "insights, user preferences, or known failure patterns could help the "
-        "current step. Query with the concrete keywords you need — a name, a "
-        "date, an amount, a place — rather than the whole question, since "
-        "fuzzy matching favours short exact terms. Facts from one message are "
-        "stored as separate lines, so search each fact you need on its own. "
-        "If a query returns nothing, retry once with different keywords "
-        "before concluding the fact was never stored. Results include each "
-        "memory's id, which update_memory and delete_memory take."
-    )
+    description = SEARCH_MEMORY_DESCRIPTION
     args_schema = SearchMemoryArgs
 
     def __init__(self, *, memory_store: Any, runtime: Any | None = None) -> None:
@@ -470,11 +450,7 @@ class UpdateMemoryTool:
     """Execution-scoped ``update_memory`` tool bound to a memory store."""
 
     name = UPDATE_MEMORY_TOOL_NAME
-    description = (
-        "Replace the content of a stored memory. Use this when a memory turns "
-        "out to be outdated or contradicts what you observe now. Find the "
-        "memory's id with search_memory first."
-    )
+    description = UPDATE_MEMORY_DESCRIPTION
     args_schema = UpdateMemoryArgs
 
     def __init__(self, *, memory_store: Any) -> None:
@@ -529,12 +505,7 @@ class DeleteMemoryTool:
     """Execution-scoped ``delete_memory`` tool bound to a memory store."""
 
     name = DELETE_MEMORY_TOOL_NAME
-    description = (
-        "Permanently delete a stored memory. Use this when a memory is "
-        "plainly wrong or harmful and cannot be fixed by update_memory, and "
-        "whenever the user explicitly asks you to forget, drop or remove "
-        "something you stored. Find the memory's id with search_memory first."
-    )
+    description = DELETE_MEMORY_DESCRIPTION
     args_schema = DeleteMemoryArgs
 
     def __init__(self, *, memory_store: Any) -> None:
@@ -589,15 +560,7 @@ class DeliverMemoryTool:
     """Execution-scoped ``deliver_memory`` tool bound to a memory store."""
 
     name = DELIVER_MEMORY_TOOL_NAME
-    description = (
-        "Hand a note to a teammate's own memory instead of keeping it in "
-        "yours: the recipient's agents retrieve it as if they had stored it "
-        "themselves. Use it to pass a fact, decision or instruction to the "
-        "agent or user who will act on it, addressed by username, external id "
-        "or agent name. It lands in their inbox (read back with check_inbox), "
-        "is rate-limited per recipient, and never exposes who else is copied. "
-        "For your own durable facts use store_memory instead."
-    )
+    description = DELIVER_MEMORY_DESCRIPTION
     args_schema = DeliverMemoryArgs
 
     def __init__(self, *, memory_store: Any) -> None:
@@ -703,15 +666,7 @@ class CheckInboxTool:
     """Execution-scoped ``check_inbox`` tool bound to a memory store."""
 
     name = CHECK_INBOX_TOOL_NAME
-    description = (
-        "Read the notes teammates have delivered to you — things other "
-        "agents or users handed over for you to act on. Use this when the "
-        "user asks what you were told, when a task refers to a handover, or "
-        "before acting on an instruction that did not come from this "
-        "conversation. Returns the newest deliveries first, each with its "
-        "content, sender and time. Facts stored by your own past tasks are "
-        "found with search_memory instead."
-    )
+    description = CHECK_INBOX_DESCRIPTION
     args_schema = CheckInboxArgs
 
     def __init__(self, *, memory_store: Any) -> None:
