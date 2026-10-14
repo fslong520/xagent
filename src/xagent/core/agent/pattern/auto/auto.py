@@ -731,9 +731,14 @@ class AutoPattern(AgentPattern):
         )
         for fact in facts:
             try:
-                await tool.execute(fact, kind="domain_insight")
+                result = await tool.execute(fact, kind="domain_insight")
             except Exception:
                 logger.exception("AutoPattern failed to persist a durable fact")
+                continue
+            # The tool answers rejections as data, so the bare `await` above swallowed them
+            # and the "best effort" path became "no effort" without a trace.
+            if isinstance(result, dict) and not result.get("success", True):
+                logger.warning("AutoPattern durable fact was rejected: %s", result)
 
     async def _interrupt_if_requested(
         self,

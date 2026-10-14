@@ -444,39 +444,46 @@ def lookup_relevant_memories(
     limit: int = 5,
     similarity_threshold: float | None = None,
 ) -> list[dict[str, Any]]:
+    # `category` / `include_general` stay in the signature for the callers, but retrieval no
+    # longer filters on them: the strict equality filter hid every memory outside the two
+    # ingestion categories (console-written ones included) from the recall, and the ranked
+    # search never needed the second `general` pass either.
+    del category, include_general
     if memory_store is None:
         return []
 
-    filters: dict[str, Any] = {}
-    if category:
-        filters["category"] = category
     search = getattr(memory_store, "search", None)
     if not callable(search):
+        logger.warning(
+            "memory store %s has no callable search; skipping retrieval",
+            type(memory_store).__name__,
+        )
         return []
 
     memories = search(
         query=query,
         k=limit,
-        filters=filters or None,
+        filters=None,
         similarity_threshold=similarity_threshold,
     )
-    if include_general and category != "general":
-        memories.extend(
-            search(
-                query=query,
-                k=limit,
-                filters={"category": "general"},
-                similarity_threshold=similarity_threshold,
-            )
-        )
     return [_memory_note_to_dict(memory) for memory in memories[:limit]]
+
+
+# The injected block rides in every prompt of the run; a full note body (delivery bundles
+# easily clear 1k chars) is a token amplifier with no recall upside.
+MEMORY_EXCERPT_LIMIT = 300
+
+
+def _memory_excerpt(content: str, limit: int = MEMORY_EXCERPT_LIMIT) -> str:
+    text = str(content or "").strip()
+    return text if len(text) <= limit else text[:limit] + "…"
 
 
 def enhance_goal_with_memory(query: str, memories: list[dict[str, Any]]) -> str:
     if not memories:
         return query
     memory_lines = [
-        f"- {str(memory.get('content') or '').strip()}"
+        f"- {_memory_excerpt(str(memory.get('content') or ''))}"
         for memory in memories
         if str(memory.get("content") or "").strip()
     ]

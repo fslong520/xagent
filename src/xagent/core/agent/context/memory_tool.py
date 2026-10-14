@@ -42,7 +42,9 @@ CHECK_INBOX_TOOL_NAME = "check_inbox"
 MEMORY_TOOLS_METADATA_KEY = "memory_tools_enabled"
 # Cap per ReAct run. Each DAG step runs its own ReActPattern, so a DAG
 # task gets a fresh cap per step rather than one shared task-wide cap.
-DEFAULT_MAX_STORES_PER_RUN = 5
+# 2026-10-14: raised from 5 — a dense planning turn easily states six or
+# more durable facts and the silent tail loss read as "auto memory forgot".
+DEFAULT_MAX_STORES_PER_RUN = 20
 # Cosine distance passed to search(similarity_threshold=...): lower = stricter
 # dedup (fewer results count as duplicates).
 DEFAULT_DEDUP_DISTANCE_THRESHOLD = 0.1

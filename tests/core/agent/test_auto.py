@@ -466,12 +466,11 @@ async def test_auto_decision_sees_memory_context() -> None:
     )
 
     assert result["success"] is True
-    assert [search["filters"]["category"] for search in memory_store.searches] == [
-        "react_memory",
-        "general",
-    ]
+    # one ranked search, no category filter: the strict two-category filter used to hide
+    # every memory outside the ingestion categories from the injection
+    assert len(memory_store.searches) == 1
+    assert memory_store.searches[0].get("filters") in (None, {})
     assert [search["query"] for search in memory_store.searches] == [
-        "Answer from context",
         "Answer from context",
     ]
     decision_messages = llm.calls[0]["messages"]
@@ -1850,8 +1849,6 @@ async def test_auto_pattern_final_answer_redecision_refreshes_enrichment() -> No
     assert resumed["output"] == "new"
     assert [search["query"] for search in memory_store.searches] == [
         "first question",
-        "first question",
-        "replacement question",
         "replacement question",
     ]
     resumed_system_context = next(

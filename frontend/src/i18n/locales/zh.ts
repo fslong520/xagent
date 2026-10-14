@@ -1613,7 +1613,7 @@ const zh = {
       },
       categoryOptions: {
         general: "用户添加的记忆",
-        react_memory: "运行记忆",
+        react_memory: "代理记忆",
         execution_memory: "任务记忆",
       },
       search: {
@@ -1637,6 +1637,7 @@ const zh = {
       tagPrefix: "标签",
       addedManually: "手动添加",
       addedAutomatically: "自动添加",
+      addedByAgent: "由代理记住",
       keywordsLabel: "关键词：",
       tagsLabel: "标签：",
     },
@@ -1688,6 +1689,7 @@ const zh = {
       exportSelected: "导出选中 ({count})",
       exportCsv: "导出 CSV",
       deleteSelected: "删除选中 ({count})",
+      deleteOne: "删除",
       clearFilter: "清除筛选",
     },
     empty: {

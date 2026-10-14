@@ -401,6 +401,9 @@ def test_build_memory_tools_composition() -> None:
         "search_memory",
         "update_memory",
         "delete_memory",
+        # T14 team channel: directed delivery plus the recipient's inbox reader
+        "deliver_memory",
+        "check_inbox",
     ]
 
 

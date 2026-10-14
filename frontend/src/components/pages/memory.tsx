@@ -522,10 +522,10 @@ export function MemoryPage() {
 
                           {/* Actions - Mobile top right */}
                           <div className="flex sm:hidden items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); openEditDialog(memory); }}>
+                            <Button variant="ghost" size="icon" aria-label={t("memory.viewDialog.edit")} title={t("memory.viewDialog.edit")} className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); openEditDialog(memory); }}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/70 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeletingId(memory.id); }}>
+                            <Button variant="ghost" size="icon" aria-label={t("memory.actions.deleteOne")} title={t("memory.actions.deleteOne")} className="h-8 w-8 text-destructive/70 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeletingId(memory.id); }}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -547,7 +547,11 @@ export function MemoryPage() {
                                 )}
                               </Badge>
                               <span className="text-[10px] sm:text-xs text-muted-foreground">
-                                {memory.category === 'general' ? t("memory.item.addedManually") : t("memory.item.addedAutomatically")} • {formatDate(memory.timestamp)}
+                                {memory.metadata?.source === 'store_memory'
+                                  ? t("memory.item.addedByAgent")
+                                  : memory.category === 'general'
+                                    ? t("memory.item.addedManually")
+                                    : t("memory.item.addedAutomatically")} • {formatDate(memory.timestamp)}
                               </span>
                             </div>
 
@@ -585,10 +589,10 @@ export function MemoryPage() {
 
                         {/* Actions - Desktop right side */}
                         <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity self-start ml-auto">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); openEditDialog(memory); }}>
+                          <Button variant="ghost" size="icon" aria-label={t("memory.viewDialog.edit")} title={t("memory.viewDialog.edit")} className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); openEditDialog(memory); }}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/70 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeletingId(memory.id); }}>
+                          <Button variant="ghost" size="icon" aria-label={t("memory.actions.deleteOne")} title={t("memory.actions.deleteOne")} className="h-8 w-8 text-destructive/70 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeletingId(memory.id); }}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -652,6 +656,14 @@ export function MemoryPage() {
           )}
           <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
             <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>{t("memory.viewDialog.close")}</Button>
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => { setIsViewDialogOpen(false); setDeletingId(viewingMemory!.id) }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {t("memory.actions.deleteOne")}
+            </Button>
             <Button onClick={() => { setIsViewDialogOpen(false); openEditDialog(viewingMemory!) }}>
               <Edit className="h-4 w-4 mr-2" />
               {t("memory.viewDialog.edit")}

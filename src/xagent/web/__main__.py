@@ -24,6 +24,29 @@ from .logging_config import LogLevel, setup_logging
 load_dotenv()
 
 
+def _sanitize_no_proxy_env() -> None:
+    """Rewrite bracketed IPv6 entries in `NO_PROXY` before anything builds an httpx client.
+
+    httpx turns each `no_proxy` entry into a mount pattern (`_utils.get_environment_proxies`),
+    and a bracketed entry such as `[::1]` becomes the invalid pattern `all://*[::1]` — every
+    `httpx.Client()` then dies at import time with `Invalid port: ':1]'` (this took the whole
+    service down on 2026-10-14). The bare form is what httpx accepts.
+    """
+    for name in ("NO_PROXY", "no_proxy"):
+        raw = os.environ.get(name)
+        if not raw or "[" not in raw:
+            continue
+        cleaned = ",".join(
+            part.replace("[", "").replace("]", "")
+            for part in (p.strip() for p in raw.split(","))
+            if part
+        )
+        os.environ[name] = cleaned
+
+
+_sanitize_no_proxy_env()
+
+
 JWT_ENV_KEYS = (
     "XAGENT_JWT_SECRET",
     "XAGENT_JWT_ALGORITHM",

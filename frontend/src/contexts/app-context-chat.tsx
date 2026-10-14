@@ -5525,6 +5525,7 @@ export function AppProvider({
                   message: '🔍 ' + t('agent.logs.event.actions.task_start_memory_retrieve'),
                   // Display full data
                   rawData: eventData,
+                  ...eventData,
                 }
               }
               dispatch({ type: "ADD_TRACE_EVENT", payload: traceEvent })
@@ -5576,6 +5577,10 @@ export function AppProvider({
                   message: '🔍 ' + t('agent.logs.event.actions.task_end_memory_retrieve'),
                   // Display full data
                   rawData: eventData,
+                  // …and keep the fields at the top level too: TraceEventRenderer reads
+                  // `memories_count` here, and burying it under rawData rendered every
+                  // live retrieval as "0 found" while the backend had returned results.
+                  ...eventData,
                 }
               }
               dispatch({ type: "ADD_TRACE_EVENT", payload: traceEvent })
