@@ -6532,15 +6532,16 @@ async def test_dag_pattern_enriches_plan_prompt_with_memory() -> None:
         skill_manager=skill_manager,
     )
 
-    # Only the root run retrieves automatically; DAG steps rely on the
-    # search_memory tool instead of re-querying per step.
-    assert [search["filters"]["category"] for search in memory_store.searches] == [
-        "dag_plan_execute_memory",
-        "general",
-        "react_memory",
+    # One unfiltered ranked search per automatic retrieve: the strict category
+    # filter used to split each call into a dag/react + general pair and hid
+    # every other category from the injection. The second recorded search is
+    # store_memory's dedup probe, which deliberately stays within its category.
+    # DAG steps rely on the search_memory tool instead of re-querying per step.
+    assert [search["filters"] for search in memory_store.searches] == [
+        None,
+        {"category": "react_memory"},
     ]
     assert [search["query"] for search in memory_store.searches] == [
-        "Plan this",
         "Plan this",
         "User prefers concise summaries.",
     ]

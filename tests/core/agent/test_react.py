@@ -4372,12 +4372,10 @@ async def test_react_pattern_injects_memory_context_and_skill_index() -> None:
     )
 
     assert result["success"] is True
-    assert [search["filters"]["category"] for search in memory_store.searches] == [
-        "react_memory",
-        "general",
-    ]
+    # one unfiltered ranked search per automatic retrieve (the category filter
+    # used to issue a second `general` pass per call)
+    assert [search["filters"] for search in memory_store.searches] == [None]
     assert [search["query"] for search in memory_store.searches] == [
-        "Do the thing",
         "Do the thing",
     ]
     first_system_prompt = llm.calls[0]["messages"][0]["content"]
