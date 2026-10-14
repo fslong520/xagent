@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
+import json
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -604,6 +605,20 @@ class AgentRunner:
                                 streaming_handler=streaming_handler,
                             )
                         )
+                        # single_call strips the memory tools (react skips them when the
+                        # finalize flag is set), so nothing could persist a fact the user
+                        # stated in passing — one bounded extraction call after the answer
+                        # restores the guarantee; failures stay behind the shipped answer.
+                        if getattr(pattern, "finalize_after_tool_result", False) and (
+                            result.get("success")
+                        ):
+                            await self._persist_single_call_facts(
+                                task=task or "",
+                                result=result,
+                                llm=getattr(self.agent, "llm", None),
+                                memory_store=getattr(self.agent, "memory_store", None),
+                                runtime=runtime,
+                            )
                     except ExecutionInterrupted as exc:
                         if runtime.budget_stopped:
                             teardown_status = "completed"
@@ -1965,6 +1980,77 @@ class AgentRunner:
             skill_manager=getattr(self.agent, "skill_manager", None),
             allowed_skills=getattr(self.agent, "allowed_skills", None),
         )
+
+    async def _persist_single_call_facts(
+        self,
+        *,
+        task: str,
+        result: dict[str, Any],
+        llm: Any,
+        memory_store: Any,
+        runtime: Any,
+    ) -> None:
+        """Best-effort durable-fact store for the single_call (flash) path.
+
+        That mode skips ``build_memory_tools`` on purpose, so the model itself cannot
+        store anything a user stated in passing. One short extraction call after the
+        final answer closes the hole; every failure is logged and never surfaces —
+        the answer has already shipped by now.
+        """
+        if llm is None or memory_store is None:
+            return
+        answer = str(result.get("output") or result.get("answer") or "")
+        if not answer.strip() or not task.strip():
+            return
+        try:
+            raw = await llm.chat(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You extract durable facts from a completed exchange. "
+                            "Reply with ONE JSON object: {\"facts\": [\"...\"]}. "
+                            "One self-contained statement per fact (project or client "
+                            "names, identifiers, budgets, deadlines, schedules, "
+                            "decisions and their reasons, lasting preferences, "
+                            "corrections). Exclude chatter, the answer itself and "
+                            "anything transient. No durable fact? {\"facts\": []}."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Request:\n{task}\n\nFinal answer:\n{answer}\n\n"
+                            "Extract the durable facts."
+                        ),
+                    },
+                ],
+                response_format={"type": "json_object"},
+            )
+            text = raw if isinstance(raw, str) else str(raw)
+            if "```" in text:
+                text = text.split("```", 2)[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            payload = json.loads(text.strip())
+            facts = [
+                str(f).strip()
+                for f in payload.get("facts", [])
+                if isinstance(f, (str, int, float)) and str(f).strip()
+            ][:10]
+            if not facts:
+                return
+            from .context.memory_tool import StoreMemoryTool
+
+            tool = StoreMemoryTool(memory_store=memory_store, task=task, runtime=runtime)
+            for fact in facts:
+                stored = await tool.execute(fact, kind="domain_insight")
+                if isinstance(stored, dict) and not stored.get("success", True):
+                    logger.warning(
+                        "single_call durable fact rejected: %s", stored
+                    )
+        except Exception:
+            logger.exception("single_call durable-fact persistence failed")
 
     async def _setup_tools(self, tools: list[Any], *, task_id: str) -> None:
         for tool in tools:

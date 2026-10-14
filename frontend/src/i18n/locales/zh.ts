@@ -3720,6 +3720,7 @@ const zh = {
     skillSelected: "已选择技能",
     taskExecution: "正在思考",
     memoryRetrieved: "已检索记忆 {count} 条",
+    memoryRetrievalFailed: "记忆检索不可用（{reason}）",
     memoryStored: "已存记忆（{action}）",
     memoryStoreFailed: "记忆保存失败",
     thoughtProcess: "思考过程",

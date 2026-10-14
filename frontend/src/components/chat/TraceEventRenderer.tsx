@@ -568,13 +568,19 @@ export function processTraceEvents(
           : Array.isArray(eventData.memories)
             ? eventData.memories.length
             : 0;
+        const retrievalError =
+          typeof eventData.retrieval_error === 'string' ? eventData.retrieval_error : '';
         if (!step.stepName) {
           step.stepName = t('traceEventRenderer.taskExecution');
         }
         step.actions.push({
           id: eventId,
           type: 'info',
-          title: t('traceEventRenderer.memoryRetrieved', { count }),
+          // an auth/outage failure must not masquerade as "nothing was ever remembered"
+          title:
+            retrievalError && !count
+              ? t('traceEventRenderer.memoryRetrievalFailed', { reason: retrievalError })
+              : t('traceEventRenderer.memoryRetrieved', { count }),
           status: 'completed',
           timestamp,
           data: { statusLine: true },

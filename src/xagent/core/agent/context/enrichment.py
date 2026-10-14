@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
@@ -12,6 +13,13 @@ from ...agent.trace import (
 from ...user_context import current_user_id
 
 logger = logging.getLogger(__name__)
+
+# The lookup turns failures into [] (a memory outage must not fail the task), but the
+# empty result alone reads as "nothing was ever remembered": the last failure rides here
+# so the trace can say *why* the retrieval came back empty.
+_retrieval_error: ContextVar[str | None] = ContextVar(
+    "mem_retrieval_error", default=None
+)
 
 MEMORY_CONTEXT_METADATA_KEY = "retrieved_memory_context"
 RETRIEVED_MEMORIES_METADATA_KEY = "retrieved_memories"
@@ -209,6 +217,7 @@ async def enrich_context_with_memory(
             data={"query": query[:200], "category": category},
         )
 
+    _retrieval_error.set(None)
     memories = await asyncio.to_thread(
         _lookup_relevant_memories_with_context,
         memory_store,
@@ -219,6 +228,9 @@ async def enrich_context_with_memory(
         similarity_threshold,
         user_id,
     )
+    retrieval_error = _retrieval_error.get()
+    if retrieval_error:
+        logger.warning("memory retrieval degraded: %s", retrieval_error)
     retrieved_by_category[category] = memories
     context.metadata[MEMORY_CONTEXT_METADATA_KEY] = _build_memory_context(
         context.metadata.get(MEMORY_CONTEXT_METADATA_KEY), query, memories
@@ -234,6 +246,7 @@ async def enrich_context_with_memory(
                 "category": category,
                 "memories_count": len(memories),
                 "found": bool(memories),
+                "retrieval_error": retrieval_error,
             },
         )
 
@@ -423,11 +436,12 @@ def _lookup_relevant_memories_with_context(
             limit=limit,
             similarity_threshold=similarity_threshold,
         )
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "Failed to retrieve memories%s",
             " with user context" if user_id is not None else "",
         )
+        _retrieval_error.set(f"{type(exc).__name__}: {exc}")
         return []
 
 
@@ -479,11 +493,20 @@ def _memory_excerpt(content: str, limit: int = MEMORY_EXCERPT_LIMIT) -> str:
     return text if len(text) <= limit else text[:limit] + "…"
 
 
+def _shared_tag(memory: dict[str, Any]) -> str:
+    """`[shared:dept:1]` / `[shared:company]` provenance for a shared-layer note."""
+    space_kind = memory.get("space_kind")
+    if not space_kind:
+        return ""
+    space_id = memory.get("space_id")
+    return f"[shared:{space_kind}" + (f":{space_id}]" if space_id else "]")
+
+
 def enhance_goal_with_memory(query: str, memories: list[dict[str, Any]]) -> str:
     if not memories:
         return query
     memory_lines = [
-        f"- {_memory_excerpt(str(memory.get('content') or ''))}"
+        f"- {_shared_tag(memory)}{_memory_excerpt(str(memory.get('content') or ''))}"
         for memory in memories
         if str(memory.get("content") or "").strip()
     ]

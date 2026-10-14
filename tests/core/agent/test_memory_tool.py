@@ -271,6 +271,8 @@ async def test_search_memory_returns_ids_and_content() -> None:
             "id": "mem-1",
             "content": "User prefers Chinese.",
             "category": "react_memory",
+            "space_kind": None,
+            "space_id": None,
         }
     ]
     assert store.searches[0]["query"] == "preferences"

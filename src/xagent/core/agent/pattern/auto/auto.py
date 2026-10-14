@@ -659,6 +659,16 @@ class AutoPattern(AgentPattern):
             await runtime.checkpoint("auto_final", context=context, pattern=self)
             return result
 
+        # The router's durable_facts belong to the conversation, not to the final-answer
+        # branch: persist them before delegating too — otherwise every react/dag decision
+        # drops exactly what the schema promised to store (the react model may also store
+        # them via tools; the judged write dedupes on the server).
+        await self._persist_durable_facts(
+            memory_store=memory_store,
+            runtime=runtime,
+            context=context,
+        )
+
         child = self._selected_child()
         self._restore_child_state(child)
         self.status = "running"
@@ -827,6 +837,9 @@ class AutoPattern(AgentPattern):
                 existing_context_sufficient=False,
                 evidence_basis=self.decision.evidence_basis,
                 missing_verification=self.decision.missing_verification,
+                # the facts survive the fallback: they belong to the conversation,
+                # not to the discarded final-answer decision
+                durable_facts=list(self.decision.durable_facts),
             )
         if (
             self.decision.action == AutoAction.FINAL_ANSWER
@@ -843,6 +856,7 @@ class AutoPattern(AgentPattern):
                     "AutoPattern selected final_answer without a non-empty answer; "
                     "falling back to react."
                 ),
+                durable_facts=list(self.decision.durable_facts),
             )
         if self.decision.action == AutoAction.PLAN_EXECUTE and self.dag_pattern is None:
             raise ValueError(

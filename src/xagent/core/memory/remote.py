@@ -579,6 +579,8 @@ def _note_from_payload(data: Mapping[str, Any]) -> MemoryNote:
         ),
         mime_type=str(data.get("mime_type") or "text/plain"),
         metadata=metadata,
+        space_kind=(str(v) if (v := data.get("space_kind")) else None),
+        space_id=(int(v) if (v := data.get("space_id")) is not None else None),
     )
 
 
@@ -704,13 +706,23 @@ class RemoteMemoryStore(MemoryStore):
         status = response.status_code
         if 200 <= status < 300:
             return
+        # the service's own message carries the repair ("send a follow-up delivery
+        # instead" for a 409) — dropping it left the model retrying blind
+        detail = ""
+        try:
+            payload = response.json()
+            message = ((payload or {}).get("error") or {}).get("message")
+            if isinstance(message, str) and message:
+                detail = f" — {message}"
+        except ValueError:
+            pass
         if status == 401:
             raise RemoteMemoryStoreAuthenticationError(
                 f"Remote memory service rejected the service credential: {path}",
                 status_code=status,
             )
         raise RemoteMemoryStoreError(
-            f"Remote memory service returned HTTP {status}: {path}",
+            f"Remote memory service returned HTTP {status}: {path}{detail}",
             status_code=status,
         )
 
@@ -1077,6 +1089,31 @@ class RemoteMemoryStore(MemoryStore):
         self._raise_for_error(path, response)
         items = self._note_items(path, self._json(path, response))
         return [_note_from_payload(item) for item in items]
+
+    def inbox_list(self, include_read: bool = False) -> List[MemoryNote]:
+        """Deliveries addressed to the identity; unread-only unless ``include_read``.
+
+        Read state lives beside the immutable delivery row (service migration 0009), so
+        the tool can distinguish "new" from "already handled" without mutating anything.
+        """
+        path = "/v1/memory/inbox/list"
+        response = self._request(
+            "POST", path, body={"include_read": bool(include_read)}
+        )
+        self._raise_for_error(path, response)
+        items = self._note_items(path, self._json(path, response))
+        return [_note_from_payload(item) for item in items]
+
+    def inbox_read(self, ids: List[str]) -> int:
+        """Mark deliveries as read; returns how many receipts were written."""
+        path = "/v1/memory/inbox/read"
+        response = self._request("POST", path, body={"ids": [str(i) for i in ids]})
+        self._raise_for_error(path, response)
+        payload = self._json(path, response)
+        try:
+            return int(payload.get("marked") or 0)
+        except (AttributeError, TypeError, ValueError):
+            return 0
 
     def clear(self) -> None:
         path = "/v1/memory/clear"

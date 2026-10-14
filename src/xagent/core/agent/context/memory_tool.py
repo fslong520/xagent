@@ -48,6 +48,9 @@ DEFAULT_MAX_STORES_PER_RUN = 20
 # Cosine distance passed to search(similarity_threshold=...): lower = stricter
 # dedup (fewer results count as duplicates).
 DEFAULT_DEDUP_DISTANCE_THRESHOLD = 0.1
+# Attachment wording refs resolve at most this cosine distance: beyond it the nearest
+# note is filler, and a confident wrong quote is worse than an unresolved ref.
+ATTACH_WORDING_MAX_DISTANCE = 0.60
 DEFAULT_SEARCH_LIMIT = 5
 MAX_SEARCH_LIMIT = 20
 
@@ -428,11 +431,21 @@ class SearchMemoryTool:
         results = self.memory_store.search(query=query, k=limit)
         memories = []
         for note in results or []:
+            content = getattr(note, "content", "") or ""
+            space_kind = getattr(note, "space_kind", None)
+            space_id = getattr(note, "space_id", None)
+            if space_kind:
+                # provenance rides with the quote: the model must know it is citing the
+                # team's shared layer, not somebody's private note (§A4 hand-over form)
+                tag = f"[shared:{space_kind}" + (f":{space_id}]" if space_id else "]")
+                content = f"{tag} {content}"
             memories.append(
                 {
                     "id": getattr(note, "id", None),
-                    "content": getattr(note, "content", ""),
+                    "content": content,
                     "category": getattr(note, "category", "general"),
+                    "space_kind": space_kind,
+                    "space_id": space_id,
                 }
             )
         return memories
@@ -474,7 +487,12 @@ class UpdateMemoryTool:
             if not getattr(existing, "success", False):
                 return {
                     "success": False,
-                    "error": f"Memory '{memory_id}' not found.",
+                    "error": (
+                        f"Memory '{memory_id}' not found or not accessible (it may "
+                        "exist under another owner). Do not tell the user it was "
+                        "never recorded — search first, then ask whether the id is "
+                        "right."
+                    ),
                 }
             note = getattr(existing, "content", None)
             if note is None:
@@ -594,7 +612,7 @@ class DeliverMemoryTool:
                     "store has no teammate inbox."
                 ),
             }
-        quoted = await self._quote_attachments(attach or [])
+        quoted, unresolved = await self._quote_attachments(attach or [])
         if quoted:
             content = f"{content}\n\n— attached memories —\n{quoted}"
         note = MemoryNote(content=f"[to:{target}] {content}")
@@ -608,22 +626,31 @@ class DeliverMemoryTool:
                 "success": False,
                 "error": str(getattr(response, "error", None) or "Delivery failed."),
             }
-        return {
+        result = {
             "success": True,
             "memory_id": getattr(response, "memory_id", None),
             "delivered_to": target,
+            "attachments_quoted": (len(attach or []) - len(unresolved)),
         }
+        if unresolved:
+            # the sender must SEE the stale refs: silently swapping in whatever was
+            # nearest turned a broken quote into a confident wrong one
+            result["attachments_unresolved"] = unresolved
+        return result
 
-    async def _quote_attachments(self, refs: list[str]) -> str:
+    async def _quote_attachments(self, refs: list[str]) -> tuple[str, list[str]]:
         """Resolve each attachment ref into quoted memory text.
 
-        A ref that looks like an id is fetched directly; anything else is
-        looked up by its wording. Unresolvable refs are skipped rather than
-        failing the delivery — a message with a stale quote still carries its
-        own text.
+        A ref that looks like an id is fetched directly and never fuzzy-matched — an id
+        that no longer exists (or that the sender may not read) must surface as
+        unresolved, not resolve to whatever note happens to be nearest. Wording refs
+        search with a relevance ceiling so a near-miss comes back unresolved too.
+        Unresolvable refs are skipped rather than failing the delivery — a message with
+        a stale quote still carries its own text.
         """
         lines: list[str] = []
         seen: set[str] = set()
+        unresolved: list[str] = []
         for ref in list(refs)[:8]:
             ref = str(ref or "").strip()
             if not ref or ref in seen:
@@ -632,29 +659,42 @@ class DeliverMemoryTool:
             note = None
             if len(ref) >= 32 and "-" in ref:
                 get = getattr(self.memory_store, "get", None)
-                if callable(get):
-                    try:
-                        response = await asyncio.to_thread(get, ref)
-                        if getattr(response, "success", False):
-                            candidate = getattr(response, "content", None)
-                            if candidate is not None:
-                                note = candidate
-                    except Exception:
-                        logger.debug("attachment id lookup failed", exc_info=True)
+                if not callable(get):
+                    unresolved.append(ref)
+                    continue
+                try:
+                    response = await asyncio.to_thread(get, ref)
+                    if getattr(response, "success", False):
+                        candidate = getattr(response, "content", None)
+                        if candidate is not None:
+                            note = candidate
+                except Exception:
+                    logger.debug("attachment id lookup failed", exc_info=True)
+                if note is None:
+                    # an id ref is either gone or invisible: both mean "quote not found"
+                    unresolved.append(ref)
+                    continue
             if note is None:
                 search = getattr(self.memory_store, "search", None)
                 if callable(search):
                     try:
-                        results = await asyncio.to_thread(search, ref, 1)
+                        results = await asyncio.to_thread(
+                            lambda: search(
+                                query=ref,
+                                k=1,
+                                similarity_threshold=ATTACH_WORDING_MAX_DISTANCE,
+                            )
+                        )
                         note = results[0] if results else None
                     except Exception:
                         logger.debug("attachment keyword lookup failed", exc_info=True)
             if note is None:
+                unresolved.append(ref)
                 continue
             text = str(getattr(note, "content", "") or "").strip()
             if text:
                 lines.append(f"- {text}")
-        return "\n".join(lines)
+        return "\n".join(lines), unresolved
 
 
 class CheckInboxArgs(BaseModel):
@@ -680,6 +720,47 @@ class CheckInboxTool:
         except (TypeError, ValueError):
             limit = 20
         limit = max(1, min(limit, 50))
+        # Prefer the dedicated inbox surface (unread-first + receipts beside the
+        # immutable delivery). Legacy/fake stores without it keep the list+filter path.
+        inbox_list = getattr(self.memory_store, "inbox_list", None)
+        if callable(inbox_list):
+            try:
+                notes = await asyncio.to_thread(lambda: inbox_list(include_read=False))
+            except Exception:
+                logger.exception("check_inbox failed")
+                return {"success": False, "error": "Failed to read the inbox."}
+            ordered = sorted(
+                notes, key=lambda n: str(getattr(n, "timestamp", "") or ""), reverse=True
+            )
+            shown = ordered[:limit]
+            items = []
+            for note in shown:
+                metadata = getattr(note, "metadata", None) or {}
+                items.append(
+                    {
+                        "id": getattr(note, "id", None),
+                        "content": str(getattr(note, "content", "") or ""),
+                        "from_user": metadata.get("from_user"),
+                        "timestamp": str(getattr(note, "timestamp", "") or ""),
+                    }
+                )
+            marked = 0
+            inbox_read = getattr(self.memory_store, "inbox_read", None)
+            ids = [i["id"] for i in items if i.get("id")]
+            if ids and callable(inbox_read):
+                try:
+                    marked = await asyncio.to_thread(lambda: inbox_read(ids))
+                except Exception:
+                    # receipts are best effort: the deliveries were still returned
+                    logger.warning("check_inbox could not take receipts", exc_info=True)
+            result = {
+                "success": True,
+                "count": len(items),
+                "deliveries": items,
+                "marked_read": marked,
+                "unread_remaining": max(0, len(ordered) - len(shown)),
+            }
+            return result
         list_all = getattr(self.memory_store, "list_all", None)
         if not callable(list_all):
             return {

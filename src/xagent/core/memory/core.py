@@ -16,6 +16,10 @@ class MemoryNote(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
     mime_type: str = "text/plain"
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Shared-layer provenance (design §A2): which shared space the note lives in, so every
+    # consumer (search results, injection) can label a team-visible quote as such.
+    space_kind: Optional[str] = None
+    space_id: Optional[int] = None
 
 
 class MemoryResponse(BaseModel):
