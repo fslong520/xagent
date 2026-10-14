@@ -829,6 +829,11 @@ async def test_startup_event_skips_when_auto_migrate_disabled(
     )
     monkeypatch.setattr(web_app_module.asyncio, "to_thread", _fake_to_thread)
     monkeypatch.setattr(web_app_module.asyncio, "create_task", _track_create_task)
+    monkeypatch.setattr(
+        web_app_module,
+        "start_app_process_diagnostics",
+        lambda _app: runtime_start_order.append("diagnostics"),
+    )
 
     await web_app_module.startup_event()
     if created_tasks:
@@ -837,7 +842,7 @@ async def test_startup_event_skips_when_auto_migrate_disabled(
     assert created_tasks == []
     assert migration_called["value"] is False
     assert lease_recovery_starts == [web_app_module.app]
-    assert runtime_start_order == ["admission", "trigger"]
+    assert runtime_start_order == ["admission", "trigger", "diagnostics"]
 
 
 @pytest.mark.asyncio
@@ -1406,9 +1411,7 @@ async def test_failed_startup_leaves_no_unsignaled_temp_file_cleanup(
         "xagent.web.services.kb_file_service.reconcile_uploaded_files",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(
-        "xagent.web.models.database.get_session_local", lambda: _FakeSession
-    )
+    monkeypatch.setattr("xagent.web.models.database._SessionLocal", _FakeSession)
 
     def _blocking_cleanup(*, stop_event=None) -> int:
         # Stand in for a real sweep of a large tree: an executor walk that only

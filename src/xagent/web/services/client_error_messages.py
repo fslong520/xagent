@@ -97,6 +97,9 @@ class ClientErrorCode(StrEnum):
     TASK_CHECKPOINT_UNREADABLE = "task_checkpoint_unreadable"
     AUTHENTICATION_REQUIRED = "authentication_required"
     TASK_ACCESS_DENIED = "task_access_denied"
+    EXCEL_WORKBOOK_ACCESS_DENIED = "excel_workbook_access_denied"
+    EXCEL_SITE_NOT_FOUND = "excel_site_not_found"
+    EXCEL_WORKBOOK_LOCKED = "excel_workbook_locked"
     INVALID_MESSAGE = "invalid_message"
     MESSAGE_OUTCOME_UNKNOWN = "message_outcome_unknown"
     # The turn ended interrupted after an external stop was requested (that
@@ -108,6 +111,13 @@ class ClientErrorCode(StrEnum):
     # command ended in failure while its task was already COMPLETED or
     # FAILED. That record never reaches a client.
     EXTERNAL_TURN_INTERRUPTED = "external_turn_interrupted"
+    # An external stop request ended without the server confirming it took
+    # effect, and the server could not confirm the turn is over: it may still
+    # be running, or its row may be unreadable. Only the terminal command
+    # broadcast for an external-scope cancel puts it on a frame, as
+    # ``error_code`` on an ``agent_error``, by passing it to that frame's
+    # builder as ``asserted_code``.
+    EXTERNAL_STOP_NOT_APPLIED = "external_stop_not_applied"
     MODEL_ERROR = "model_error"
 
 
@@ -164,12 +174,26 @@ def client_error_message(code: ClientErrorCode) -> str:
             "Authentication is required to send this message."
         ),
         ClientErrorCode.TASK_ACCESS_DENIED: "You do not have access to this task.",
+        ClientErrorCode.EXCEL_WORKBOOK_ACCESS_DENIED: (
+            "The Excel workbook could not be opened or modified. Check that you "
+            "have edit permission or reconnect the Excel connector."
+        ),
+        ClientErrorCode.EXCEL_SITE_NOT_FOUND: (
+            "The Excel workbook or its SharePoint location could not be found. "
+            "Check the workbook path or reconnect the Excel connector."
+        ),
+        ClientErrorCode.EXCEL_WORKBOOK_LOCKED: (
+            "The Excel workbook is locked. Close it elsewhere and try again."
+        ),
         ClientErrorCode.INVALID_MESSAGE: "The message format is invalid.",
         ClientErrorCode.MESSAGE_OUTCOME_UNKNOWN: (
             "The message may or may not have been applied. Check the "
             "conversation before sending it again."
         ),
         ClientErrorCode.EXTERNAL_TURN_INTERRUPTED: "This response was interrupted.",
+        ClientErrorCode.EXTERNAL_STOP_NOT_APPLIED: (
+            "Stopping this response didn't go through — please try again."
+        ),
         ClientErrorCode.MODEL_ERROR: CLIENT_SAFE_MODEL_ERROR,
     }[code]
 

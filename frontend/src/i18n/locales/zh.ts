@@ -10,6 +10,15 @@ const zh = {
     leaseExpired: "运行任务的服务器已停止，任务因系统中断已暂停，可点击“继续”恢复执行。",
     persistenceFailure: "数据库暂时不可用，任务因系统中断已暂停，可点击“继续”恢复执行。",
     llmUnavailable: "模型服务暂时不可用，任务因系统中断已暂停，可点击“继续”恢复执行。",
+    autoResumeScheduled: "任务因系统中断已暂停，稍后将自动恢复执行。",
+    autoResumeScheduledAt: "任务因系统中断已暂停，将在 {time} 左右自动恢复执行。",
+    autoResumeResuming: "任务因系统中断暂停，正在自动恢复执行。",
+    autoResumeStopped: "自动恢复已停止，可点击“继续”恢复执行。",
+    autoResumeStoppedLimit: "多次尝试后自动恢复已停止，可点击“继续”恢复执行。",
+    autoResumeStoppedExpired: "已超过自动恢复时限，可点击“继续”恢复执行。",
+    autoResumeStoppedSuperseded: "已有更新的定时运行取代本次运行，自动恢复已停止。",
+    autoResumeStoppedFailed: "自动恢复未能启动，可点击“继续”恢复执行。",
+    autoResumeStoppedDisabled: "自动恢复已关闭，可点击“继续”恢复执行。",
   },
   clientErrors: {
     executionQueueFull: "团队执行队列已满，请稍后重试。",
@@ -34,6 +43,7 @@ const zh = {
     invalidMessage: "消息格式无效。",
     messageOutcomeUnknown: "该消息是否已成功发送尚不确定，请先查看对话内容后再决定是否重新发送。",
     externalTurnInterrupted: "此回答已被中断。",
+    externalStopNotApplied: "未能停止此回答，请重试。",
     uploadTooLarge: "文件过大，请减小上传大小后重试。",
     uploadProxyError: "上传请求未到达应用，请检查服务器的上传大小限制。",
     uploadFailed: "上传失败，请重试。",
@@ -2844,6 +2854,7 @@ const zh = {
       },
     },
     configForm: {
+      listLoadFailed: "列表加载失败。",
       logo: {
         label: "Logo",
         upload: "上传 Logo",

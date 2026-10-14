@@ -13,7 +13,14 @@ from xagent.web.services.client_error_messages import (
     client_error_message,
     required_mcp_unavailable_client_message,
 )
-from xagent.web.services.external_task_cancel import EXTERNAL_TURN_INTERRUPTED_MESSAGE
+from xagent.web.services.external_task_cancel import (
+    EXTERNAL_CANCEL_NOT_APPLIED_MESSAGE,
+    EXTERNAL_TURN_INTERRUPTED_MESSAGE,
+)
+from xagent.web.services.task_execution import (
+    _CALLER_ASSERTED_COMMAND_ERROR_CODES,
+    _CALLER_ASSERTED_TERMINAL_CODES,
+)
 
 
 def test_client_error_codes_have_fixed_safe_fallbacks() -> None:
@@ -38,6 +45,10 @@ def test_client_error_codes_have_fixed_safe_fallbacks() -> None:
     assert (
         client_error_message(ClientErrorCode.EXTERNAL_TURN_INTERRUPTED)
         == EXTERNAL_TURN_INTERRUPTED_MESSAGE
+    )
+    assert (
+        client_error_message(ClientErrorCode.EXTERNAL_STOP_NOT_APPLIED)
+        == EXTERNAL_CANCEL_NOT_APPLIED_MESSAGE
     )
     assert {code.value: client_error_message(code) for code in ClientErrorCode} == {
         "message_processing_failed": "The message could not be processed. Please try again.",
@@ -91,12 +102,24 @@ def test_client_error_codes_have_fixed_safe_fallbacks() -> None:
         "task_checkpoint_unreadable": "The task's saved progress could not be read.",
         "authentication_required": "Authentication is required to send this message.",
         "task_access_denied": "You do not have access to this task.",
+        "excel_workbook_access_denied": (
+            "The Excel workbook could not be opened or modified. Check that you "
+            "have edit permission or reconnect the Excel connector."
+        ),
+        "excel_site_not_found": (
+            "The Excel workbook or its SharePoint location could not be found. "
+            "Check the workbook path or reconnect the Excel connector."
+        ),
+        "excel_workbook_locked": "The Excel workbook is locked. Close it elsewhere and try again.",
         "invalid_message": "The message format is invalid.",
         "message_outcome_unknown": (
             "The message may or may not have been applied. Check the "
             "conversation before sending it again."
         ),
         "external_turn_interrupted": "This response was interrupted.",
+        "external_stop_not_applied": (
+            "Stopping this response didn't go through — please try again."
+        ),
         "model_error": "Model provider call failed.",
     }
 
@@ -128,8 +151,25 @@ _FRONTEND_TABLE = (
 )
 
 
-def test_the_interruption_code_is_in_the_frontend_error_table() -> None:
-    """The cancel core's code is only useful if the client table lists it.
+def test_caller_asserted_code_sets_are_disjoint() -> None:
+    """A caller-asserted code names one outcome on one kind of frame.
+
+    The terminal ``task_error`` frame and the external command ``agent_error``
+    frame admit codes from separate sets. A code in both would let one frame
+    claim the other's outcome: "the turn ended interrupted" and "the stop may
+    not have taken effect" cannot share a code.
+    """
+    assert not (_CALLER_ASSERTED_TERMINAL_CODES & _CALLER_ASSERTED_COMMAND_ERROR_CODES)
+
+
+@pytest.mark.parametrize(
+    "code",
+    sorted(_CALLER_ASSERTED_TERMINAL_CODES | _CALLER_ASSERTED_COMMAND_ERROR_CODES),
+)
+def test_every_caller_asserted_code_is_in_the_frontend_error_table(
+    code: ClientErrorCode,
+) -> None:
+    """A caller-asserted code is only useful if the client table lists it.
 
     A client that does not render server prose shows a generic fallback for
     any code ``CLIENT_ERROR_CODES`` does not list, so renaming either side
@@ -141,4 +181,4 @@ def test_the_interruption_code_is_in_the_frontend_error_table() -> None:
     table = source.split("export const CLIENT_ERROR_CODES = [", 1)
     assert len(table) == 2, "could not parse: CLIENT_ERROR_CODES moved"
     listed = set(re.findall(r'^\s*"(\w+)",', table[1].split("] as const", 1)[0], re.M))
-    assert ClientErrorCode.EXTERNAL_TURN_INTERRUPTED.value in listed
+    assert code.value in listed

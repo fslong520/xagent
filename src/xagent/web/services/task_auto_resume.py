@@ -3,10 +3,9 @@
 The sweeper turns due ``scheduled`` rows of ``task_auto_recovery`` into
 durable RESUME commands; ``resume_task`` re-checks each such command when it
 is claimed (:func:`check_auto_resume_claim_sync`), because the task may have
-moved on while the command waited. Recording an interruption does not
-schedule yet, so in production every tick is a single ``EXISTS`` over the
-due index that finds nothing; every path here is reachable by inserting
-``scheduled`` rows directly.
+moved on while the command waited. Rows become ``scheduled`` when an
+interruption is recorded (``task_auto_recovery.record_interruption_no_commit``);
+with nothing due a tick is a single ``EXISTS`` over the due index.
 
 Every process that runs lease recovery runs a sweeper; correctness rests on
 the compare-and-swaps below, not on a singleton.
@@ -47,10 +46,10 @@ import logging
 import random
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -74,6 +73,7 @@ from ..models.task_auto_recovery import (
     TaskRecoveryEventType,
 )
 from ..models.task_command import TaskExecutionCommand
+from ..utils.db_timezone import format_datetime_for_api
 from .db_runtime import is_database_pool_timeout, run_db_io_cancellation_safe
 from .ops_signals import (
     TASK_AUTO_RESUME_UNAVAILABLE,
@@ -81,6 +81,9 @@ from .ops_signals import (
     register_degradation,
 )
 from .task_auto_recovery import (
+    AUTO_RESUME_DISABLED_DETAIL,
+    CHANNEL_HOLD_PENDING_DETAIL,
+    PLANNED_RECOVERY_EVENTS,
     TASK_INTERRUPTION_PAUSED_TRIGGER_ERROR,
     auto_recovery_eligibility,
     auto_resume_schedulable,
@@ -106,6 +109,7 @@ from .task_command_transport import (
 from .task_execution_admission import AdmissionQueueFull
 from .task_execution_controller import TaskControlState
 from .task_lease_service import utc_now
+from .task_settlement_report import RecordedInterruption
 
 logger = logging.getLogger(__name__)
 
@@ -143,11 +147,6 @@ TASK_AUTO_RESUME_DISABLED_TRIGGER_ERROR = (
     "Manual resume is required."
 )
 
-# ``state_detail`` of a row stopped because XAGENT_TASK_AUTO_RESUME_ENABLED is
-# off, and the ``why`` of a claim skipped for it.
-AUTO_RESUME_DISABLED_DETAIL = "auto_resume_disabled"
-CHANNEL_HOLD_PENDING_DETAIL = "channel_hold_pending"
-
 # Module-level so tests can seed it; drawn only by housekeeping reschedules.
 _AUTO_RESUME_RNG = random.Random()
 
@@ -176,6 +175,178 @@ def _utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+# --------------------------------------------------------------------------
+# Public notices (``task_recovery_update``)
+# --------------------------------------------------------------------------
+
+_STOP_REASONS = {
+    TaskAutoRecoveryState.EXHAUSTED.value: "limit_reached",
+    TaskAutoRecoveryState.EXPIRED.value: "expired",
+    TaskAutoRecoveryState.SUPERSEDED.value: "superseded",
+    TaskAutoRecoveryState.DISPATCH_FAILED.value: "failed",
+    TaskAutoRecoveryState.INELIGIBLE.value: "ineligible",
+}
+
+
+def public_auto_resume_view(
+    state: str,
+    *,
+    state_detail: str | None,
+    reason: str,
+    attempt: int | None,
+    next_attempt_at: datetime | None,
+) -> dict[str, Any] | None:
+    """The client contract for one automatic-resume transition, or ``None``.
+
+    Counters, ``state_detail``, ``last_error`` and command ids stay
+    server-side. ``stale`` is not announced: a person's own action produced
+    it, and that action announced itself. ``manual`` reached from an
+    announced state (the sweeper or the guard closing a scheduled or
+    dispatched row) is ``stopped``: ``disabled`` for a switched-off executor,
+    else ``ineligible`` (a channel task or a reason with no policy -- either
+    way automatic resume will not act on the task). Callers decide whether a
+    transition is announced at all; a recorded ``manual`` is not.
+    """
+
+    if state == _SCHEDULED.value:
+        status, stop_reason = "scheduled", None
+    elif state == _DISPATCHED.value:
+        status, stop_reason = "resuming", None
+    elif state in _STOP_REASONS:
+        status, stop_reason = "stopped", _STOP_REASONS[state]
+    elif state == TaskAutoRecoveryState.MANUAL.value:
+        status, stop_reason = (
+            "stopped",
+            "disabled" if state_detail == AUTO_RESUME_DISABLED_DETAIL else "ineligible",
+        )
+    else:
+        return None
+    return {
+        "status": status,
+        "stop_reason": stop_reason,
+        "reason": reason,
+        "attempt": attempt,
+        "next_attempt_at": (
+            format_datetime_for_api(next_attempt_at) if status == "scheduled" else None
+        ),
+    }
+
+
+@dataclass(frozen=True)
+class RecoveryNotice:
+    """A committed transition to announce as ``task_recovery_update``."""
+
+    task_id: int
+    run_id: str
+    # The row's fence; a client already past it ignores the notice.
+    state_version: int
+    auto_resume: dict[str, Any]
+
+    def message(self) -> dict[str, Any]:
+        return {
+            "type": "task_recovery_update",
+            "task_id": self.task_id,
+            "run_id": self.run_id,
+            "state_version": self.state_version,
+            "auto_resume": self.auto_resume,
+            "timestamp": datetime.now(timezone.utc).timestamp(),
+        }
+
+
+def _notice(
+    row: TaskAutoRecovery,
+    state: TaskAutoRecoveryState,
+    *,
+    state_detail: str | None,
+    attempt: int | None,
+    next_attempt_at: datetime | None = None,
+    state_version: int | None = None,
+) -> RecoveryNotice | None:
+    """``state_version`` names the pause the client shows when it is not the
+    row's fence (a give-up past a rolled-back resume); the row's otherwise."""
+    view = public_auto_resume_view(
+        state.value,
+        state_detail=state_detail,
+        reason=str(row.reason),
+        attempt=attempt,
+        next_attempt_at=next_attempt_at,
+    )
+    if view is None:
+        return None
+    return RecoveryNotice(
+        task_id=int(row.task_id),
+        run_id=str(row.run_id),
+        state_version=(
+            int(row.paused_state_version) if state_version is None else state_version
+        ),
+        auto_resume=view,
+    )
+
+
+# Recorded states announced at record time. A recorded ``manual``,
+# ``ineligible`` or ``disabled`` changes nothing for the client: the pause it
+# already shows is all there is.
+_RECORDED_ANNOUNCED = frozenset(state.value for state in PLANNED_RECOVERY_EVENTS)
+
+
+def recorded_notice(recorded: RecordedInterruption | None) -> RecoveryNotice | None:
+    """The notice for what recording an interruption committed, if any."""
+
+    if recorded is None or recorded.state not in _RECORDED_ANNOUNCED:
+        return None
+    view = public_auto_resume_view(
+        recorded.state,
+        state_detail=recorded.state_detail,
+        reason=recorded.reason,
+        attempt=recorded.attempt,
+        next_attempt_at=recorded.next_attempt_at,
+    )
+    if view is None:
+        return None
+    return RecoveryNotice(
+        task_id=recorded.task_id,
+        run_id=recorded.run_id,
+        state_version=recorded.paused_state_version,
+        auto_resume=view,
+    )
+
+
+def trigger_error_for_recorded(
+    recorded: RecordedInterruption | None, *, default: str
+) -> str | None:
+    """The TriggerRun error for a recorded PAUSED interruption, or ``None``.
+
+    ``None`` keeps the run RUNNING: a scheduled resume settles it later. A
+    stop names why automatic resume will not run; anything else (``manual``,
+    ``ineligible``, or nothing recorded) is the caller's ``default``.
+    """
+
+    if recorded is None:
+        return default
+    if recorded.state == _SCHEDULED.value:
+        return None
+    stop = _STOPS.get(TaskAutoRecoveryState(recorded.state))
+    if recorded.state in _RECORDED_ANNOUNCED and stop is not None:
+        return stop[1]
+    return default
+
+
+async def publish_recovery_notices(notices: Iterable[RecoveryNotice]) -> None:
+    """Broadcast committed notices; best effort, a failure is only logged."""
+
+    from .task_events import publish_task_event
+
+    for notice in notices:
+        try:
+            await publish_task_event(notice.message(), notice.task_id)
+        except Exception:
+            logger.warning(
+                "task_recovery_update committed but broadcast failed for task %s",
+                notice.task_id,
+                exc_info=True,
+            )
 
 
 # --------------------------------------------------------------------------
@@ -297,6 +468,7 @@ class _Outcome(str, Enum):
 @dataclass(frozen=True)
 class _CandidateResult:
     outcome: _Outcome
+    notice: RecoveryNotice | None = None
     staged: bool = False
     dispatch_delay_seconds: float | None = None
 
@@ -325,11 +497,14 @@ def _give_up_no_commit(
 
     The CAS re-checks the fence except for ``stale``, which exists because
     the fence no longer holds; ``fenced`` overrides that for a caller that
-    has already established why the fence moved. TriggerRun: a give-up fails a PENDING/RUNNING
-    run with the state's message; ``stale`` only mirrors a task that already
-    ended, since otherwise a person resumed or changed it and that run's own
-    settlement reports the real outcome. ``stop`` overrides the state's
-    ``(event, TriggerRun error)``.
+    has already established why the fence moved. TriggerRun: a give-up fails
+    a PENDING/RUNNING run with the state's message; ``stale`` only mirrors a
+    task that already ended, since otherwise a person resumed or changed it
+    and that run's own settlement reports the real outcome. That includes a
+    task left paused on the same run, as after a user's resume that failed
+    to start: like any user pause, its run stays RUNNING until a later run
+    settles it (#2177), and deleting the task fails it. ``stop`` overrides
+    the state's ``(event, TriggerRun error)``.
     """
 
     from .task_orchestrator import sync_trigger_run_status
@@ -405,7 +580,19 @@ def _give_up_no_commit(
         attempts,
         state_detail,
     )
-    return _CandidateResult(_Outcome.GAVE_UP)
+    return _CandidateResult(
+        _Outcome.GAVE_UP,
+        _notice(
+            row,
+            new_state,
+            state_detail=state_detail,
+            attempt=attempts,
+            # Past a rolled-back resume the task rests paused on the same
+            # run at a later version; the client shows that pause, so name
+            # it, or a viewer holding that version drops the notice as old.
+            state_version=None if fenced is not False else int(task.state_version or 0),
+        ),
+    )
 
 
 def _load_locked_no_commit(
@@ -627,6 +814,7 @@ def _process_due_candidate_no_commit(
     )
     return _CandidateResult(
         _Outcome.DISPATCHED,
+        _notice(row, _DISPATCHED, state_detail=None, attempt=attempt),
         staged=staged.created,
         dispatch_delay_seconds=(now - _utc(row.next_attempt_at)).total_seconds(),
     )
@@ -868,7 +1056,16 @@ def _reschedule_dispatched_no_commit(
         next_attempt_at,
         after,
     )
-    return _CandidateResult(_Outcome.RESCHEDULED)
+    return _CandidateResult(
+        _Outcome.RESCHEDULED,
+        _notice(
+            row,
+            _SCHEDULED,
+            state_detail=None,
+            attempt=attempt,
+            next_attempt_at=next_attempt_at,
+        ),
+    )
 
 
 def _drain_candidate_no_commit(db: Session, task_id: int) -> _CandidateResult:
@@ -1043,6 +1240,7 @@ class AutoResumeTickReport:
     inflight: int | None = None
     budget: int | None = None
     admission_full: bool = False
+    notices: list[RecoveryNotice] = field(default_factory=list)
 
     def record(self, result: _CandidateResult) -> None:
         field_name = {
@@ -1058,6 +1256,8 @@ class AutoResumeTickReport:
             setattr(self, field_name, getattr(self, field_name) + 1)
         if result.staged:
             self.staged_commands += 1
+        if result.notice is not None:
+            self.notices.append(result.notice)
 
 
 def _settle_candidate(
@@ -1321,9 +1521,24 @@ def run_auto_resume_tick(*, now: datetime | None = None) -> AutoResumeTickReport
             )
         scan_due(now, report, dispatch_budget=budget, scan_limit=4 * max_per_tick)
         return report
+    except Exception as exc:
+        # Candidates before the failure committed; the loop still announces
+        # them (see ``committed_tick_report``).
+        exc.__dict__[_PARTIAL_REPORT_ATTR] = report
+        raise
     finally:
         if report.staged_commands:
             notify_task_command_dispatcher()
+
+
+_PARTIAL_REPORT_ATTR = "auto_resume_partial_report"
+
+
+def committed_tick_report(exc: BaseException) -> AutoResumeTickReport | None:
+    """What a tick that raised ``exc`` had committed before it failed."""
+
+    report = getattr(exc, _PARTIAL_REPORT_ATTR, None)
+    return report if isinstance(report, AutoResumeTickReport) else None
 
 
 def _clock() -> float:
@@ -1348,9 +1563,10 @@ async def run_task_auto_resume_loop(*, poll_interval_seconds: int) -> None:
     last_failure_log = float("-inf")
     while True:
         try:
-            await run_db_io_cancellation_safe(
+            report = await run_db_io_cancellation_safe(
                 lambda: run_auto_resume_tick(now=utc_now())
             )
+            await publish_recovery_notices(report.notices)
             if failures:
                 logger.info(
                     "Auto-resume sweeper recovered after %s failed tick(s)", failures
@@ -1360,6 +1576,9 @@ async def run_task_auto_resume_loop(*, poll_interval_seconds: int) -> None:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            partial = committed_tick_report(exc)
+            if partial is not None:
+                await publish_recovery_notices(partial.notices)
             failures += 1
             increment_counter("xagent.task.auto_resume.tick_failed")
             now_monotonic = _clock()
@@ -1408,6 +1627,7 @@ class AutoResumeClaimDecision:
 
     proceed: bool
     why: str | None = None
+    notices: tuple[RecoveryNotice, ...] = ()
 
 
 _PROCEED = AutoResumeClaimDecision(proceed=True)
@@ -1557,7 +1777,11 @@ def _settle_claim(
         except Exception:
             db.rollback()
             raise
-    return AutoResumeClaimDecision(proceed=False, why=why)
+    return AutoResumeClaimDecision(
+        proceed=False,
+        why=why,
+        notices=(result.notice,) if result.notice is not None else (),
+    )
 
 
 def _rolled_back_by_this_claim(

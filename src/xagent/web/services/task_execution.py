@@ -38,6 +38,7 @@ import shutil
 import time
 import uuid
 import weakref
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -108,7 +109,7 @@ from .task_lease_service import (
     lock_task_lease_no_commit,
     task_lease_attempt_predicate,
 )
-from .task_settlement_report import SettlementReport
+from .task_settlement_report import RecordedInterruption, SettlementReport
 
 if TYPE_CHECKING:
     from .task_setup_snapshot import TaskSetupSnapshot
@@ -266,6 +267,45 @@ def _task_error_payload(
     return payload
 
 
+def _admit_asserted_code(
+    task_id: int,
+    asserted_code: object,
+    listed: frozenset[ClientErrorCode],
+    *,
+    component: str,
+    conflicts: bool = False,
+) -> ClientErrorCode | None:
+    """Return the caller-asserted code a frame builder may write, or ``None``.
+
+    The one rule for every builder that takes ``asserted_code``: the value
+    must be a ``ClientErrorCode`` member in that builder's own listed set,
+    and must not conflict with anything else the caller passed. An equal
+    plain string or a same-valued member of another enum fails the first
+    test. Anything else is dropped and logged with its stack, never raised:
+    a bad optional argument costs that argument and nothing else.
+    """
+
+    if asserted_code is None:
+        return None
+    # The type check comes first: an unhashable value would raise inside the
+    # membership test.
+    if (
+        conflicts
+        or not isinstance(asserted_code, ClientErrorCode)
+        or asserted_code not in listed
+    ):
+        logger.error(
+            "task_id=%s component=%s dropped=asserted_code value=%r; "
+            "the frame is still sent without it",
+            task_id,
+            component,
+            asserted_code,
+            stack_info=True,
+        )
+        return None
+    return asserted_code
+
+
 # Codes a caller states from an outcome it proved itself, as opposed to
 # ``code``, which is projected from an exception. Add a member in the change
 # that adds the call site asserting it; the runtime set is derived from this.
@@ -309,19 +349,13 @@ def create_terminal_task_error_event(
     # The exclusivity check reads ``code`` as passed, before its own gate
     # below can clear it: an assertion never rides along with a projected
     # failure, valid or not.
-    if asserted_code is not None and (
-        not isinstance(asserted_code, ClientErrorCode)
-        or asserted_code not in _CALLER_ASSERTED_TERMINAL_CODES
-        or code is not None
-    ):
-        logger.error(
-            "task_id=%s component=terminal-error-frame dropped=asserted_code "
-            "value=%r; the frame is still sent without it",
-            task_id,
-            asserted_code,
-            stack_info=True,
-        )
-        asserted_code = None
+    admitted_code = _admit_asserted_code(
+        task_id,
+        asserted_code,
+        _CALLER_ASSERTED_TERMINAL_CODES,
+        component="terminal-error-frame",
+        conflicts=code is not None,
+    )
 
     # Python annotations are not enforced at run time, so the mypy gate on the
     # signature above is not the whole door: a caller that routes through Any
@@ -364,8 +398,57 @@ def create_terminal_task_error_event(
     }
     if code is not None:
         event["code"] = code
-    elif asserted_code is not None:
-        event["code"] = asserted_code.value
+    elif admitted_code is not None:
+        event["code"] = admitted_code.value
+    return event
+
+
+# Codes a caller states on the ``agent_error`` frame that reports an
+# external-scope command's terminal outcome to the task's anonymous audience.
+# Same rule as ``CallerAssertedTerminalCode``: add a member in the change that
+# adds the call site asserting it; the runtime set is derived from this. The
+# two sets are disjoint: a code names one outcome on one kind of frame.
+CallerAssertedCommandErrorCode = Literal[ClientErrorCode.EXTERNAL_STOP_NOT_APPLIED]
+_CALLER_ASSERTED_COMMAND_ERROR_CODES: frozenset[ClientErrorCode] = frozenset(
+    get_args(CallerAssertedCommandErrorCode)
+)
+
+
+def create_external_command_error_event(
+    task_id: int,
+    message: str,
+    *,
+    asserted_code: CallerAssertedCommandErrorCode | None = None,
+) -> dict[str, Any]:
+    """Shape the ``agent_error`` an external-scope command's terminal outcome sends.
+
+    When an external-scope command's terminal failure is reported to the
+    task's audience, this is the frame. Not every one is reported: a cancel
+    rejection whose reason is not in
+    ``EXTERNAL_CANCEL_BROADCAST_REJECTION_REASONS``, and any cancel whose
+    target already completed, end silently. The audience is anonymous, so the
+    frame carries the sentence, the task id and the time, and never the
+    durable command identity or the exception text.
+    ``asserted_code`` is the one way a code reaches it, written as
+    ``error_code`` - the field clients already read on ``agent_error`` - so a
+    client that does not render server prose still names the outcome. It is
+    admitted only from ``CallerAssertedCommandErrorCode``.
+    """
+
+    admitted_code = _admit_asserted_code(
+        task_id,
+        asserted_code,
+        _CALLER_ASSERTED_COMMAND_ERROR_CODES,
+        component="external-command-error-frame",
+    )
+    event: dict[str, Any] = {
+        "type": "agent_error",
+        "message": message,
+        "task_id": task_id,
+        "timestamp": datetime.now(timezone.utc).timestamp(),
+    }
+    if admitted_code is not None:
+        event["error_code"] = admitted_code.value
     return event
 
 
@@ -1915,8 +1998,8 @@ def _apply_result_interruption(
     task: Task,
     decision: InterruptionDecision,
     result: dict[str, Any],
-) -> None:
-    apply_interruption_outcome_no_commit(
+) -> RecordedInterruption | None:
+    return apply_interruption_outcome_no_commit(
         db,
         task=task,
         decision=decision,
@@ -2042,6 +2125,7 @@ def _finalize_task_execution_result_isolated(
         # its files.
         control_commit_pending = False
         interruption_pause_reason: InterruptionReason | None = None
+        interruption_recovery: RecordedInterruption | None = None
         final_control_snapshot: TaskControlSnapshot | None = None
         final_task_status = pre_run_status.value
         # Set only when this transaction settles the result as FAILED.
@@ -2152,7 +2236,7 @@ def _finalize_task_execution_result_isolated(
                         status=TaskStatus.PAUSED,
                         expected_run_id=expected_run_id,
                     )
-                    _apply_result_interruption(
+                    interruption_recovery = _apply_result_interruption(
                         finalize_db, task_updated, interruption, result
                     )
                     interruption_pause_reason = interruption.reason
@@ -2315,6 +2399,7 @@ def _finalize_task_execution_result_isolated(
                     else {}
                 ),
                 paused_for=interruption_pause_reason,
+                recovery=interruption_recovery,
             ),
             error_code=(
                 presentation.error_code
@@ -3027,6 +3112,7 @@ def _finalize_resumed_task(
 
         interruption: InterruptionDecision | None = None
         pause_reason: InterruptionReason | None = None
+        pause_recovery: RecordedInterruption | None = None
         if result.get("injection_outcome_unknown") and (
             success or status in {"waiting_for_user", "interrupted"}
         ):
@@ -3106,9 +3192,10 @@ def _finalize_resumed_task(
             # Projects the workforce run itself for a pause.
             if not interruption.pause:
                 sync_workforce_run_status(db, task, final_task_status)
-            _apply_result_interruption(db, task, interruption, result)
+            recorded = _apply_result_interruption(db, task, interruption, result)
             if interruption.pause:
                 pause_reason = interruption.reason
+                pause_recovery = recorded
         else:
             sync_workforce_run_status(db, task, final_task_status)
         if final_task_status in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
@@ -3140,7 +3227,9 @@ def _finalize_resumed_task(
         finalized["final_status"] = final_task_status.value
         # Filled only now that the commit succeeded.
         finalized["report"] = SettlementReport(
-            control_state=control_snapshot.as_dict(), paused_for=pause_reason
+            control_state=control_snapshot.as_dict(),
+            paused_for=pause_reason,
+            recovery=pause_recovery,
         )
         return finalized
     finally:
@@ -3798,7 +3887,7 @@ async def execute_resume_background(
             # if it ever stops carrying the id forward and starts deriving
             # its own. See task_interaction_close's module docstring for
             # the rule, the other sites, and why the v1 reply resume-input
-            # path needs no guard at all.
+            # path's guard is defense in depth.
             if posted is UserMessageInjectionOutcome.POSTED_FRESH:
                 try:
                     await run_db_io_cancellation_safe(
@@ -4593,6 +4682,18 @@ class BackgroundTaskManager:
         self._explicitly_cancelled: weakref.WeakSet[asyncio.Task] = weakref.WeakSet()
         self._shutting_down = False
         self._shutdown_lock = asyncio.Lock()
+        # Every execution task this process started, by identity: one object
+        # counts once as started and once as finished however many times it
+        # is registered. Live members are the in-flight executions.
+        self._counted_tasks: weakref.WeakSet[asyncio.Task] = weakref.WeakSet()
+        # Window counts for the per-process diagnostics line. Written by
+        # registration and by done callbacks, zeroed by ``drain_window_counts``
+        # and when ``start_accepting`` opens a new lifespan. ``shutdown`` keeps
+        # them so cancellations during shutdown are still reported.
+        self._window_started = 0
+        self._window_finished_ok = 0
+        self._window_finished_failed = 0
+        self._window_finished_cancelled = 0
 
     def start_accepting(self) -> None:
         """Reopen admission for a new application lifespan."""
@@ -4611,6 +4712,7 @@ class BackgroundTaskManager:
         # so an idle manager must not retain the previous lifespan's lock.
         self._shutdown_lock = asyncio.Lock()
         self._shutting_down = False
+        self.drain_window_counts()
 
     async def wait_for_previous(self, task_id: int) -> None:
         """Wait for previous background task of this task to complete"""
@@ -4631,8 +4733,23 @@ class BackgroundTaskManager:
                         f"Previous background task {task_id} ended with error: {e}"
                     )
 
-    def register_task(self, task_id: int, task: asyncio.Task) -> None:
-        """Register new background task"""
+    def register_task(
+        self,
+        task_id: int,
+        task: asyncio.Task,
+        *,
+        failure_flag: Callable[[], bool] | None = None,
+    ) -> None:
+        """Register new background task and count it as a started execution.
+
+        ``failure_flag`` reports a failure the task handled itself and then
+        returned from normally; it is read once, when the task finishes, and
+        must be a cheap read of state the task already holds. Without it only
+        an exception escaping the task counts as a failure. The manager logs
+        that exception exactly once, with its traceback, and asyncio adds no
+        second report; a path that also awaits the handle may log it again
+        there.
+        """
         if self._shutting_down:
             task.cancel()
             raise RuntimeError("Background task manager is shutting down")
@@ -4649,6 +4766,7 @@ class BackgroundTaskManager:
         task.add_done_callback(
             lambda finished: self.cleanup_task(task_id, expected_task=finished)
         )
+        self._count_execution_start(task_id, task, failure_flag)
         logger.info(f"Registered background task for task {task_id}")
 
     def resume_admission_state(
@@ -4768,6 +4886,13 @@ class BackgroundTaskManager:
         self._resume_owner_started_at.pop(task_id, None)
 
     def promote_resume_task(self, task_id: int, task: asyncio.Task) -> None:
+        """Make a resume coordinator the task's execution and count it as started.
+
+        It is counted without a failure flag: only an exception escaping the
+        coordinator counts as failed, and that exception is logged as for
+        ``register_task``.
+        """
+
         if self._shutting_down:
             raise RuntimeError("Background task manager is shutting down")
         existing = self.resume_tasks.get(task_id)
@@ -4776,7 +4901,95 @@ class BackgroundTaskManager:
                 f"Task {task_id} resume coordinator is not registered or no longer current"
             )
         self.running_tasks[task_id] = task
+        self._count_execution_start(task_id, task, None)
         logger.info("Promoted resume coordinator for task %s", task_id)
+
+    def _count_execution_start(
+        self,
+        task_id: int,
+        task: asyncio.Task,
+        failure_flag: Callable[[], bool] | None,
+    ) -> None:
+        if task in self._counted_tasks:
+            return
+        self._counted_tasks.add(task)
+        self._window_started += 1
+        task.add_done_callback(
+            lambda finished: self._count_execution_finish(
+                task_id, finished, failure_flag
+            )
+        )
+
+    def _count_execution_finish(
+        self,
+        task_id: int,
+        task: asyncio.Task,
+        failure_flag: Callable[[], bool] | None,
+    ) -> None:
+        # Deliberately independent of ``cleanup_task`` and ``_shutting_down``:
+        # tasks cancelled by ``shutdown`` are still counted.
+        if task.cancelled():
+            self._window_finished_cancelled += 1
+            return
+        exc = task.exception()
+        if exc is not None:
+            # Reading the exception marks it retrieved, which silences
+            # asyncio's "Task exception was never retrieved" report for a
+            # handle nobody awaits. Report it here instead; this callback is
+            # attached once per task object, so it is reported once.
+            logger.error(
+                "Background execution for task %s raised", task_id, exc_info=exc
+            )
+        failed = exc is not None
+        if not failed and failure_flag is not None:
+            try:
+                failed = bool(failure_flag())
+            except Exception:
+                logger.exception("Execution failure flag raised; counting as failed")
+                failed = True
+        if failed:
+            self._window_finished_failed += 1
+        else:
+            self._window_finished_ok += 1
+
+    def inflight_counts(self) -> tuple[int, int]:
+        """Return (executions in flight, resume coordinators not yet executing).
+
+        The two numbers are disjoint: a promoted coordinator is an execution.
+        Counts objects, not task ids, so an older execution still finishing
+        after its task id was registered again is included.
+        """
+
+        inflight = sum(1 for task in list(self._counted_tasks) if not task.done())
+        resuming = sum(
+            1
+            for task in list(self.resume_tasks.values())
+            if not task.done() and task not in self._counted_tasks
+        )
+        return inflight, resuming
+
+    def drain_window_counts(self) -> tuple[int, int, int, int]:
+        """Return and zero (started, finished ok, failed, cancelled) since the last drain.
+
+        "failed" means the task raised, or reported through its failure flag
+        that it handled a failure. "ok" is every other non-cancelled finish,
+        which includes runs that paused, lost their lease, or whose agent
+        reported an unsuccessful result without raising. A resume coordinator
+        is counted without a failure flag, so a resume run that handles its
+        own failure and returns normally counts as "ok".
+        """
+
+        counts = (
+            self._window_started,
+            self._window_finished_ok,
+            self._window_finished_failed,
+            self._window_finished_cancelled,
+        )
+        self._window_started = 0
+        self._window_finished_ok = 0
+        self._window_finished_failed = 0
+        self._window_finished_cancelled = 0
+        return counts
 
     def cleanup_task(
         self,

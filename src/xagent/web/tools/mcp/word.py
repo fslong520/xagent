@@ -15,6 +15,7 @@ from defusedxml import ElementTree as DefusedElementTree
 from defusedxml.common import DefusedXmlException
 from docx import Document
 from docx.document import Document as DocumentType
+from docx.enum.text import WD_BREAK
 from docx.oxml.ns import qn
 from docx.text.run import Run
 from mcp.server.fastmcp import FastMCP
@@ -104,6 +105,14 @@ class _GraphRequestError(RuntimeError):
         self.status_code = status_code
 
 
+class _WordEditConflict(ValueError):
+    """A caller-actionable concurrency conflict while editing a document."""
+
+    def __init__(self, message: str, *, code: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 @dataclass(frozen=True)
 class _EditSnapshot:
     """Stable Graph identity and version observed for an edit download."""
@@ -157,8 +166,22 @@ def _success_with_item(item: dict[str, Any], **payload: Any) -> str:
     return _success()
 
 
-def _error(message: str, *, details: Any = None) -> str:
-    payload: dict[str, Any] = {"status": "error", "message": message}
+def _error(message: str | Exception, *, details: Any = None) -> str:
+    payload: dict[str, Any] = {"status": "error", "message": str(message)}
+    if isinstance(message, _WordEditConflict):
+        payload.update(
+            code=message.code,
+            retryable=True,
+            suggested_actions=(
+                ["close_document_and_retry"]
+                if message.code == "resource_locked"
+                else ["reread_and_retry"]
+            ),
+        )
+        if message.code == "resource_locked":
+            # Graph does not reliably return the lock owner for driveItem 423s.
+            # Keep the field stable for consumers without guessing identity.
+            payload["lock_owner"] = None
     if details is not None:
         payload["details"] = details
     encoded = json.dumps(payload, ensure_ascii=False)
@@ -523,9 +546,10 @@ def _download_document(
             metadata.get("publication") if isinstance(metadata, dict) else None
         )
         if isinstance(publication, dict) and publication.get("level") == "checkout":
-            raise ValueError(
+            raise _WordEditConflict(
                 f"{file_path!r} is already checked out; check it in or discard "
-                "that checkout before editing it with this connector"
+                "that checkout before editing it with this connector",
+                code="resource_locked",
             )
         if (
             not isinstance(item_id, str)
@@ -595,7 +619,14 @@ def _upload_document(
         f"{file_path!r} was changed by someone else since this edit "
         "started; re-read it and retry"
     )
-    locked_etag = _checkout_edit_snapshot(snapshot, conflict_message)
+    lock_message = (
+        f"{file_path!r} is locked for editing; close it in Word or Teams and "
+        "retry later. This tool edits in place; use onedrive_download_file "
+        "and onedrive_upload_file with a new path to save a copy"
+    )
+    locked_etag = _checkout_edit_snapshot(
+        snapshot, conflict_message, lock_message=lock_message
+    )
     locked_snapshot = _EditSnapshot(
         item_path=snapshot.item_path,
         etag=locked_etag,
@@ -603,7 +634,10 @@ def _upload_document(
     )
     try:
         result = _upload_checked_out_document(
-            content, locked_snapshot, conflict_message=conflict_message
+            content,
+            locked_snapshot,
+            conflict_message=conflict_message,
+            lock_message=lock_message,
         )
         _check_in_edit_snapshot(snapshot, content)
         return result
@@ -655,45 +689,59 @@ def _discard_edit_checkout(snapshot: _EditSnapshot) -> None:
     _graph_request("POST", f"{snapshot.item_path}/discardCheckout")
 
 
-def _checkout_edit_snapshot(snapshot: _EditSnapshot, conflict_message: str) -> str:
+def _checkout_edit_snapshot(
+    snapshot: _EditSnapshot,
+    conflict_message: str,
+    *,
+    lock_message: str = "The Word document is locked for editing; retry later",
+) -> str:
     """Lock the item, then prove it still contains the downloaded snapshot."""
     if not snapshot.generation:
         raise RuntimeError("Word edit snapshot is missing its content generation")
-    try:
-        _graph_request("POST", f"{snapshot.item_path}/checkout")
-    except requests.RequestException:
-        # The lock may have been acquired before the transport failed. A
-        # delegated discard can release only this user's checkout; HTTP 400
-        # means no checkout existed, while any other cleanup failure remains
-        # an explicit unknown state requiring manual verification.
+    for attempt in range(_UPLOAD_RETRY_ATTEMPTS):
         try:
-            _discard_edit_checkout(snapshot)
-        except _GraphRequestError as cleanup_error:
-            if cleanup_error.status_code == 400:
+            _graph_request("POST", f"{snapshot.item_path}/checkout")
+            break
+        except requests.RequestException:
+            # The lock may have been acquired before the transport failed. A
+            # delegated discard can release only this user's checkout; HTTP 400
+            # means no checkout existed, while any other cleanup failure remains
+            # an explicit unknown state requiring manual verification.
+            try:
+                _discard_edit_checkout(snapshot)
+            except _GraphRequestError as cleanup_error:
+                if cleanup_error.status_code == 400:
+                    raise RuntimeError(
+                        "Graph could not acquire the checkout required for a "
+                        "concurrency-safe Word edit"
+                    ) from None
                 raise RuntimeError(
-                    "Graph could not acquire the checkout required for a "
-                    "concurrency-safe Word edit"
+                    "Word checkout outcome is unknown; verify the document in "
+                    "Word before retrying"
+                ) from None
+            except requests.RequestException:
+                raise RuntimeError(
+                    "Word checkout outcome is unknown; verify the document in "
+                    "Word before retrying"
                 ) from None
             raise RuntimeError(
-                "Word checkout outcome is unknown; verify the document in "
-                "Word before retrying"
+                "Graph did not confirm the Word checkout; the possible checkout "
+                "was discarded, so the edit was not applied"
             ) from None
-        except requests.RequestException:
+        except _GraphRequestError as exc:
+            if exc.status_code == 423 and attempt < _UPLOAD_RETRY_ATTEMPTS - 1:
+                _sleep_before_retry(attempt, _UPLOAD_RETRY_ATTEMPTS)
+                continue
+            if exc.status_code in (409, 423):
+                raise _WordEditConflict(lock_message, code="resource_locked") from exc
+            if exc.status_code == 412:
+                raise _WordEditConflict(
+                    conflict_message, code="version_conflict"
+                ) from exc
             raise RuntimeError(
-                "Word checkout outcome is unknown; verify the document in "
-                "Word before retrying"
-            ) from None
-        raise RuntimeError(
-            "Graph did not confirm the Word checkout; the possible checkout "
-            "was discarded, so the edit was not applied"
-        ) from None
-    except _GraphRequestError as exc:
-        if exc.status_code in (409, 412, 423):
-            raise ValueError(conflict_message) from exc
-        raise RuntimeError(
-            "Graph could not acquire the checkout required for a "
-            "concurrency-safe Word edit"
-        ) from exc
+                "Graph could not acquire the checkout required for a "
+                "concurrency-safe Word edit"
+            ) from exc
     try:
         metadata = _graph_request("GET", snapshot.item_path, params={"$select": "eTag"})
         locked_content = _graph_request(
@@ -703,7 +751,7 @@ def _checkout_edit_snapshot(snapshot: _EditSnapshot, conflict_message: str) -> s
         if not isinstance(locked_etag, str) or not locked_etag:
             raise RuntimeError("Graph did not return an eTag for the checked-out file")
         if hashlib.sha256(locked_content).hexdigest() != snapshot.generation:
-            raise ValueError(conflict_message)
+            raise _WordEditConflict(conflict_message, code="version_conflict")
         return locked_etag
     except Exception:
         try:
@@ -721,6 +769,7 @@ def _upload_checked_out_document(
     snapshot: _EditSnapshot,
     *,
     conflict_message: str,
+    lock_message: str,
 ) -> dict[str, Any]:
     try:
         session = _graph_request(
@@ -731,7 +780,9 @@ def _upload_checked_out_document(
         )
     except _GraphRequestError as exc:
         if exc.status_code == 412:
-            raise ValueError(conflict_message) from exc
+            raise _WordEditConflict(conflict_message, code="version_conflict") from exc
+        if exc.status_code in (409, 423):
+            raise _WordEditConflict(lock_message, code="resource_locked") from exc
         raise
     upload_url = session.get("uploadUrl") if isinstance(session, dict) else None
     if not isinstance(upload_url, str) or not upload_url:
@@ -753,7 +804,9 @@ def _upload_checked_out_document(
                 timeout=_BINARY_TIMEOUT_SECONDS,
             )
             if response.status_code == 412:
-                raise ValueError(conflict_message)
+                raise _WordEditConflict(conflict_message, code="version_conflict")
+            if response.status_code in (409, 423):
+                raise _WordEditConflict(lock_message, code="resource_locked")
             if response.status_code in (200, 201):
                 try:
                     result = response.json()
@@ -791,12 +844,12 @@ def _upload_checked_out_document(
                 next_offset = _next_upload_offset(progress, len(content))
                 if next_offset is not None:
                     offset = next_offset
-                    _sleep_before_upload_retry(attempt)
+                    _sleep_before_retry(attempt, _UPLOAD_RETRY_ATTEMPTS)
                     continue
         except requests.RequestException:
             pass
 
-        _sleep_before_upload_retry(attempt)
+        _sleep_before_retry(attempt, _UPLOAD_RETRY_ATTEMPTS)
 
     raise RuntimeError(
         "Word document upload outcome is unknown; its checkout must be "
@@ -804,9 +857,9 @@ def _upload_checked_out_document(
     )
 
 
-def _sleep_before_upload_retry(attempt: int) -> None:
-    """Apply bounded exponential backoff before another upload attempt."""
-    if attempt >= _UPLOAD_RETRY_ATTEMPTS - 1:
+def _sleep_before_retry(attempt: int, attempts: int) -> None:
+    """Apply bounded exponential backoff before another bounded retry."""
+    if attempt >= attempts - 1:
         return
     delay = min(
         _UPLOAD_RETRY_BASE_SECONDS * (2.0**attempt),
@@ -948,13 +1001,13 @@ def _create_only_upload(
                 next_offset = _next_upload_offset(progress, len(content))
                 if next_offset is not None:
                     offset = next_offset
-                    _sleep_before_upload_retry(attempt)
+                    _sleep_before_retry(attempt, _UPLOAD_RETRY_ATTEMPTS)
                     continue
             if outcome_ambiguous and status.status_code in (404, 410):
                 break
         except requests.RequestException:
             pass
-        _sleep_before_upload_retry(attempt)
+        _sleep_before_retry(attempt, _UPLOAD_RETRY_ATTEMPTS)
 
     raise RuntimeError(
         "Word document creation outcome is unknown; verify whether the file "
@@ -1445,7 +1498,9 @@ def word_list_paragraphs(
     next_text_offset is non-zero only when one unusually large paragraph had
     to be split. limit is normalized to 100-500 paragraphs. Pagination
     requires an output cap of at least 16,384 characters. Pass generation to
-    word_set_paragraph_text with the index."""
+    word_set_paragraph_text with the index. To insert a page break after
+    one of these paragraphs, also pass its generation to
+    word_insert_page_break(after_paragraph_index=..., expected_generation=...)."""
     try:
         _require_pagination_output_budget()
         if (
@@ -1485,7 +1540,12 @@ def word_set_paragraph_text(
     character formatting; does not preserve formatting that varied across
     multiple runs within the paragraph. expected_generation is required from
     the word_list_paragraphs response that supplied paragraph_index, preventing
-    an intervening edit from redirecting the index to different content."""
+    an intervening edit from redirecting the index to different content.
+
+    If the response has code="resource_locked", do not retry immediately:
+    close the document in Word or Teams and retry later. This connector edits
+    in place; to save a copy, use onedrive_download_file and
+    onedrive_upload_file with a new remote_path."""
     try:
         _require_tool_output_budget()
         if not expected_generation:
@@ -1518,7 +1578,7 @@ def word_set_paragraph_text(
             file_path,
             e,
         )
-        return _error(str(e))
+        return _error(e)
 
 
 @mcp.tool()
@@ -1528,11 +1588,20 @@ def word_append_paragraph(
     style: str | None = None,
     site_id: str | None = None,
     drive_id: str | None = None,
+    page_break_before: bool = False,
 ) -> str:
     """Append a new paragraph to the end of a Word document. style, if
     given, is a built-in Word style name (e.g. "List Bullet", "Quote");
     invalid names raise an error rather than silently falling back to
-    Normal."""
+    Normal. If page_break_before is true, the paragraph starts on a new
+    page. Use page_break_before when adding the content that should start
+    on the new page; do not combine it with word_insert_page_break, which
+    would create an extra blank page.
+
+    If the response has code="resource_locked", do not retry immediately:
+    close the document in Word or Teams and retry later. This connector edits
+    in place; to save a copy, use onedrive_download_file and
+    onedrive_upload_file with a new remote_path."""
     try:
         _require_tool_output_budget()
         document, snapshot, _generation = _download_document(
@@ -1542,12 +1611,14 @@ def word_append_paragraph(
         _validate_mutation_text(text, field_name="text")
         _ensure_can_add_body_paragraph(document)
         _ensure_projected_text_budget(document, len(text))
-        document.add_paragraph(text, style=style)
+        paragraph = document.add_paragraph(text, style=style)
+        if page_break_before:
+            paragraph.paragraph_format.page_break_before = True
         item = _upload_document(document, file_path, snapshot)
         return _success_with_item(item)
     except Exception as e:
         logger.error("Error appending paragraph to Word document %s: %s", file_path, e)
-        return _error(str(e))
+        return _error(e)
 
 
 @mcp.tool()
@@ -1557,9 +1628,18 @@ def word_add_heading(
     level: int = 1,
     site_id: str | None = None,
     drive_id: str | None = None,
+    page_break_before: bool = False,
 ) -> str:
     """Append a heading to the end of a Word document. level is 0 (the
-    document title style) through 9."""
+    document title style) through 9. If page_break_before is true, the
+    heading starts on a new page. Use page_break_before when adding the
+    heading that should start on the new page; do not combine it with
+    word_insert_page_break, which would create an extra blank page.
+
+    If the response has code="resource_locked", do not retry immediately:
+    close the document in Word or Teams and retry later. This connector edits
+    in place; to save a copy, use onedrive_download_file and
+    onedrive_upload_file with a new remote_path."""
     try:
         _require_tool_output_budget()
         if not 0 <= level <= 9:
@@ -1571,11 +1651,71 @@ def word_add_heading(
         _validate_mutation_text(text, field_name="text")
         _ensure_can_add_body_paragraph(document)
         _ensure_projected_text_budget(document, len(text))
-        document.add_heading(text, level=level)
+        paragraph = document.add_heading(text, level=level)
+        if page_break_before:
+            paragraph.paragraph_format.page_break_before = True
         item = _upload_document(document, file_path, snapshot)
         return _success_with_item(item)
     except Exception as e:
         logger.error("Error adding heading to Word document %s: %s", file_path, e)
+        return _error(e)
+
+
+@mcp.tool()
+def word_insert_page_break(
+    file_path: str,
+    after_paragraph_index: int | None = None,
+    site_id: str | None = None,
+    drive_id: str | None = None,
+    expected_generation: str | None = None,
+) -> str:
+    """Insert a real page break in a Word document.
+
+    With no paragraph index, a break paragraph is appended to the document.
+    When after_paragraph_index is supplied, the break is added after that
+    top-level body paragraph. The index must come from word_list_paragraphs
+    and therefore requires its expected_generation value. Use this tool when
+    inserting a break before a later edit; when adding the new paragraph or
+    heading in the same operation, prefer page_break_before=True on that
+    tool instead. Do not combine both, or Word will render a blank page.
+    """
+    try:
+        _require_tool_output_budget()
+        if after_paragraph_index is not None and not expected_generation:
+            raise ValueError(
+                "expected_generation from word_list_paragraphs is required "
+                "when after_paragraph_index is supplied"
+            )
+        document, snapshot, _generation = _download_document(
+            file_path,
+            site_id,
+            drive_id,
+            expected_generation=expected_generation,
+        )
+        assert snapshot is not None
+        paragraphs = document.paragraphs
+        if after_paragraph_index is None:
+            _ensure_can_add_body_paragraph(document)
+            paragraph = document.add_paragraph()
+            page_break_paragraph_index = len(paragraphs)
+        else:
+            if not 0 <= after_paragraph_index < len(paragraphs):
+                raise ValueError(
+                    f"after_paragraph_index {after_paragraph_index} is out of "
+                    f"range for a document with {len(paragraphs)} paragraphs"
+                )
+            _ensure_can_add_body_paragraph(document)
+            paragraph = document.add_paragraph()
+            paragraphs[after_paragraph_index]._p.addnext(paragraph._p)
+            page_break_paragraph_index = after_paragraph_index + 1
+        paragraph.add_run().add_break(WD_BREAK.PAGE)
+        item = _upload_document(document, file_path, snapshot)
+        return _success_with_item(
+            item,
+            page_break_paragraph_index=page_break_paragraph_index,
+        )
+    except Exception as e:
+        logger.error("Error inserting page break in Word document %s: %s", file_path, e)
         return _error(str(e))
 
 
@@ -1615,7 +1755,12 @@ def word_replace_text(
     guard prevents; or a content control or field's cached result, since
     rewriting that text in place would desync it from the control's data
     binding or the field's own instruction, with no way for this tool to
-    update either to match."""
+    update either to match.
+
+    If the response has code="resource_locked", do not retry immediately:
+    close the document in Word or Teams and retry later. This connector edits
+    in place; to save a copy, use onedrive_download_file and
+    onedrive_upload_file with a new remote_path."""
     try:
         _require_tool_output_budget()
         if not find:
@@ -1692,7 +1837,7 @@ def word_replace_text(
         return _success_with_item(item, replacements=replacements)
     except Exception as e:
         logger.error("Error replacing text in Word document %s: %s", file_path, e)
-        return _error(str(e))
+        return _error(e)
 
 
 if __name__ == "__main__":
