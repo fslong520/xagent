@@ -1,12 +1,18 @@
 """Tests for the model-invocable ``store_memory`` tool."""
 
 import asyncio
+import json
+from datetime import datetime
 from typing import Any
 
 import pytest
+import requests
 
 from xagent.core.agent.context.memory_tool import (
+    CheckInboxTool,
     DeleteMemoryTool,
+    DeliverMemoryTool,
+    SearchMemoryArgs,
     SearchMemoryTool,
     StoreMemoryTool,
     UpdateMemoryTool,
@@ -15,7 +21,13 @@ from xagent.core.agent.context.memory_tool import (
 )
 from xagent.core.memory.core import MemoryNote, MemoryResponse
 from xagent.core.memory.lancedb import LanceDBMemoryStore
+from xagent.core.memory.remote import RemoteMemoryStore, RemoteMemoryStoreError
+from xagent.web.memory_lifecycle import MemoryLifecycleState, MemoryLifecycleStatus
+from xagent.web.revocable_memory_store import RevocableMemoryStore
 from xagent.web.user_isolated_memory import UserIsolatedMemoryStore
+
+SERVICE_URL = "http://memsrv:8080"
+SERVICE_KEY = "svc-key"
 
 
 class RecordingMemoryStore:
@@ -310,7 +322,9 @@ async def test_search_memory_reports_backend_failure() -> None:
 
     result = await tool.execute(query="preferences")
 
-    assert result == {"success": False, "error": "Failed to search memories."}
+    # P1-4: the raised error's own message is surfaced to the model instead of
+    # a generic string that hides what failed.
+    assert result == {"success": False, "error": "backend unavailable"}
     assert tracer.events[-1]["data"]["success"] is False
     assert tracer.events[-1]["data"]["found"] is False
 
@@ -339,7 +353,10 @@ async def test_search_memory_reports_terminal_lancedb_failure(
 
     result = await tool.execute(query="preferences")
 
-    assert result == {"success": False, "error": "Failed to search memories."}
+    # P1-4: the propagated message is the user-facing error (str(e), no
+    # traceback), so the exact text now follows the exception.
+    assert result["success"] is False
+    assert "memory table unavailable" in result["error"]
 
 
 @pytest.mark.asyncio
@@ -551,3 +568,405 @@ async def test_store_memory_emits_the_branch_in_the_store_trace() -> None:
 
     assert tracer.events[-1]["data"]["storage_action"] == "parent"
     assert tracer.events[-1]["data"]["storage_success"] is True
+
+
+# ---------------------------------------------------------------------------
+# check_inbox: the dedicated inbox surface behind the wrapper chain (P0-1)
+# ---------------------------------------------------------------------------
+
+
+def _delivery(note_id: str, content: str, at: str, from_user: int) -> MemoryNote:
+    return MemoryNote(
+        id=note_id,
+        content=content,
+        category="general",
+        timestamp=datetime.fromisoformat(at),
+        metadata={"deliver": True, "from_user": from_user},
+    )
+
+
+def _inbox_notes() -> list[MemoryNote]:
+    return [
+        _delivery("d1", "first", "2026-10-15T09:00:00", 7),
+        _delivery("d2", "second", "2026-10-15T10:00:00", 8),
+        _delivery("d3", "third", "2026-10-15T11:00:00", 9),
+    ]
+
+
+class InboxSurfaceStore:
+    """Fake exposing the dedicated inbox surface (unread list + receipts)."""
+
+    def __init__(self) -> None:
+        self.notes = _inbox_notes()
+        self.inbox_calls: list[bool] = []
+        self.read_ids: list[str] = []
+        self.list_all_calls: list[Any] = []
+
+    def inbox_list(self, include_read: bool = False) -> list[MemoryNote]:
+        self.inbox_calls.append(include_read)
+        return list(self.notes)
+
+    def inbox_read(self, ids: list[str]) -> int:
+        self.read_ids = list(ids)
+        return len(ids)
+
+    def list_all(self, filters: Any = None) -> list[MemoryNote]:
+        self.list_all_calls.append(filters)
+        raise AssertionError("legacy list_all must not run when the surface exists")
+
+
+class LegacyInboxStore:
+    """Fake without the dedicated surface: only the legacy list path exists."""
+
+    def __init__(self) -> None:
+        self.notes = _inbox_notes()
+        self.list_all_calls: list[Any] = []
+
+    def list_all(self, filters: Any = None) -> list[MemoryNote]:
+        self.list_all_calls.append(filters)
+        return list(self.notes)
+
+
+class _ScriptedSession:
+    """Fake HTTP transport: scripted ``(status, payload)`` answers in order."""
+
+    def __init__(self, *responses: tuple[int, Any]) -> None:
+        self._responses = list(responses)
+        self.calls: list[dict[str, Any]] = []
+
+    def request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
+        self.calls.append({"method": method, "url": url, **kwargs})
+        if not self._responses:
+            raise AssertionError(f"unexpected request: {method} {url}")
+        status, payload = self._responses.pop(0)
+        response = requests.Response()
+        response.status_code = status
+        response._content = json.dumps(payload).encode("utf-8")
+        response.headers["Content-Type"] = "application/json"
+        return response
+
+
+class _WrappedRemoteStore:
+    """A wrapper that does not forward the inbox surface, adapter behind it."""
+
+    def __init__(self, remote: RemoteMemoryStore) -> None:
+        self._base_store = remote
+        self.list_all_calls: list[Any] = []
+        self.added: list[MemoryNote] = []
+
+    def list_all(self, filters: Any = None) -> list[MemoryNote]:
+        self.list_all_calls.append(filters)
+        return [_delivery("d1", "legacy", "2026-10-15T09:00:00", 7)]
+
+    def add(self, note: MemoryNote) -> MemoryResponse:
+        self.added.append(note)
+        raise RemoteMemoryStoreError(
+            "Remote memory service returned HTTP 409: /v1/memory/deliver"
+            " — you already delivered this note;"
+            " send a follow-up delivery instead",
+            status_code=409,
+        )
+
+
+class _PublicationSource:
+    """Minimal publication source for the revocable wrapper (test double)."""
+
+    def __init__(self, generation: int = 1) -> None:
+        self.generation = generation
+
+    def publication_generation(self) -> int:
+        return self.generation
+
+    def published_status(self) -> MemoryLifecycleStatus:
+        return MemoryLifecycleStatus(state=MemoryLifecycleState.RESTART_REQUIRED)
+
+
+@pytest.mark.asyncio
+async def test_check_inbox_walks_the_wrapper_to_the_dedicated_surface() -> None:
+    """A wrapper store must not hide the surface: unread filter + receipts."""
+    base = InboxSurfaceStore()
+    tool = CheckInboxTool(memory_store=UserIsolatedMemoryStore(base))
+
+    result = await tool.execute(limit=2)
+
+    assert result["success"] is True
+    assert [d["id"] for d in result["deliveries"]] == ["d3", "d2"]
+    assert result["count"] == 2
+    assert result["marked_read"] == 2
+    assert result["unread_remaining"] == 1
+    assert base.read_ids == ["d3", "d2"]
+    assert base.inbox_calls == [False]
+    # the legacy path must not be taken when the surface exists
+    assert base.list_all_calls == []
+
+
+@pytest.mark.asyncio
+async def test_check_inbox_through_the_full_production_chain() -> None:
+    """Revocable(user_isolated(remote)): live reads go over the inbox routes,
+    and a revoked reference fails closed instead of reaching the adapter."""
+    session = _ScriptedSession(
+        (
+            200,
+            [
+                {
+                    "id": "d1",
+                    "content": "hello",
+                    "category": "general",
+                    "timestamp": "2026-10-15T10:00:00",
+                    "metadata": {"from_user": 7},
+                }
+            ],
+        ),
+        (200, {"marked": 1}),
+    )
+    remote = RemoteMemoryStore(SERVICE_URL, SERVICE_KEY, session=session)
+    source = _PublicationSource(generation=1)
+    store = RevocableMemoryStore(  # type: ignore[arg-type]
+        UserIsolatedMemoryStore(remote), source, generation=1
+    )
+    tool = CheckInboxTool(memory_store=store)
+
+    live = await tool.execute()
+
+    assert live["success"] is True
+    assert [d["id"] for d in live["deliveries"]] == ["d1"]
+    assert live["marked_read"] == 1
+    assert live["unread_remaining"] == 0
+    assert [call["url"] for call in session.calls] == [
+        f"{SERVICE_URL}/v1/memory/inbox/list",
+        f"{SERVICE_URL}/v1/memory/inbox/read",
+    ]
+
+    source.generation = 2  # the manager revoked this publication
+
+    revoked = await tool.execute()
+
+    assert revoked["success"] is False
+    # the revoked reference never reached the adapter: no third request
+    assert len(session.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_check_inbox_reaches_the_adapter_behind_a_hiding_wrapper() -> None:
+    """A wrapper without forwarding methods must not hide the capability."""
+    session = _ScriptedSession(
+        (
+            200,
+            [
+                {
+                    "id": "d1",
+                    "content": "hello",
+                    "category": "general",
+                    "timestamp": "2026-10-15T10:00:00",
+                    "metadata": {"from_user": 7},
+                }
+            ],
+        ),
+        (200, {"marked": 1}),
+    )
+    wrapper = _WrappedRemoteStore(
+        RemoteMemoryStore(SERVICE_URL, SERVICE_KEY, session=session)
+    )
+    tool = CheckInboxTool(memory_store=wrapper)
+
+    result = await tool.execute()
+
+    assert result["success"] is True
+    assert [d["id"] for d in result["deliveries"]] == ["d1"]
+    assert result["marked_read"] == 1
+    assert result["unread_remaining"] == 0
+    assert wrapper.list_all_calls == []
+    assert [call["url"] for call in session.calls] == [
+        f"{SERVICE_URL}/v1/memory/inbox/list",
+        f"{SERVICE_URL}/v1/memory/inbox/read",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_check_inbox_falls_back_to_legacy_on_a_missing_inbox_route() -> None:
+    """An old service answers 404 for the inbox routes: use the legacy path."""
+    session = _ScriptedSession((404, {"error": {"message": "no such route"}}))
+    wrapper = _WrappedRemoteStore(
+        RemoteMemoryStore(SERVICE_URL, SERVICE_KEY, session=session)
+    )
+    tool = CheckInboxTool(memory_store=wrapper)
+
+    result = await tool.execute()
+
+    assert result["success"] is True
+    assert [d["id"] for d in result["deliveries"]] == ["d1"]
+    # legacy shape: no receipt bookkeeping, no unread counter
+    assert "unread_remaining" not in result
+    assert "marked_read" not in result
+    assert wrapper.list_all_calls == [{"metadata": {"deliver": True}}]
+    assert session.calls[0]["url"] == f"{SERVICE_URL}/v1/memory/inbox/list"
+
+
+@pytest.mark.asyncio
+async def test_check_inbox_falls_back_to_legacy_when_the_delegate_lacks_it() -> None:
+    """A forwarding wrapper over a local store raises AttributeError → legacy."""
+    base = LegacyInboxStore()
+    tool = CheckInboxTool(memory_store=UserIsolatedMemoryStore(base))
+
+    result = await tool.execute()
+
+    assert result["success"] is True
+    assert result["count"] == 3
+    assert "unread_remaining" not in result
+    assert base.list_all_calls == [{"metadata": {"deliver": True}}]
+
+
+@pytest.mark.asyncio
+async def test_check_inbox_keeps_the_legacy_path_for_surface_less_fakes() -> None:
+    """A plain fake store with only list_all keeps the historical behaviour."""
+    base = LegacyInboxStore()
+    tool = CheckInboxTool(memory_store=base)
+
+    result = await tool.execute(limit=2)
+
+    assert result == {
+        "success": True,
+        "count": 2,
+        "deliveries": [
+            {
+                "id": "d3",
+                "content": "third",
+                "from_user": 9,
+                "timestamp": "2026-10-15 11:00:00",
+            },
+            {
+                "id": "d2",
+                "content": "second",
+                "from_user": 8,
+                "timestamp": "2026-10-15 10:00:00",
+            },
+        ],
+    }
+    assert base.list_all_calls == [{"metadata": {"deliver": True}}]
+
+
+# ---------------------------------------------------------------------------
+# server-side error messages reach the model (P1-4)
+# ---------------------------------------------------------------------------
+
+APPEND_ONLY_409 = (
+    "Remote memory service returned HTTP 409: /v1/memory/notes/mem-1"
+    " — this note is append-only; send a follow-up delivery instead"
+)
+
+
+@pytest.mark.asyncio
+async def test_update_memory_surfaces_the_service_message() -> None:
+    class AppendOnlyStore(CrudMemoryStore):
+        def update(self, note: MemoryNote) -> MemoryResponse:
+            raise RemoteMemoryStoreError(APPEND_ONLY_409, status_code=409)
+
+    store = AppendOnlyStore({"mem-1": _note("mem-1", "Delivered note.")})
+    tool = UpdateMemoryTool(memory_store=store)
+
+    result = await tool.execute(memory_id="mem-1", content="Corrected fact.")
+
+    assert result["success"] is False
+    assert "send a follow-up delivery instead" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_delete_memory_surfaces_the_service_message() -> None:
+    class ConflictingDeleteStore(CrudMemoryStore):
+        def delete(self, note_id: str) -> MemoryResponse:
+            raise RemoteMemoryStoreError(APPEND_ONLY_409, status_code=409)
+
+    tool = DeleteMemoryTool(memory_store=ConflictingDeleteStore({"mem-1": _note("mem-1", "x")}))
+
+    result = await tool.execute(memory_id="mem-1")
+
+    assert result["success"] is False
+    assert "send a follow-up delivery instead" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_store_memory_surfaces_the_service_message_on_judged_write() -> None:
+    class ConflictingRememberStore(RecordingMemoryStore):
+        def remember(self, note: MemoryNote, *, force: bool = False) -> MemoryResponse:
+            raise RemoteMemoryStoreError(APPEND_ONLY_409, status_code=409)
+
+    tool = StoreMemoryTool(memory_store=ConflictingRememberStore(), task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["success"] is False
+    assert "send a follow-up delivery instead" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_deliver_memory_surfaces_the_service_message() -> None:
+    wrapper = _WrappedRemoteStore(RemoteMemoryStore(SERVICE_URL, SERVICE_KEY))
+    tool = DeliverMemoryTool(memory_store=wrapper)
+
+    result = await tool.execute(target="t10-probe", content="Ship it.")
+
+    assert result["success"] is False
+    assert "send a follow-up delivery instead" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_search_memory_surfaces_the_service_message() -> None:
+    class RateLimitedStore(CrudMemoryStore):
+        def search(self, **kwargs: Any) -> list[Any]:
+            raise RemoteMemoryStoreError(
+                "Remote memory service returned HTTP 429: /v1/memory/search"
+                " — rate limited, slow down",
+                status_code=429,
+            )
+
+    tool = SearchMemoryTool(memory_store=RateLimitedStore())
+
+    result = await tool.execute(query="anything")
+
+    assert result["success"] is False
+    assert "rate limited, slow down" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# search_memory space / category filters (P1-6a, client half)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_search_memory_forwards_space_and_category_filters() -> None:
+    store = CrudMemoryStore()
+    tool = SearchMemoryTool(memory_store=store)
+
+    filtered = await tool.execute(
+        query="budget", space="department", category="react_memory"
+    )
+    unfiltered = await tool.execute(query="budget")
+
+    assert filtered["success"] is True
+    assert unfiltered["success"] is True
+    assert store.searches[0]["filters"] == {
+        "space": "department",
+        "category": "react_memory",
+    }
+    # default behaviour is unchanged: no caller filters at all
+    assert store.searches[1]["filters"] is None
+
+
+@pytest.mark.asyncio
+async def test_search_memory_rejects_an_unknown_space() -> None:
+    store = CrudMemoryStore()
+    tool = SearchMemoryTool(memory_store=store)
+
+    result = await tool.execute(query="budget", space="team")
+
+    assert result["success"] is False
+    assert "personal" in result["error"] and "department" in result["error"]
+    assert store.searches == []
+
+
+def test_search_memory_schema_advertises_space_and_category() -> None:
+    properties = SearchMemoryArgs.model_json_schema()["properties"]
+    space_schema = json.dumps(properties["space"])
+    for value in ("personal", "department", "company"):
+        assert value in space_schema
+    assert "category" in properties

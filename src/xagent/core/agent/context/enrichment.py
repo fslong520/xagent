@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
@@ -15,11 +14,11 @@ from ...user_context import current_user_id
 logger = logging.getLogger(__name__)
 
 # The lookup turns failures into [] (a memory outage must not fail the task), but the
-# empty result alone reads as "nothing was ever remembered": the last failure rides here
-# so the trace can say *why* the retrieval came back empty.
-_retrieval_error: ContextVar[str | None] = ContextVar(
-    "mem_retrieval_error", default=None
-)
+# empty result alone reads as "nothing was ever remembered": the last failure rides
+# back from ``_lookup_relevant_memories_with_context`` as the second tuple element so
+# the trace can say *why* the retrieval came back empty. It is a return value, not a
+# ContextVar: the lookup runs in ``asyncio.to_thread``, and a ContextVar set inside
+# that worker thread never reaches the awaiting parent context.
 
 MEMORY_CONTEXT_METADATA_KEY = "retrieved_memory_context"
 RETRIEVED_MEMORIES_METADATA_KEY = "retrieved_memories"
@@ -217,8 +216,7 @@ async def enrich_context_with_memory(
             data={"query": query[:200], "category": category},
         )
 
-    _retrieval_error.set(None)
-    memories = await asyncio.to_thread(
+    memories, retrieval_error = await asyncio.to_thread(
         _lookup_relevant_memories_with_context,
         memory_store,
         query,
@@ -228,7 +226,6 @@ async def enrich_context_with_memory(
         similarity_threshold,
         user_id,
     )
-    retrieval_error = _retrieval_error.get()
     if retrieval_error:
         logger.warning("memory retrieval degraded: %s", retrieval_error)
     retrieved_by_category[category] = memories
@@ -412,12 +409,19 @@ def _lookup_relevant_memories_with_context(
     limit: int,
     similarity_threshold: float | None,
     user_id: Any | None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Run the lookup under ``user_id``; return ``(memories, retrieval_error)``.
+
+    The error is returned, never stashed in a ContextVar: this function runs
+    on a worker thread (``asyncio.to_thread`` copies the context in, nothing
+    is copied back out), so a ``set()`` here was invisible to the caller and
+    the trace never reported a failed retrieval. ``None`` means success.
+    """
     try:
         if user_id is not None:
             token = current_user_id.set(user_id)
             try:
-                return lookup_relevant_memories(
+                memories = lookup_relevant_memories(
                     memory_store,
                     query,
                     category,
@@ -427,22 +431,22 @@ def _lookup_relevant_memories_with_context(
                 )
             finally:
                 current_user_id.reset(token)
-
-        return lookup_relevant_memories(
-            memory_store,
-            query,
-            category,
-            include_general=include_general,
-            limit=limit,
-            similarity_threshold=similarity_threshold,
-        )
+        else:
+            memories = lookup_relevant_memories(
+                memory_store,
+                query,
+                category,
+                include_general=include_general,
+                limit=limit,
+                similarity_threshold=similarity_threshold,
+            )
     except Exception as exc:
         logger.exception(
             "Failed to retrieve memories%s",
             " with user context" if user_id is not None else "",
         )
-        _retrieval_error.set(f"{type(exc).__name__}: {exc}")
-        return []
+        return [], f"{type(exc).__name__}: {exc}"
+    return memories, None
 
 
 def _current_user_id() -> Any | None:

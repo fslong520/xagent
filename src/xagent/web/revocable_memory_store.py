@@ -26,7 +26,7 @@ the wrappers (``get_store_info`` reporting ``store_type``) go through
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Protocol
+from typing import Any, Callable, List, Optional, Protocol, cast
 
 from ..core.memory.base import MemoryStore
 from ..core.memory.core import MemoryNote, MemoryResponse
@@ -135,7 +135,33 @@ class RevocableMemoryStore(MemoryStore):
         remember = getattr(delegate, "remember", None)
         if not callable(remember):
             raise AttributeError("memory store does not support remember")
-        return remember(note, force=force)
+        return cast(Callable[..., MemoryResponse], remember)(note, force=force)
+
+    def inbox_list(self, include_read: bool = False) -> List[MemoryNote]:
+        """Forward the unread-first inbox surface (T14 side table) live.
+
+        Same forwarding rule as ``remember``: ``inbox_list`` is an optional
+        capability, so hiding it would send every ``check_inbox`` call down
+        the legacy ``list_all`` path -- no unread filter, no receipts. The
+        call goes through ``_live`` so a revoked reference fails closed, and a
+        delegate without the capability raises ``AttributeError`` so the
+        caller can fall back to the legacy path.
+        """
+        delegate = self._live()
+        inbox_list = getattr(delegate, "inbox_list", None)
+        if not callable(inbox_list):
+            raise AttributeError("memory store does not support inbox_list")
+        return cast(Callable[..., List[MemoryNote]], inbox_list)(
+            include_read=include_read
+        )
+
+    def inbox_read(self, ids: List[str]) -> int:
+        """Forward the read-receipt write (T14 side table) through ``_live``."""
+        delegate = self._live()
+        inbox_read = getattr(delegate, "inbox_read", None)
+        if not callable(inbox_read):
+            raise AttributeError("memory store does not support inbox_read")
+        return cast(Callable[..., int], inbox_read)(ids)
 
 
 def unwrap_memory_store(store: Any) -> Any:

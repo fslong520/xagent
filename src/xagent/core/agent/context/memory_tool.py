@@ -23,7 +23,7 @@ from .memory_prompts import (
     UPDATE_MEMORY_DESCRIPTION,
 )
 from ...memory.core import MemoryNote
-from ...memory.remote import _unwrap_remote_store
+from ...memory.remote import RemoteMemoryStoreError, _unwrap_remote_store
 from ..trace import (
     trace_memory_retrieve_end,
     trace_memory_retrieve_start,
@@ -247,12 +247,15 @@ class StoreMemoryTool:
             # The store advertises the method but does not support it (a
             # wrapper over a local store); the caller falls back.
             return {"unsupported": True}
-        except Exception:
+        except Exception as exc:
             logger.exception("store_memory judged write failed")
+            # str() only: the adapter's message carries the service's repair
+            # hint (the 409 append-only guidance), while the traceback stays
+            # in the log instead of the model-facing text.
             return {
                 "stored": False,
                 "action": "failed",
-                "error": "Failed to store memory.",
+                "error": str(exc) or "Failed to store memory.",
             }
         if not getattr(response, "success", False):
             return {
@@ -356,6 +359,38 @@ class StoreMemoryTool:
         return getattr(response, "memory_id", None)
 
 
+#: Accepted values of the optional ``space`` search filter (方案 §4.7): the
+#: personal notes, the department layer, or the whole organisation. The server
+#: resolves the caller's readable layers itself, so ``space`` only narrows.
+SearchSpace = Literal["personal", "department", "company"]
+_SEARCH_SPACE_VALUES = ("personal", "department", "company")
+
+
+def _search_filters(
+    space: Any, category: Any
+) -> tuple[dict[str, Any], str | None]:
+    """Build the optional ``space``/``category`` filter keys (§4.7).
+
+    Returns ``(filters, None)`` for valid input and ``({}, message)`` for an
+    illegal ``space``: the tool must tell the model which values exist instead
+    of silently searching the unfiltered surface.
+    """
+    filters: dict[str, Any] = {}
+    if space:
+        value = str(space)
+        if value not in _SEARCH_SPACE_VALUES:
+            return (
+                {},
+                "space must be one of "
+                + ", ".join(_SEARCH_SPACE_VALUES)
+                + f" (got {value!r}); omit it to search everything.",
+            )
+        filters["space"] = value
+    if category:
+        filters["category"] = str(category)
+    return filters, None
+
+
 class SearchMemoryArgs(BaseModel):
     query: str = Field(description="What to look for in stored memories.")
     limit: int = Field(
@@ -363,6 +398,18 @@ class SearchMemoryArgs(BaseModel):
         ge=1,
         le=MAX_SEARCH_LIMIT,
         description="Maximum number of memories to return.",
+    )
+    space: SearchSpace | None = Field(
+        default=None,
+        description=(
+            "Optional shared-space narrowing: 'personal' for your own notes, "
+            "'department' for your department's shared layer, 'company' for "
+            "the whole organisation. Omit to search everything you can read."
+        ),
+    )
+    category: str | None = Field(
+        default=None,
+        description="Optional exact category filter (for example react_memory).",
     )
 
 
@@ -378,7 +425,11 @@ class SearchMemoryTool:
         self.runtime = runtime
 
     async def execute(
-        self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
+        self,
+        query: str,
+        limit: int = DEFAULT_SEARCH_LIMIT,
+        space: str | None = None,
+        category: str | None = None,
     ) -> dict[str, Any]:
         query = str(query or "").strip()
         if not query:
@@ -388,6 +439,9 @@ class SearchMemoryTool:
         except (TypeError, ValueError):
             limit = DEFAULT_SEARCH_LIMIT
         limit = max(1, min(limit, MAX_SEARCH_LIMIT))
+        filters, filter_error = _search_filters(space, category)
+        if filter_error is not None:
+            return {"success": False, "error": filter_error}
 
         task_id = str(_runtime_attr(self.runtime, "execution_id") or "")
         step_id = _runtime_attr(self.runtime, "active_react_step_id")
@@ -403,11 +457,13 @@ class SearchMemoryTool:
 
         error: str | None = None
         try:
-            memories = await asyncio.to_thread(self._search, query, limit)
-        except Exception:
+            memories = await asyncio.to_thread(self._search, query, limit, filters)
+        except Exception as exc:
             logger.exception("search_memory failed")
             memories = []
-            error = "Failed to search memories."
+            # surface the service's own message (§4.7 errors reach the model);
+            # str() carries no traceback.
+            error = str(exc) or "Failed to search memories."
 
         if tracer is not None and task_id:
             await trace_memory_retrieve_end(
@@ -427,8 +483,17 @@ class SearchMemoryTool:
             return {"success": False, "error": error}
         return {"success": True, "memories": memories, "count": len(memories)}
 
-    def _search(self, query: str, limit: int) -> list[dict[str, Any]]:
-        results = self.memory_store.search(query=query, k=limit)
+    def _search(
+        self, query: str, limit: int, filters: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        # Only the caller's own keys ride here; the execution-scope keys are
+        # merged downstream (UserIsolatedMemoryStore / remote._filters_payload),
+        # so passing the dict through merges instead of overwriting them.
+        results = self.memory_store.search(
+            query=query,
+            k=limit,
+            filters=dict(filters) if filters else None,
+        )
         memories = []
         for note in results or []:
             content = getattr(note, "content", "") or ""
@@ -504,9 +569,11 @@ class UpdateMemoryTool:
             if note.metadata is None:
                 note.metadata = {}
             response = self.memory_store.update(note)
-        except Exception:
+        except Exception as exc:
             logger.exception("update_memory failed")
-            return {"success": False, "error": "Failed to update memory."}
+            # str() only — the service's 409 message ("send a follow-up
+            # delivery instead") is the repair the model needs here.
+            return {"success": False, "error": str(exc) or "Failed to update memory."}
         if not getattr(response, "success", False):
             return {
                 "success": False,
@@ -540,9 +607,9 @@ class DeleteMemoryTool:
     def _delete(self, memory_id: str) -> dict[str, Any]:
         try:
             response = self.memory_store.delete(memory_id)
-        except Exception:
+        except Exception as exc:
             logger.exception("delete_memory failed")
-            return {"success": False, "error": "Failed to delete memory."}
+            return {"success": False, "error": str(exc) or "Failed to delete memory."}
         if not getattr(response, "success", False):
             return {
                 "success": False,
@@ -618,9 +685,14 @@ class DeliverMemoryTool:
         note = MemoryNote(content=f"[to:{target}] {content}")
         try:
             response = await asyncio.to_thread(self.memory_store.add, note)
-        except Exception:
+        except Exception as exc:
             logger.exception("deliver_memory failed")
-            return {"success": False, "error": "Failed to deliver the note."}
+            # the service's own message (rate limit, unknown target, 409) is
+            # the only guidance the model can act on; str() excludes traceback.
+            return {
+                "success": False,
+                "error": str(exc) or "Failed to deliver the note.",
+            }
         if not getattr(response, "success", False):
             return {
                 "success": False,
@@ -714,6 +786,35 @@ class CheckInboxTool:
     def __init__(self, *, memory_store: Any) -> None:
         self.memory_store = memory_store
 
+    def _inbox_surface(self) -> tuple[Any | None, Any | None]:
+        """Resolve the dedicated inbox surface behind the wrapper chain.
+
+        Probe order: the unwrapped ``RemoteMemoryStore`` first — production
+        publishes a wrapper chain (revocation / user isolation) that can hide
+        optional capabilities from a plain ``getattr`` on the outer object —
+        then the store this tool was handed, so a bare local/fake store that
+        defines ``inbox_list`` itself keeps working.
+
+        Whichever probe finds the capability, the call binds to the outer
+        store when it also forwards the method, so a revoked reference still
+        fails closed through ``_live()`` instead of reaching around the
+        wrapper.
+        """
+        remote = _unwrap_remote_store(self.memory_store)
+        for probe in (remote, self.memory_store):
+            if probe is None or not callable(getattr(probe, "inbox_list", None)):
+                continue
+            target = probe
+            if probe is not self.memory_store and callable(
+                getattr(self.memory_store, "inbox_list", None)
+            ):
+                target = self.memory_store
+            return (
+                getattr(target, "inbox_list", None),
+                getattr(target, "inbox_read", None),
+            )
+        return None, None
+
     async def execute(self, limit: int = 20) -> dict[str, Any]:
         try:
             limit = int(limit)
@@ -722,45 +823,64 @@ class CheckInboxTool:
         limit = max(1, min(limit, 50))
         # Prefer the dedicated inbox surface (unread-first + receipts beside the
         # immutable delivery). Legacy/fake stores without it keep the list+filter path.
-        inbox_list = getattr(self.memory_store, "inbox_list", None)
+        inbox_list, inbox_read = self._inbox_surface()
         if callable(inbox_list):
             try:
                 notes = await asyncio.to_thread(lambda: inbox_list(include_read=False))
-            except Exception:
-                logger.exception("check_inbox failed")
-                return {"success": False, "error": "Failed to read the inbox."}
-            ordered = sorted(
-                notes, key=lambda n: str(getattr(n, "timestamp", "") or ""), reverse=True
-            )
-            shown = ordered[:limit]
-            items = []
-            for note in shown:
-                metadata = getattr(note, "metadata", None) or {}
-                items.append(
-                    {
-                        "id": getattr(note, "id", None),
-                        "content": str(getattr(note, "content", "") or ""),
-                        "from_user": metadata.get("from_user"),
-                        "timestamp": str(getattr(note, "timestamp", "") or ""),
+            except Exception as exc:
+                if not _inbox_surface_missing(exc):
+                    logger.exception("check_inbox failed")
+                    return {
+                        "success": False,
+                        "error": str(exc) or "Failed to read the inbox.",
                     }
+                # An old service without the inbox routes (404) or a wrapper
+                # whose delegate lacks the capability (AttributeError): fall
+                # back to the legacy list path instead of failing the tool.
+                logger.warning(
+                    "check_inbox found no usable inbox surface (%s); "
+                    "falling back to list_all",
+                    exc,
                 )
-            marked = 0
-            inbox_read = getattr(self.memory_store, "inbox_read", None)
-            ids = [i["id"] for i in items if i.get("id")]
-            if ids and callable(inbox_read):
-                try:
-                    marked = await asyncio.to_thread(lambda: inbox_read(ids))
-                except Exception:
-                    # receipts are best effort: the deliveries were still returned
-                    logger.warning("check_inbox could not take receipts", exc_info=True)
-            result = {
-                "success": True,
-                "count": len(items),
-                "deliveries": items,
-                "marked_read": marked,
-                "unread_remaining": max(0, len(ordered) - len(shown)),
-            }
-            return result
+            else:
+                return await self._surface_result(notes, inbox_read, limit)
+        return await self._legacy_result(limit)
+
+    async def _surface_result(
+        self, notes: list[Any], inbox_read: Any, limit: int
+    ) -> dict[str, Any]:
+        ordered = sorted(
+            notes, key=lambda n: str(getattr(n, "timestamp", "") or ""), reverse=True
+        )
+        shown = ordered[:limit]
+        items = []
+        for note in shown:
+            metadata = getattr(note, "metadata", None) or {}
+            items.append(
+                {
+                    "id": getattr(note, "id", None),
+                    "content": str(getattr(note, "content", "") or ""),
+                    "from_user": metadata.get("from_user"),
+                    "timestamp": str(getattr(note, "timestamp", "") or ""),
+                }
+            )
+        marked = 0
+        ids = [i["id"] for i in items if i.get("id")]
+        if ids and callable(inbox_read):
+            try:
+                marked = await asyncio.to_thread(lambda: inbox_read(ids))
+            except Exception:
+                # receipts are best effort: the deliveries were still returned
+                logger.warning("check_inbox could not take receipts", exc_info=True)
+        return {
+            "success": True,
+            "count": len(items),
+            "deliveries": items,
+            "marked_read": marked,
+            "unread_remaining": max(0, len(ordered) - len(shown)),
+        }
+
+    async def _legacy_result(self, limit: int) -> dict[str, Any]:
         list_all = getattr(self.memory_store, "list_all", None)
         if not callable(list_all):
             return {
@@ -771,9 +891,12 @@ class CheckInboxTool:
             notes = await asyncio.to_thread(
                 list_all, {"metadata": {"deliver": True}}
             )
-        except Exception:
+        except Exception as exc:
             logger.exception("check_inbox failed")
-            return {"success": False, "error": "Failed to read the inbox."}
+            return {
+                "success": False,
+                "error": str(exc) or "Failed to read the inbox.",
+            }
         ordered = sorted(
             notes, key=lambda n: str(getattr(n, "timestamp", "") or ""), reverse=True
         )
@@ -789,6 +912,22 @@ class CheckInboxTool:
                 }
             )
         return {"success": True, "count": len(items), "deliveries": items}
+
+
+def _inbox_surface_missing(exc: BaseException) -> bool:
+    """Whether the failure means "this store has no dedicated inbox surface".
+
+    An old service answers 404 for the inbox side-table routes, and a wrapper
+    whose delegate lacks the capability raises ``AttributeError`` on the call —
+    both must fall back to the legacy ``list_all`` path. Everything else
+    (5xx, 401/403, timeout, a revoked publication) is a real failure and
+    surfaces to the caller.
+    """
+    if isinstance(exc, AttributeError):
+        return True
+    if getattr(exc, "status_code", None) == 404:
+        return True
+    return isinstance(exc, RemoteMemoryStoreError) and "HTTP 404" in str(exc)
 
 
 def build_store_memory_tool(

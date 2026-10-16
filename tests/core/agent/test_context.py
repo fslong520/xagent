@@ -6,6 +6,7 @@ import logging
 from dataclasses import replace
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -508,7 +509,7 @@ def test_memory_enrichment_uses_web_user_context(
 
     assert current_user_id.get() is None
     assert _current_user_id() is None
-    memories = _lookup_relevant_memories_with_context(
+    memories, retrieval_error = _lookup_relevant_memories_with_context(
         memory_store=object(),
         query="query",
         category="general",
@@ -519,6 +520,8 @@ def test_memory_enrichment_uses_web_user_context(
     )
 
     assert memories == [{"content": "memory"}]
+    # the failure channel is the return value now, not a ContextVar
+    assert retrieval_error is None
     assert observed_user_ids == [42]
     assert current_user_id.get() is None
 
@@ -535,7 +538,7 @@ def test_memory_enrichment_without_user_context_fails_open(
         fail_lookup,
     )
 
-    memories = _lookup_relevant_memories_with_context(
+    memories, retrieval_error = _lookup_relevant_memories_with_context(
         memory_store=object(),
         query="query",
         category="general",
@@ -546,7 +549,78 @@ def test_memory_enrichment_without_user_context_fails_open(
     )
 
     assert memories == []
+    # the error must come back from the call — nothing sets it elsewhere
+    assert retrieval_error == "RuntimeError: memory backend unavailable"
     assert current_user_id.get() is None
+
+
+class _RecordingTracer:
+    """Minimal tracer double: records the data payload of each event."""
+
+    def __init__(self) -> None:
+        self.events: list[dict[str, Any]] = []
+
+    async def trace_event(
+        self,
+        event_type: Any,
+        *,
+        task_id: str | None = None,
+        step_id: str | None = None,
+        data: dict[str, Any] | None = None,
+        **_: Any,
+    ) -> str:
+        self.events.append(
+            {
+                "event_type": getattr(event_type, "value", str(event_type)),
+                "task_id": task_id,
+                "data": data or {},
+            }
+        )
+        return str(len(self.events))
+
+
+@pytest.mark.asyncio
+async def test_enrich_context_carries_retrieval_error_out_of_the_worker_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production runs the lookup in asyncio.to_thread; the error must ride back.
+
+    The old code set a ContextVar inside the worker thread, which the awaiting
+    parent context never sees, so the retrieval_error trace key stayed None
+    forever. The lookup failure now travels as the returned second element.
+    """
+
+    def fail_lookup(*_: object, **__: object) -> list[dict[str, str]]:
+        raise RuntimeError("memory backend unavailable")
+
+    monkeypatch.setattr(
+        enrichment_module,
+        "lookup_relevant_memories",
+        fail_lookup,
+    )
+    tracer = _RecordingTracer()
+    runtime = SimpleNamespace(
+        execution_id="exec-retrieval-error",
+        active_react_step_id=None,
+        tracer=tracer,
+    )
+    ctx = ExecutionContext(execution_id="exec-retrieval-error")
+
+    memories = await enrich_context_with_memory(
+        context=ctx,
+        query="Summarize",
+        category="general",
+        memory_store=object(),
+        runtime=runtime,
+    )
+
+    assert memories == []
+    end_event = tracer.events[-1]
+    assert end_event["event_type"] == "task_end_memory_retrieve"
+    assert end_event["data"]["retrieval_error"] == (
+        "RuntimeError: memory backend unavailable"
+    )
+    assert end_event["data"]["found"] is False
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 """User-isolated memory store for web application."""
 
 import contextvars
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional, cast
 
 from xagent.core.execution_scope import (
     MEMORY_DIMENSION_METADATA_PREFIX,
@@ -275,6 +275,36 @@ class UserIsolatedMemoryStore(MemoryStore):
         only, for the same reasons: it enumerates values across every user.
         """
         return self._base_store.list_scope_dimension_values(dim_key)
+
+    def inbox_list(self, include_read: bool = False) -> List[MemoryNote]:
+        """Forward the unread-first inbox surface (T14 side table).
+
+        ``inbox_list`` is an optional capability of the ``MemoryStore`` ABC's
+        implementations (the remote adapter offers it); without this forward
+        this wrapper would hide it from a duck-typed probe and every
+        ``check_inbox`` call would silently fall back to the legacy
+        ``list_all`` path. Scoping is the service's job — the inbox is
+        already addressed to the acting identity — so nothing is merged here.
+        A delegate without the capability raises ``AttributeError`` so the
+        caller can treat it as "not supported" and use its legacy path.
+        """
+        inbox_list = getattr(self._base_store, "inbox_list", None)
+        if not callable(inbox_list):
+            raise AttributeError("memory store does not support inbox_list")
+        return cast(Callable[..., List[MemoryNote]], inbox_list)(
+            include_read=include_read
+        )
+
+    def inbox_read(self, ids: List[str]) -> int:
+        """Forward the read-receipt write (T14 side table) to the delegate.
+
+        Same optional-capability contract as ``inbox_list``: a delegate
+        without the capability raises ``AttributeError``.
+        """
+        inbox_read = getattr(self._base_store, "inbox_read", None)
+        if not callable(inbox_read):
+            raise AttributeError("memory store does not support inbox_read")
+        return cast(Callable[..., int], inbox_read)(ids)
 
     def search(
         self,
