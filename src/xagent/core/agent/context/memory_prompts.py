@@ -9,8 +9,9 @@ edits and migrations only touch here. Consumption points:
 - core/agent/context/memory_tool.py -> STORE/SEARCH/UPDATE/DELETE/DELIVER/
                                         CHECK_INBOX _DESCRIPTION
 
-Texts are byte-identical copies of the original inline segments; do not
-reword here without re-running the extraction equality check.
+Texts may be reworded in place here (2026-10-24: recall guidance moved
+from keyword-only to one-sentence semantic queries + tree exploration);
+upstream syncs still only touch this file.
 """
 
 MEMORY_PERSISTENCE_GUIDE = (
@@ -32,10 +33,14 @@ MEMORY_PERSISTENCE_GUIDE = (
 "correction the user stated that is not yet stored must be "
 "stored now — replying without persisting a stated durable fact "
 "leaves the task incomplete, and storing never needs the user's "
-"permission. When recalling, search with the concrete "
-"keywords of what you need (names, dates, amounts, places), "
-"not with the whole question, and issue a second query with "
-"different keywords when the first returns nothing. Do not "
+"permission. When recalling, put what you need into one "
+"complete self-contained sentence — retrieval is semantic, "
+"so it matches the meaning of your query against stored "
+"memories: a full sentence naming the fact, person, "
+"decision or period you are after finds more than a pile "
+"of keywords, with the names, dates, amounts and places "
+"inside that sentence. If it returns nothing, rephrase "
+"the same need in different words and search again. Do not "
 "store routine task completions, transient chatter, the answer "
 "you just produced, widely known facts, or secrets and "
 "credentials. To hand a fact, decision or instruction to a "
@@ -155,13 +160,20 @@ into that memory or attached under it, and the result says which happened."""
 SEARCH_MEMORY_DESCRIPTION = (
 "Search stored memories from previous tasks. Use this when earlier "
 "insights, user preferences, or known failure patterns could help the "
-"current step. Query with the concrete keywords you need — a name, a "
-"date, an amount, a place — rather than the whole question, since "
-"fuzzy matching favours short exact terms. Facts from one message are "
-"stored as separate lines, so search each fact you need on its own. "
-"If a query returns nothing, retry once with different keywords "
-"before concluding the fact was never stored. Results include each "
-"memory's id, which update_memory and delete_memory take."
+"current step. Retrieval is semantic: write the query as one complete "
+"sentence stating what you are looking for — a person, a date, an "
+"amount, a place, a decision — because it matches meaning, not exact "
+"words, and the whole question retrieves better than a keyword list. "
+"Facts from one message are stored as separate lines, so search each "
+"fact you need on its own. If a query returns nothing, rephrase the "
+"same need in a different sentence once before concluding the fact "
+"was never stored. Each result sits in a tree of related memories: "
+"its parent (the cause or topic it hangs under), its children and "
+"its siblings are reachable — after a hit, follow up with another "
+"sentence built from that hit's own subject to climb, branch or "
+"move sideways along the tree until you have the context you need. "
+"Results include each memory's id, which update_memory and "
+"delete_memory take."
 )
 
 UPDATE_MEMORY_DESCRIPTION = (

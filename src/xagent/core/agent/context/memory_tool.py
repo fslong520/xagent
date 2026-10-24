@@ -392,7 +392,13 @@ def _search_filters(
 
 
 class SearchMemoryArgs(BaseModel):
-    query: str = Field(description="What to look for in stored memories.")
+    query: str = Field(
+        description=(
+            "What to look for in stored memories, written as one "
+            "complete sentence — retrieval is semantic and matches "
+            "meaning, not exact keywords."
+        )
+    )
     limit: int = Field(
         default=DEFAULT_SEARCH_LIMIT,
         ge=1,
