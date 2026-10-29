@@ -88,6 +88,42 @@ def auth_headers(test_db):
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture(scope="function")
+def regular_user(test_db):
+    """A non-admin account, so the personal-scope path keeps coverage."""
+    session = TestingSessionLocal()
+    try:
+        user = User(
+            username="member",
+            password_hash=hash_password("member"),
+            is_admin=False,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
+    finally:
+        session.close()
+
+
+@pytest.fixture(scope="function")
+def regular_auth_headers(regular_user):
+    """Authentication headers for a regular (non-admin) user."""
+    from datetime import datetime, timedelta, timezone
+
+    import jwt
+
+    payload = {
+        "sub": "member",
+        "type": "access",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        "iat": datetime.now(timezone.utc),
+        "user_id": regular_user.id,
+    }
+    token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return {"Authorization": f"Bearer {token}"}
+
+
 @pytest.fixture
 def mock_memory_store():
     """Create a mock memory store for testing."""
@@ -515,8 +551,124 @@ class TestMemoryUpdateEndpoint:
         # Verify that only content was updated, other fields preserved
         call_args = mock_memory_store.update.call_args[0][0]
         assert call_args.content == "Only content updated"
-        assert call_args.keywords == ["test", "sample"]  # Original values preserved
+        # X-06: a keyword that only the replaced body supported ("test" was in
+        # "Test memory 1") is cleared so the service cannot refill tags from it;
+        # "sample" never appeared in the body and is kept.
+        assert call_args.keywords == ["sample"]
         assert call_args.tags == ["important"]  # Original values preserved
+
+    def test_update_memory_drops_the_tag_the_new_content_replaced(self, client, mock_memory_store, auth_headers):
+        """X-06: a content-only PUT must not keep the old plate in `tags`.
+
+        The store keeps whichever tags a request carries (probed 2026-10-29),
+        so a body rewritten from 京A8888 to 京A9999 left the old value in tags.
+        """
+        mock_memory_store.get.return_value = Mock(
+            success=True,
+            content=MemoryNote(
+                id="memory_1",
+                content="Y-C7-PLATE 我的车牌号是 京A8888，停车月卡登记用。",
+                keywords=["车牌号", "京A8888"],
+                tags=["车牌号", "京A8888"],
+                category="general",
+            ),
+        )
+        mock_memory_store.update.return_value = Mock(success=True)
+
+        response = client.put(
+            "/api/memory/memory_1",
+            json={"content": "Y-C7-PLATE 我的车牌号是 京A9999，停车月卡登记用。"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        written = mock_memory_store.update.call_args[0][0]
+        assert written.content.endswith("京A9999，停车月卡登记用。")
+        assert written.tags == ["车牌号"]
+
+    def test_update_memory_honours_tags_the_caller_supplies(self, client, mock_memory_store, auth_headers):
+        """An explicit tag list is the caller's decision, not the client's."""
+        mock_memory_store.get.return_value = Mock(
+            success=True,
+            content=MemoryNote(
+                id="memory_1", content="车牌 京A8888", tags=["京A8888"]
+            ),
+        )
+        mock_memory_store.update.return_value = Mock(success=True)
+
+        response = client.put(
+            "/api/memory/memory_1",
+            json={"content": "车牌 京A9999", "tags": ["2026-10-29校正"]},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        assert mock_memory_store.update.call_args[0][0].tags == ["2026-10-29校正"]
+
+    def test_update_memory_clears_stale_keywords_without_tags(self, client, mock_memory_store, auth_headers):
+        """X-06: an empty tag list must not be refilled from old keywords.
+
+        memsrv treats an empty ``tags`` list as "use keywords", so a PUT whose
+        tags are already empty kept ``京A8888`` alive through ``keywords``
+        (evidence ``probe_x06_tags3.out``).
+        """
+        mock_memory_store.get.return_value = Mock(
+            success=True,
+            content=MemoryNote(
+                id="memory_1",
+                content="Y-C7-PLATE 我的车牌号是 京A8888，停车月卡登记用。",
+                keywords=["车牌号", "京A8888"],
+                tags=[],
+                category="general",
+            ),
+        )
+        mock_memory_store.update.return_value = Mock(success=True)
+
+        response = client.put(
+            "/api/memory/memory_1",
+            json={"content": "Y-C7-PLATE 我的车牌号是 京A9999，停车月卡登记用。"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        written = mock_memory_store.update.call_args[0][0]
+        assert written.tags == []
+        assert written.keywords == ["车牌号"]
+
+    def test_update_memory_drops_echoed_old_tags_but_keeps_classification(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """The UI prefills the old tags; echoing them is not a decision.
+
+        A value only the old body supported (京A8888) is dropped, a value the
+        new body still supports (车牌号) stays, and a classification tag that
+        never appeared in the body (高频) is untouched.
+        """
+        mock_memory_store.get.return_value = Mock(
+            success=True,
+            content=MemoryNote(
+                id="memory_1",
+                content="Y-C7-PLATE 我的车牌号是 京A8888，停车月卡登记用。",
+                tags=["车牌号", "京A8888", "高频"],
+                keywords=["车牌号", "京A8888"],
+                category="general",
+            ),
+        )
+        mock_memory_store.update.return_value = Mock(success=True)
+
+        response = client.put(
+            "/api/memory/memory_1",
+            json={
+                "content": "Y-C7-PLATE 我的车牌号是 京A9999，停车月卡登记用。",
+                "tags": ["车牌号", "京A8888", "高频"],
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        written = mock_memory_store.update.call_args[0][0]
+        assert written.tags == ["车牌号", "高频"]
+        assert "京A8888" not in written.keywords
 
     def test_update_memory_error_handling(
         self, client, mock_memory_store, auth_headers
@@ -579,7 +731,7 @@ class TestMemoryDeleteEndpoint:
 class TestMemoryStatsEndpoint:
     """Test cases for memory stats endpoint."""
 
-    def test_get_stats_success(self, client, mock_memory_store, auth_headers):
+    def test_get_stats_success(self, client, mock_memory_store, regular_auth_headers):
         """Test successful stats retrieval."""
         mock_stats = {
             "total_count": 10,
@@ -589,7 +741,7 @@ class TestMemoryStatsEndpoint:
         }
         mock_memory_store.get_stats.return_value = mock_stats
 
-        response = client.get("/api/memory/stats", headers=auth_headers)
+        response = client.get("/api/memory/stats", headers=regular_auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -597,8 +749,11 @@ class TestMemoryStatsEndpoint:
         assert data["category_counts"]["general"] == 5
         assert data["tag_counts"]["important"] == 3
         assert data["memory_store_type"] == "in_memory"
+        assert data["scope"] == "personal"
 
-    def test_get_stats_with_error(self, client, mock_memory_store, auth_headers):
+    def test_get_stats_with_error(
+        self, client, mock_memory_store, regular_auth_headers
+    ):
         """Test stats retrieval with error."""
         mock_stats = {
             "total_count": 0,
@@ -609,7 +764,7 @@ class TestMemoryStatsEndpoint:
         }
         mock_memory_store.get_stats.return_value = mock_stats
 
-        response = client.get("/api/memory/stats", headers=auth_headers)
+        response = client.get("/api/memory/stats", headers=regular_auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -617,15 +772,109 @@ class TestMemoryStatsEndpoint:
         assert "error" in data
         assert data["error"] == "Database connection failed"
 
-    def test_get_stats_error_handling(self, client, mock_memory_store, auth_headers):
+    def test_get_stats_error_handling(
+        self, client, mock_memory_store, regular_auth_headers
+    ):
         """Test error handling in stats retrieval."""
         # Setup mock to raise exception
         mock_memory_store.get_stats.side_effect = Exception("Database error")
 
-        response = client.get("/api/memory/stats", headers=auth_headers)
+        response = client.get("/api/memory/stats", headers=regular_auth_headers)
 
         assert response.status_code == 500
         assert "Failed to get memory stats" in response.json()["detail"]
+
+    def test_admin_stats_aggregates_the_notes_the_list_returns(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """X-02: an admin's org figure must be the list's own notes.
+
+        Probed 2026-10-29 on the live deployment: the admin list answered 17
+        organisation notes while stats answered 4 (that identity's own), so the
+        panel contradicted itself. Stats now aggregates ``list_all()`` -- the
+        same call the list port makes -- over the organisation scope.
+        """
+        org_notes = [
+            MemoryNote(
+                id="mem-1",
+                content="2 号的报销额度是 8800 元。",
+                tags=["报销额度"],
+                category="general",
+                metadata={"user_id": 2},
+            ),
+            MemoryNote(
+                id="mem-2",
+                content="2 号的停车月卡登记用 京A8888。",
+                tags=["e2e"],
+                category="react_memory",
+                metadata={"user_id": 2},
+            ),
+            MemoryNote(
+                id="mem-3",
+                content="3 号的车牌号是 京A9999。",
+                tags=["e2e"],
+                category="general",
+                metadata={"user_id": 3},
+            ),
+        ]
+        mock_memory_store.list_all.return_value = org_notes
+        # The service's own stats stay personal; only the store type is taken.
+        mock_memory_store.get_stats.return_value = {
+            "total_count": 1,
+            "category_counts": {"react_memory": 1},
+            "tag_counts": {},
+            "memory_store_type": "remote",
+        }
+
+        stats_response = client.get("/api/memory/stats", headers=auth_headers)
+        list_response = client.get("/api/memory/list", headers=auth_headers)
+
+        assert stats_response.status_code == 200
+        assert list_response.status_code == 200
+        stats, listing = stats_response.json(), list_response.json()
+        assert stats["total_count"] == listing["total_count"] == 3
+        assert sum(stats["category_counts"].values()) == stats["total_count"]
+        assert stats["category_counts"] == {"general": 2, "react_memory": 1}
+        assert stats["tag_counts"] == {"报销额度": 1, "e2e": 2}
+        assert stats["scope"] == listing["scope"] == "org"
+        assert stats["memory_store_type"] == "remote"
+
+    def test_regular_user_stats_and_list_stay_personal_and_agree(
+        self, client, mock_memory_store, regular_user, regular_auth_headers
+    ):
+        """A regular user keeps the personal surface, and the two ports agree."""
+        own_notes = [
+            MemoryNote(
+                id="own-1",
+                content="我的报销额度是 8800 元。",
+                tags=["报销额度"],
+                category="general",
+                metadata={"user_id": regular_user.id},
+            ),
+            MemoryNote(
+                id="own-2",
+                content="我的停车月卡登记车牌 京A8888。",
+                tags=["e2e"],
+                category="react_memory",
+                metadata={"user_id": regular_user.id},
+            ),
+        ]
+        mock_memory_store.list_all.return_value = own_notes
+        mock_memory_store.get_stats.return_value = {
+            "total_count": 2,
+            "category_counts": {"general": 1, "react_memory": 1},
+            "tag_counts": {"报销额度": 1, "e2e": 1},
+            "memory_store_type": "remote",
+        }
+
+        stats_response = client.get("/api/memory/stats", headers=regular_auth_headers)
+        list_response = client.get("/api/memory/list", headers=regular_auth_headers)
+
+        assert stats_response.status_code == 200
+        assert list_response.status_code == 200
+        stats, listing = stats_response.json(), list_response.json()
+        assert stats["scope"] == listing["scope"] == "personal"
+        assert stats["total_count"] == listing["total_count"] == 2
 
 
 class TestMemoryApiIntegration:

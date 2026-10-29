@@ -150,6 +150,19 @@ class TaskCreateResponse(BaseModel):
     title: str
     status: str
     created_at: str
+    dispatch_required: bool = Field(
+        ...,
+        description=(
+            "True when the task was created but no turn was dispatched, so it "
+            "sits in `pending` until the caller sends the first message -- "
+            "`WS /ws/chat/{task_id}` (an `execute_task` frame) on the web "
+            "chat path, or `POST /v1/chat/tasks/{task_id}/messages` on the "
+            "SDK path. False when this endpoint already started the first "
+            "turn (the workforce widget/share create paths), where the "
+            "response's `status` is the task's live status rather than "
+            "`pending`."
+        ),
+    )
     model_id: Optional[str] = None
     small_fast_model_id: Optional[str] = None
     visual_model_id: Optional[str] = None

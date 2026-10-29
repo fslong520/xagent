@@ -106,6 +106,9 @@ async def test_handle_build_preview_execution_uses_normal_task_flow():
         title="test message",
         status="pending",
         created_at="2026-05-20T00:00:00Z",
+        # chat.create_task returns a bare pending row it never dispatches
+        # (src/xagent/web/api/chat.py:828); this WS layer starts the turn.
+        dispatch_required=True,
         connector_runtime_requirements=ConnectorRuntimeRequirementsModel(
             satisfied=True, secrets_expires_at=None, connectors=[]
         ),
@@ -164,6 +167,9 @@ async def test_handle_build_preview_execution_does_not_use_preview_sessions():
         title="test message",
         status="pending",
         created_at="2026-05-20T00:00:00Z",
+        # chat.create_task returns a bare pending row it never dispatches
+        # (src/xagent/web/api/chat.py:828); this WS layer starts the turn.
+        dispatch_required=True,
         connector_runtime_requirements=ConnectorRuntimeRequirementsModel(
             satisfied=True, secrets_expires_at=None, connectors=[]
         ),
@@ -252,6 +258,9 @@ async def test_handle_build_preview_execution_creates_task_when_no_preview_task_
         title="second turn",
         status="pending",
         created_at="2026-05-20T00:00:00Z",
+        # chat.create_task returns a bare pending row it never dispatches
+        # (src/xagent/web/api/chat.py:828); this WS layer starts the turn.
+        dispatch_required=True,
         connector_runtime_requirements=ConnectorRuntimeRequirementsModel(
             satisfied=True, secrets_expires_at=None, connectors=[]
         ),

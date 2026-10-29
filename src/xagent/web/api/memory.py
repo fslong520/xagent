@@ -9,14 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from xagent.core.memory.base import MemoryStore
-from xagent.core.memory.core import MemoryNote
+from xagent.core.memory.core import MemoryNote, drop_replaced_tags
 
-from ..auth_dependencies import get_current_user
+from ..auth_dependencies import get_current_user, is_admin_user
 from ..dynamic_memory_store import get_memory_store, get_memory_store_manager
 from ..memory_lifecycle import MemoryUnavailableError
 from ..models.user import User
 from ..services.db_runtime import run_db_io_cancellation_safe
-from ..user_isolated_memory import UserContext
+from ..user_isolated_memory import UserContext, calculate_memory_stats
 
 logger = logging.getLogger(__name__)
 MEMORY_READ_UNAVAILABLE_DETAIL = "Memory storage is temporarily unavailable."
@@ -80,6 +80,16 @@ class MemoryListResponse(BaseModel):
     memories: list[dict[str, Any]]
     total_count: int
     filters_used: dict[str, Any]
+    # X-02: which memory surface ``total_count`` covers. An administrator reads
+    # the organisation's notes, everyone else only their own; the panel shows
+    # this label so a count is never read as the wrong population.
+    scope: str = Field(
+        "personal",
+        description=(
+            "Coverage of this result set: 'org' for an administrator "
+            "(organisation-wide) or 'personal' for a regular user."
+        ),
+    )
 
 
 class MemoryStatsResponse(BaseModel):
@@ -88,6 +98,27 @@ class MemoryStatsResponse(BaseModel):
     tag_counts: dict[str, int]
     memory_store_type: str
     error: Optional[str] = None
+    # X-02: same values as MemoryListResponse.scope, and the counts are
+    # aggregated over the same notes so the two ports cannot disagree.
+    scope: str = Field(
+        "personal",
+        description=(
+            "Coverage of these counts: 'org' for an administrator "
+            "(organisation-wide) or 'personal' for a regular user."
+        ),
+    )
+
+
+def memory_scope(user: User) -> str:
+    """Which surface this caller's memory reads cover (X-02).
+
+    Administrators aggregate the organisation's notes (the memory service
+    resolves the readable layers from the acting identity); a regular user
+    stays on their own notes. Both the list and the stats port report this
+    same value, so a UI can label the numbers and never present one caller's
+    count as the other's.
+    """
+    return "org" if is_admin_user(user) else "personal"
 
 
 class MemoryManagementRouter:
@@ -216,6 +247,7 @@ class MemoryManagementRouter:
                         memories=memory_dicts,
                         total_count=total_count,
                         filters_used=filters,
+                        scope=memory_scope(user),
                     )
             except HTTPException:
                 raise
@@ -294,6 +326,17 @@ class MemoryManagementRouter:
                         timestamp=existing_memory.timestamp,  # Keep original timestamp
                     )
 
+                    # X-06: the store keeps whichever tags a request carries, so a
+                    # plain content rewrite would keep the old values (京A8888
+                    # under a body that now says 京A9999). This runs whenever the
+                    # content changed, even when the request carries a tag list:
+                    # the UI prefills the old tags verbatim, which is not a
+                    # decision anyone made. Only values tied to the replaced text
+                    # are dropped; a tag the caller set that the new body still
+                    # supports, and a classification tag never in the body, stay.
+                    if "content" in updates:
+                        drop_replaced_tags(updated_memory, existing_memory.content)
+
                     # Update in store
                     response = self.memory_store.update(updated_memory)
                     if response.success:
@@ -318,11 +361,27 @@ class MemoryManagementRouter:
         async def get_memory_stats(
             user: User = Depends(get_current_user),
         ) -> MemoryStatsResponse:
+            scope = memory_scope(user)
             try:
                 # Set user context for memory operations
                 with UserContext(int(user.id)), memory_operation():
-                    stats = self.memory_store.get_stats()
-                    return MemoryStatsResponse(**stats)
+                    if scope == "org":
+                        # X-02: an administrator's list is the organisation's
+                        # notes (the service resolves the readable layers from
+                        # the acting identity), while the service-side stats
+                        # aggregate only that identity's own notes — probed
+                        # 2026-10-29: list 17 vs stats 4. Aggregating the very
+                        # list_all() the list port returns makes the two
+                        # numbers the same population by construction; the
+                        # store type still comes from the service.
+                        stats = calculate_memory_stats(self.memory_store.list_all())
+                        stats["memory_store_type"] = str(
+                            self.memory_store.get_stats().get("memory_store_type")
+                            or "unknown"
+                        )
+                    else:
+                        stats = self.memory_store.get_stats()
+                    return MemoryStatsResponse(**stats, scope=scope)
             except HTTPException:
                 raise
             except Exception as e:

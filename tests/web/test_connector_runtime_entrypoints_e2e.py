@@ -2670,9 +2670,22 @@ def test_public_create_paths_all_report_null_requirements(
     layers; only ``create_workforce_run`` -- the heavy collaborator that
     snapshots agent config and starts the first turn -- is stubbed to return
     an already-created task, which is all a response-shape assertion needs.
+
+    The same four call sites also split on ``dispatch_required``, because they
+    split on who owns the first turn: the workforce branches go through
+    ``create_workforce_run`` (``services/workforce_runs.py:769`` ->
+    ``_start_normalized_workforce_run`` ->
+    ``TaskTurnOrchestrator.schedule_claimed_create_turn``,
+    ``services/task_orchestrator.py:1249``), which schedules that turn before
+    returning, so they answer ``False``; the two agent branches only insert a
+    bare ``PENDING`` row and leave the first WS frame to start it, so they
+    answer ``True``.
     """
     is_widget = producer in ("widget_agent", "workforce_widget")
     is_workforce = producer in ("workforce_widget", "workforce_share")
+    # Only ever appended to by the workforce producers' stub below: a non-empty
+    # list means this path handed the first turn to ``create_workforce_run``.
+    workforce_run_calls: list[Any] = []
 
     _setup_admin_headers()
     db = _db_session()
@@ -2720,6 +2733,7 @@ def test_public_create_paths_all_report_null_requirements(
             from xagent.web.api import public_chat_access as public_chat_access_module
 
             async def _fake_create_workforce_run(*_args: Any, **_kwargs: Any) -> Any:
+                workforce_run_calls.append(_kwargs)
                 return SimpleNamespace(task=stub_task)
 
             monkeypatch.setattr(
@@ -2756,6 +2770,17 @@ def test_public_create_paths_all_report_null_requirements(
     payload = create_response.json()
     assert "connector_runtime_requirements" in payload
     assert payload["connector_runtime_requirements"] is None
+
+    if is_workforce:
+        # create_workforce_run already scheduled the first turn, so the guest
+        # has nothing left to dispatch.
+        assert len(workforce_run_calls) == 1
+        assert payload["dispatch_required"] is False
+    else:
+        # Bare PENDING row, exactly like the owner-facing create: the guest's
+        # first WS frame starts the turn.
+        assert workforce_run_calls == []
+        assert payload["dispatch_required"] is True
 
 
 def test_create_task_calls_connector_resolution_exactly_once(

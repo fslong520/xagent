@@ -1109,6 +1109,48 @@ def test_list_agents_response_carries_suggested_prompts_through_owner_and_policy
     ]
 
 
+def test_list_agents_carries_owner_user_id_from_the_db_row() -> None:
+    """List rows must expose the owning user_id, same source as the detail GET.
+
+    Regression: AgentListItem declared no user_id and
+    AgentStore.agent_to_list_item_dict never emitted one, so every list row
+    read null while GET /api/agents/{id} answered with the real owner. The
+    value must come from the Agent row, not from the caller -- a
+    policy-visible agent in the list belongs to somebody else.
+    """
+    _admin_headers()
+    bob_headers = _register_second_user()
+    admin_id = _user_id("admin")
+    bob_id = _user_id("bob")
+
+    bob_agent_id = _create_agent_row(user_id=bob_id, name="Bob Owned")
+    admin_agent_id = _create_agent_row(
+        user_id=admin_id,
+        name="Admin Shared",
+        status=AgentStatus.PUBLISHED,
+    )
+    set_workforce_policy(_VisibleAgentPolicy({admin_agent_id}))
+
+    response = client.get("/api/agents", headers=bob_headers)
+    assert response.status_code == 200, response.text
+    items_by_id = {item["id"]: item for item in response.json()}
+
+    assert items_by_id[bob_agent_id]["user_id"] == bob_id
+    # Owner, not the caller: bob's list shows an agent admin owns.
+    assert items_by_id[admin_agent_id]["user_id"] == admin_id
+    assert items_by_id[admin_agent_id]["user_id"] != bob_id
+
+    detail = client.get(f"/api/agents/{bob_agent_id}", headers=bob_headers)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["user_id"] == items_by_id[bob_agent_id]["user_id"] == bob_id
+
+    admin_list = client.get("/api/agents", headers=_admin_headers())
+    assert admin_list.status_code == 200, admin_list.text
+    admin_by_id = {item["id"]: item for item in admin_list.json()}
+    assert admin_by_id[bob_agent_id]["user_id"] == bob_id
+    assert admin_by_id[admin_agent_id]["user_id"] == admin_id
+
+
 def test_agent_lists_keep_reusable_managers_and_hide_generated_managers() -> None:
     headers = _admin_headers()
     owner_id = _user_id("admin")

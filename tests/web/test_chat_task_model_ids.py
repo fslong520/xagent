@@ -450,6 +450,34 @@ def test_pick_default_llm_raises_when_no_default_available():
     assert "no global default model" in str(exc_info.value.detail)
 
 
+def test_task_create_reports_that_the_first_turn_is_not_dispatched(
+    test_db, user1_headers
+):
+    """POST /api/chat/task/create builds a pending task and says so.
+
+    The endpoint intentionally does not start a turn (see its docstring): the
+    web client starts it over ``WS /ws/chat/{task_id}``, the SDK path uses
+    ``POST /v1/chat/tasks``. ``dispatch_required`` is the contract that keeps
+    a bare create from being mistaken for a running task -- the response must
+    carry it as True and the row must still be pending afterwards.
+    """
+    resp = client.post(
+        "/api/chat/task/create",
+        json={"title": "no-dispatch", "description": "create only"},
+        headers=user1_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["dispatch_required"] is True
+    assert data["status"] == "pending"
+    assert data["run_id"] is None
+
+    detail = client.get(f"/api/chat/task/{data['task_id']}", headers=user1_headers)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["status"] == "pending"
+    assert detail.json()["run_id"] is None
+
+
 def test_task_create_does_not_persist_inaccessible_model_ids(
     test_db, user1_headers, user2_headers, sample_model_data
 ):

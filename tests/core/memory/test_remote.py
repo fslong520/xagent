@@ -268,6 +268,29 @@ def test_remember_stamps_execution_scope_dimensions(scope: Any) -> None:
     assert metadata["execution_scope_client_application_id"] == "42"
 
 
+def test_remember_surfaces_the_service_degraded_flag() -> None:
+    """The service's ``degraded`` flag is not dropped (X-04)."""
+    store = RecordingStore(
+        _response(
+            200,
+            {
+                "action": "merge",
+                "id": "n",
+                "parent_id": "p",
+                "degraded": True,
+            },
+        )
+    )
+
+    response = store.remember(_note())
+
+    assert response.metadata == {
+        "action": "merge",
+        "parent_id": "p",
+        "degraded": True,
+    }
+
+
 def test_remember_raises_on_a_rejected_write() -> None:
     store = RecordingStore(_response(400, {"error": {"code": "bad_request"}}))
 

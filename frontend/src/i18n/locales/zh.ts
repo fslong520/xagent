@@ -1608,11 +1608,24 @@ const zh = {
       title: "创建记忆",
       description: "填写内容、关键词、标签和元数据以添加新的记忆项，类别默认为\"用户添加的记忆\"。",
     },
+    storeInfo: {
+      states: {
+        ready: "记忆存储正常",
+        degraded: "记忆存储降级",
+        unavailable: "记忆存储不可用",
+      },
+      lastCall: "上游最近一次调用时间 {time}",
+      noDetail: "后端未返回具体原因",
+    },
     stats: {
       total: "记忆总数",
       categories: "类别数",
       tags: "标签数",
       storeType: "存储类型",
+    },
+    scope: {
+      org: "组织范围",
+      personal: "我的记忆",
     },
     filters: {
       title: "筛选条件",
@@ -1634,6 +1647,7 @@ const zh = {
         label: "相似度阈值",
         strict: "严格",
         lenient: "宽松",
+        tooltip: "数值越大越宽松",
       },
       date: {
         fromLabel: "开始时间",
@@ -1650,6 +1664,7 @@ const zh = {
       addedByAgent: "由代理记住",
       keywordsLabel: "关键词：",
       tagsLabel: "标签：",
+      owner: "用户 #{id}",
     },
     list: {
       empty: "暂无记忆项",
@@ -1689,11 +1704,15 @@ const zh = {
       tagsTooltip: "自定义的分类标识，主要用于对记忆进行精确的过滤和分组。",
       metadataLabel: "元数据（JSON）",
       metadataPlaceholder: "以 JSON 格式输入元数据，例如 {\"source\":\"web\"}",
+      categoryLabel: "类别",
+      categoryTooltip: "记忆的归属类别，决定它在侧栏中的入口。新建记忆默认为用户添加的记忆。",
     },
     sidebar: {
       contextSource: "上下文来源",
       allMemories: "所有记忆",
       byCategory: "按类别",
+      byTag: "按标签",
+      tagPlaceholder: "按标签筛选",
     },
     actions: {
       exportSelected: "导出选中 ({count})",

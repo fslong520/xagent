@@ -329,7 +329,23 @@ async def create_task(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TaskCreateResponse:
-    """Create new chat task"""
+    """Create a chat task row only -- the first turn is NOT dispatched here.
+
+    The task is persisted in ``pending`` with its model/connector/runtime
+    configuration settled, and nothing runs until a caller starts a turn:
+
+      * web chat: open ``WS /ws/chat/{task_id}`` and send an ``execute_task``
+        frame (this is what the web UI does right after create);
+      * SDK: ``POST /v1/chat/tasks`` creates *and* starts in one request, or
+        append to an existing task with
+        ``POST /v1/chat/tasks/{task_id}/messages``.
+
+    So ``status='pending'`` and ``run_id=None`` in the response are the
+    documented outcome, not a stalled task, and the response says so with
+    ``dispatch_required=True``. Dispatch is deliberately left to the caller:
+    this endpoint creates tasks for previews, team pickers and the builder,
+    where auto-starting a run would spend tokens nobody asked for.
+    """
     authenticated_user_id = int(user.id)
     try:
         try:
@@ -807,6 +823,9 @@ async def create_task(
             created_at=format_datetime_for_api(task.created_at)
             if task.created_at
             else None,
+            # Nothing below this point starts a turn: the row is committed in
+            # ``pending`` and stays there until the caller sends a message.
+            dispatch_required=True,
             model_id=task.model_id,
             small_fast_model_id=task.small_fast_model_id,
             visual_model_id=task.visual_model_id,

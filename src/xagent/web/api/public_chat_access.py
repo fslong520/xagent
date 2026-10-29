@@ -1037,6 +1037,9 @@ async def _create_workforce_widget_chat_task(
     return TaskCreateResponse(
         task_id=task.id,
         title=task.title,
+        # ``create_workforce_run`` above already scheduled the first turn, so
+        # the guest has nothing left to dispatch.
+        dispatch_required=False,
         status=task.status.value,
         created_at=format_datetime_for_api(task.created_at)
         if task.created_at
@@ -1142,6 +1145,9 @@ async def create_public_chat_task(
     return TaskCreateResponse(
         task_id=task.id,
         title=task.title,
+        # Bare PENDING row, exactly like the owner-facing create: the guest's
+        # first WS frame starts the turn.
+        dispatch_required=True,
         status=task.status.value,
         created_at=format_datetime_for_api(task.created_at)
         if task.created_at
@@ -1212,6 +1218,9 @@ async def _create_workforce_share_chat_task(
     return TaskCreateResponse(
         task_id=task.id,
         title=task.title,
+        # ``create_workforce_run`` above already scheduled the first turn, so
+        # the guest has nothing left to dispatch.
+        dispatch_required=False,
         status=task.status.value,
         created_at=format_datetime_for_api(task.created_at)
         if task.created_at
@@ -1301,6 +1310,9 @@ async def create_share_chat_task(
     return TaskCreateResponse(
         task_id=task.id,
         title=task.title,
+        # Agent share path, unlike the workforce share path above, leaves the
+        # turn to the guest: the first WS frame starts it.
+        dispatch_required=True,
         status=task.status.value,
         created_at=format_datetime_for_api(task.created_at)
         if task.created_at

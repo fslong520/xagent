@@ -9,6 +9,9 @@ import pytest
 import requests
 
 from xagent.core.agent.context.memory_tool import (
+    READBACK_REJECTED_MESSAGE,
+    RECEIPT_FAILURE_UNKNOWN_MESSAGE,
+    UNVERIFIED_RECEIPT_MESSAGE,
     CheckInboxTool,
     DeleteMemoryTool,
     DeliverMemoryTool,
@@ -21,7 +24,11 @@ from xagent.core.agent.context.memory_tool import (
 )
 from xagent.core.memory.core import MemoryNote, MemoryResponse
 from xagent.core.memory.lancedb import LanceDBMemoryStore
-from xagent.core.memory.remote import RemoteMemoryStore, RemoteMemoryStoreError
+from xagent.core.memory.remote import (
+    RemoteMemoryStore,
+    RemoteMemoryStoreAuthenticationError,
+    RemoteMemoryStoreError,
+)
 from xagent.web.memory_lifecycle import MemoryLifecycleState, MemoryLifecycleStatus
 from xagent.web.revocable_memory_store import RevocableMemoryStore
 from xagent.web.user_isolated_memory import UserIsolatedMemoryStore
@@ -291,6 +298,79 @@ async def test_search_memory_returns_ids_and_content() -> None:
 
 
 @pytest.mark.asyncio
+async def test_search_memory_carries_the_owner_of_each_result() -> None:
+    """X-07: an organisation-scope search must say whose note each hit is.
+
+    The service already limits what a regular user can read, so this is
+    attribution, not an access change. A note without a stored owner stays
+    without one -- no owner is invented for it.
+    """
+    store = CrudMemoryStore(
+        {
+            "mem-2": MemoryNote(
+                id="mem-2",
+                content="2 号的报销额度是 8800 元。",
+                category="general",
+                metadata={"user_id": 2},
+            ),
+            "mem-3": MemoryNote(
+                id="mem-3",
+                content="3 号的车牌号是 京A9999。",
+                category="general",
+                metadata={"user_id": 3},
+            ),
+            "mem-old": MemoryNote(
+                id="mem-old",
+                content="没有归属的旧条目。",
+                category="general",
+                metadata={},
+            ),
+        }
+    )
+    tool = SearchMemoryTool(memory_store=store)
+
+    result = await tool.execute(query="谁的报销额度和车牌号")
+
+    by_id = {item["id"]: item for item in result["memories"]}
+    assert by_id["mem-2"]["owner_user_id"] == 2
+    assert by_id["mem-3"]["owner_user_id"] == 3
+    assert "owner_user_id" not in by_id["mem-old"]
+
+
+@pytest.mark.asyncio
+async def test_search_memory_keeps_different_owners_apart_in_one_answer() -> None:
+    """One query hitting several people returns each fact with its own owner."""
+    store = CrudMemoryStore(
+        {
+            "mem-2": MemoryNote(
+                id="mem-2",
+                content="2 号的停车月卡登记用 京A8888。",
+                category="general",
+                metadata={"user_id": 2},
+            ),
+            "mem-3": MemoryNote(
+                id="mem-3",
+                content="3 号的停车月卡登记用 京B0001。",
+                category="general",
+                metadata={"user_id": 3},
+            ),
+        }
+    )
+    tool = SearchMemoryTool(memory_store=store)
+
+    result = await tool.execute(query="停车月卡登记的是哪个车牌")
+
+    assert result["count"] == 2
+    owners_by_content = {
+        item["content"]: item["owner_user_id"] for item in result["memories"]
+    }
+    assert owners_by_content == {
+        "2 号的停车月卡登记用 京A8888。": 2,
+        "3 号的停车月卡登记用 京B0001。": 3,
+    }
+
+
+@pytest.mark.asyncio
 async def test_search_memory_rejects_empty_query_and_emits_trace() -> None:
     tracer = TraceEventRecorder()
     store = CrudMemoryStore()
@@ -440,6 +520,91 @@ async def test_update_memory_reports_note_without_content() -> None:
     assert "no stored note" in result["error"]
 
 
+# ---------------------------------------------------------------------------
+# X-06: rewriting the body must not leave the replaced fact in `tags`
+# ---------------------------------------------------------------------------
+
+
+def _plate_note() -> MemoryNote:
+    return MemoryNote(
+        id="mem-plate",
+        content="Y-C7-PLATE 我的车牌号是 京A8888，停车月卡登记用。",
+        category="react_memory",
+        keywords=["车牌号", "京A8888"],
+        tags=["车牌号", "京A8888"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_memory_drops_tags_the_new_text_no_longer_supports() -> None:
+    """X-06: 京A8888 stayed in tags after the body said 京A9999.
+
+    The service stores whichever tag list a PUT carries (probed 2026-10-29),
+    so the client has to stop shipping the replaced value.
+    """
+    store = CrudMemoryStore({"mem-plate": _plate_note()})
+    tool = UpdateMemoryTool(memory_store=store)
+
+    result = await tool.execute(
+        memory_id="mem-plate",
+        content="Y-C7-PLATE 我的车牌号是 京A9999，停车月卡登记用。",
+    )
+
+    assert result["success"] is True
+    written = store.updated[0]
+    assert written.tags == ["车牌号"]
+    assert "京A8888" not in written.tags
+
+
+@pytest.mark.asyncio
+async def test_update_memory_clears_a_stale_keyword_fallback_too() -> None:
+    """An empty tag list is refilled from keywords, so the keyword goes as well."""
+
+    note = MemoryNote(
+        id="mem-plate",
+        content="我的车牌号是 京A8888。",
+        category="react_memory",
+        keywords=["京A8888"],
+        tags=["京A8888"],
+    )
+    store = CrudMemoryStore({"mem-plate": note})
+    tool = UpdateMemoryTool(memory_store=store)
+
+    await tool.execute(memory_id="mem-plate", content="我的车牌号是 京A9999。")
+
+    written = store.updated[0]
+    assert written.tags == []
+    assert "京A8888" not in written.keywords
+
+
+@pytest.mark.asyncio
+async def test_update_memory_keeps_tags_that_were_never_in_the_body() -> None:
+    """A classification tag is not evidence, so a rewrite does not drop it."""
+    note = MemoryNote(
+        id="mem-1",
+        content="Test memory 1",
+        category="react_memory",
+        keywords=["test", "sample"],
+        tags=["important"],
+    )
+    store = CrudMemoryStore({"mem-1": note})
+    tool = UpdateMemoryTool(memory_store=store)
+
+    await tool.execute(memory_id="mem-1", content="Only content updated")
+
+    assert store.updated[0].tags == ["important"]
+
+
+@pytest.mark.asyncio
+async def test_update_memory_keeps_the_old_tags_when_the_body_is_unchanged() -> None:
+    store = CrudMemoryStore({"mem-plate": _plate_note()})
+    tool = UpdateMemoryTool(memory_store=store)
+
+    await tool.execute(memory_id="mem-plate", content=_plate_note().content)
+
+    assert store.updated[0].tags == ["车牌号", "京A8888"]
+
+
 def test_build_memory_tools_stamps_guidance_flag_on_context() -> None:
     class Ctx:
         def __init__(self) -> None:
@@ -491,26 +656,83 @@ async def test_store_memory_falls_back_when_the_judged_write_is_unsupported() ->
 
 
 class JudgedMemoryStore(RecordingMemoryStore):
-    """Store exposing the judged ``remember`` write of the remote adapter."""
+    """Store exposing the judged ``remember`` write of the remote adapter.
+
+    ``readable`` models what a follow-up GET can actually see: the service has
+    answered merge/parent with ids that 404 (X-04, evidence
+    ``y07-C9-merge.txt``), so a receipt id counts as stored only when this fake
+    lists it.
+    """
 
     def __init__(
-        self, *, action: str, parent_id: str | None = None, success: bool = True
+        self,
+        *,
+        action: str,
+        parent_id: str | None = None,
+        success: bool = True,
+        live: bool = True,
+        degraded: Any = None,
+        readable_creates: bool = True,
+        receipt_body: str | None = None,
     ) -> None:
         super().__init__()
         self.action = action
         self.parent_id = parent_id
         self.success = success
+        self.degraded = degraded
+        self.readable_creates = readable_creates
+        # A live id whose body is not the new text models the X-04 second
+        # defect: existence alone is not evidence of a merge.
+        self.receipt_body = receipt_body
+        self.receipt_id = "mem-judged"
+        self.readable: set[str] = {self.receipt_id} if live else set()
+        self.notes: dict[str, MemoryNote] = {}
         self.remembered: list[MemoryNote] = []
+        self.gets: list[str] = []
 
     def remember(self, note: MemoryNote) -> MemoryResponse:
         self.remembered.append(note)
         if not self.success:
             return MemoryResponse(success=False, error="judged write refused")
+        metadata: dict[str, Any] = {
+            "action": self.action,
+            "parent_id": self.parent_id,
+        }
+        if self.degraded is not None:
+            metadata["degraded"] = self.degraded
+        # The judged write is what a real GET would return for this id.
+        self.notes[self.receipt_id] = note
         return MemoryResponse(
             success=True,
-            memory_id="mem-judged",
-            metadata={"action": self.action, "parent_id": self.parent_id},
+            memory_id=self.receipt_id,
+            metadata=metadata,
         )
+
+    def get(self, note_id: str) -> MemoryResponse:
+        self.gets.append(note_id)
+        if note_id in self.readable:
+            if note_id == self.receipt_id and self.receipt_body is not None:
+                stored = _note(note_id, self.receipt_body)
+            else:
+                stored = self.notes.get(note_id) or _note(note_id, "stored")
+            return MemoryResponse(
+                success=True,
+                memory_id=note_id,
+                content=stored,
+            )
+        return MemoryResponse(
+            success=False, error="Memory note not found or access denied"
+        )
+
+    def add(self, note: MemoryNote) -> MemoryResponse:
+        self.added.append(note)
+        if not self.add_success:
+            return MemoryResponse(success=False, error="boom")
+        memory_id = f"mem-{len(self.added)}"
+        self.notes[memory_id] = note
+        if self.readable_creates:
+            self.readable.add(memory_id)
+        return MemoryResponse(success=True, memory_id=memory_id)
 
 
 @pytest.mark.asyncio
@@ -568,6 +790,654 @@ async def test_store_memory_emits_the_branch_in_the_store_trace() -> None:
 
     assert tracer.events[-1]["data"]["storage_action"] == "parent"
     assert tracer.events[-1]["data"]["storage_success"] is True
+    assert tracer.events[-1]["data"]["storage_verified"] is True
+
+
+# ---------------------------------------------------------------------------
+# X-04: the judged receipt is verified before the model is told anything landed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["merge", "parent"])
+async def test_store_memory_replaces_a_phantom_merge_receipt_with_a_create(
+    action: str,
+) -> None:
+    """A receipt id that 404s must not be reported as a merge/attach.
+
+    Evidence: y07-C9-merge.txt — action=merge returned e8bcc505/b46007db, both
+    404, while the text lived under another id. The tool now re-stores the text
+    as a new note and says so instead of promising a merge.
+    """
+    store = JudgedMemoryStore(action=action, parent_id="mem-parent", live=False)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["stored"] is True
+    assert result["action"] == "create"
+    assert result["memory_id"] == "mem-1"
+    assert "Merged" not in result["message"]
+    assert "Attached as a child" not in result["message"]
+    assert "cannot be read back" in result["message"]
+    assert "parent_id" not in result
+    # The phantom receipt was checked, then the replacement was checked too.
+    assert store.gets == ["mem-judged", "mem-1"]
+    assert store.added[0].content == "A durable business fact."
+    assert tool.stored_count == 1
+
+
+@pytest.mark.asyncio
+async def test_store_memory_reports_failure_when_the_create_retry_fails() -> None:
+    store = JudgedMemoryStore(action="merge", live=False)
+    store.add_success = False
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["success"] is False
+    assert "stored" not in result
+    assert "mem-judged" in result["error"]
+    assert "Nothing was saved" in result["error"]
+    assert tool.stored_count == 0
+
+
+@pytest.mark.asyncio
+async def test_store_memory_reports_a_replacement_that_also_disappears() -> None:
+    store = JudgedMemoryStore(action="merge", live=False, readable_creates=False)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["success"] is False
+    assert "replacement note mem-1 cannot be read back" in result["error"]
+    assert tool.stored_count == 0
+
+
+@pytest.mark.asyncio
+async def test_store_memory_says_the_merge_is_unconfirmed_without_a_read_path() -> None:
+    """A store that cannot read a note back keeps the branch but not the promise."""
+
+    class NoReadStore(RecordingMemoryStore):
+        def remember(self, note: MemoryNote) -> MemoryResponse:
+            return MemoryResponse(
+                success=True,
+                memory_id="mem-remote",
+                metadata={"action": "merge", "parent_id": None},
+            )
+
+    tool = StoreMemoryTool(memory_store=NoReadStore(), task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["success"] is True
+    assert result["action"] == "merge"
+    assert "cannot read a note back" in result["message"]
+    assert "Merged into an existing similar memory" not in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_store_memory_reports_the_upstream_degraded_flag() -> None:
+    store = JudgedMemoryStore(action="create", degraded=True)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["success"] is True
+    assert result["degraded"] is True
+
+
+@pytest.mark.asyncio
+async def test_store_memory_omits_degraded_when_the_store_does_not_report_it() -> None:
+    store = JudgedMemoryStore(action="create")
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    # A store with no such signal must not invent a "not degraded" claim.
+    assert "degraded" not in result
+
+
+class UnreadableReceiptStore(JudgedMemoryStore):
+    """The read-back raises, which says nothing about whether the write landed."""
+
+    def __init__(self, exc: BaseException) -> None:
+        super().__init__(action="merge")
+        self.exc = exc
+
+    def get(self, note_id: str) -> MemoryResponse:
+        self.gets.append(note_id)
+        raise self.exc
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc",
+    [
+        # remote.py::get raises this for a 2.0s read timeout: no status_code.
+        RemoteMemoryStoreError(
+            "Remote memory upstream unreachable (request timed out after 2.0s "
+            "-- a transport failure, not a credential rejection): GET "
+            "/v1/memory/notes/mem-judged"
+        ),
+        # A 5xx is classified with the status attached by _raise_for_error.
+        RemoteMemoryStoreError(
+            "Remote memory service returned HTTP 503 on /v1/memory/notes/mem-judged",
+            status_code=503,
+        ),
+        # A connection reset also arrives as a plain transport error.
+        RemoteMemoryStoreError(
+            "Remote memory upstream unreachable (connection failure -- not a "
+            "credential rejection): GET /v1/memory/notes/mem-judged"
+        ),
+    ],
+)
+async def test_store_memory_does_not_rewrite_when_the_receipt_is_unreadable(
+    exc: RemoteMemoryStoreError,
+) -> None:
+    """X-04: a timeout/5xx read says nothing about the write — never write twice.
+
+    The judged write was accepted; a failed GET must not be read as "the note
+    is gone". Re-creating it wrote the same fact twice (X-04 rework), so the
+    tool reports accepted-but-unverified and leaves the store alone.
+    """
+    tracer = TraceEventRecorder()
+    store = UnreadableReceiptStore(exc)
+    tool = StoreMemoryTool(
+        memory_store=store, task="task", runtime=FakeRuntime(tracer=tracer)
+    )
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["stored"] is True
+    assert result["verified"] is False
+    assert result["action"] == "merge"
+    assert result["message"] == UNVERIFIED_RECEIPT_MESSAGE
+    assert "Merged" not in result["message"]
+    assert store.added == []
+    assert store.gets == ["mem-judged"]
+    assert tracer.events[-1]["data"]["storage_verified"] is False
+    assert tool.stored_count == 1
+
+
+@pytest.mark.asyncio
+async def test_store_memory_retries_a_create_when_the_receipt_read_raises_404() -> None:
+    """A raised 404 is positive evidence of absence, so the create retry stands."""
+
+    class Raising404Store(JudgedMemoryStore):
+        def get(self, note_id: str) -> MemoryResponse:
+            self.gets.append(note_id)
+            if note_id == self.receipt_id:
+                raise RemoteMemoryStoreError(
+                    "Remote memory service returned HTTP 404（code=not_found） on "
+                    f"/v1/memory/notes/{note_id}",
+                    status_code=404,
+                )
+            stored = self.notes.get(note_id) or _note(note_id, "stored")
+            return MemoryResponse(success=True, memory_id=note_id, content=stored)
+
+    store = Raising404Store(action="merge")
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["action"] == "create"
+    assert result["memory_id"] == "mem-1"
+    assert len(store.added) == 1
+    assert "Merged" not in result["message"]
+    assert store.gets == ["mem-judged", "mem-1"]
+
+
+@pytest.mark.asyncio
+async def test_store_memory_recreates_when_the_receipt_note_lacks_the_new_text() -> None:
+    """X-04: a live id is not proof of a merge — the body has to carry the text."""
+    store = JudgedMemoryStore(
+        action="merge", receipt_body="an unrelated older fact"
+    )
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["stored"] is True
+    assert result["action"] == "create"
+    assert result["memory_id"] == "mem-1"
+    assert result["verified"] is True
+    assert "Merged" not in result["message"]
+    assert "does not contain the new text" in result["message"]
+    assert len(store.added) == 1
+    assert store.added[0].content == "A durable business fact."
+    assert store.gets == ["mem-judged", "mem-1"]
+
+
+@pytest.mark.asyncio
+async def test_store_memory_reports_both_errors_when_the_recreate_fails() -> None:
+    store = JudgedMemoryStore(action="merge", receipt_body="an older fact")
+    store.add_success = False
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["success"] is False
+    assert "does not contain the new text" in result["error"]
+    assert "boom" in result["error"]
+    assert "Nothing was saved" in result["error"]
+    assert tool.stored_count == 0
+
+
+@pytest.mark.asyncio
+async def test_store_memory_still_reports_a_merge_when_the_body_carries_it() -> None:
+    """The fix must not turn a legitimate merge into a create.
+
+    The fake's GET returns the note the judged write claimed to have merged
+    the text into, so the body contains the new text and "Merged" stands.
+    """
+    store = JudgedMemoryStore(action="merge")
+    store.receipt_body = "earlier note\nA durable business fact."
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["action"] == "merge"
+    assert result["verified"] is True
+    assert "Merged into an existing similar memory" in result["message"]
+    assert store.added == []
+
+
+@pytest.mark.asyncio
+async def test_store_memory_normalises_whitespace_when_checking_the_body() -> None:
+    """A body that differs only in line breaks still counts as carrying the text."""
+    store = JudgedMemoryStore(action="merge")
+    store.receipt_body = "earlier note\nA durable\n  business fact."
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["action"] == "merge"
+    assert result["verified"] is True
+    assert "Merged" in result["message"]
+
+
+class NoIdJudgedStore(JudgedMemoryStore):
+    """A receipt that answers success but carries no memory id."""
+
+    def __init__(self, action: str = "merge") -> None:
+        super().__init__(action=action)
+
+    def remember(self, note: MemoryNote) -> MemoryResponse:
+        self.remembered.append(note)
+        return MemoryResponse(
+            success=True,
+            memory_id=None,
+            metadata={"action": self.action, "parent_id": None},
+        )
+
+    def get(self, note_id: str) -> MemoryResponse:  # pragma: no cover - asserted
+        self.gets.append(note_id)
+        return MemoryResponse(
+            success=True, memory_id=note_id, content=_note(note_id, "x")
+        )
+
+
+@pytest.mark.asyncio
+async def test_store_memory_treats_a_receipt_without_id_as_unconfirmed() -> None:
+    """No id is not a not-found answer: do not create a second copy."""
+    store = NoIdJudgedStore()
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["stored"] is True
+    assert result["verified"] is False
+    assert "回执未带 memory id" in result["message"]
+    # The timeout/5xx wording would claim a read-back that never happened.
+    assert "写入已受理但未能确认落库" not in result["message"]
+    assert store.gets == []
+    assert store.added == []
+    assert tool.stored_count == 1
+
+
+@pytest.mark.asyncio
+async def test_store_memory_does_not_rewrite_when_a_401_mentions_not_found() -> None:
+    """A 401 whose upstream message embeds "not found" is not an absence verdict.
+
+    The read-back was refused, so the message must say exactly that: the whole
+    text is asserted, including the parenthesis, because the previous wording
+    enumerated "timed out / failed to connect / 5xx" and the model copied the
+    wrong cause back (third review).
+    """
+    exc = RemoteMemoryStoreError(
+        "上游返回 HTTP 401（code=unauthorized） on /v1/memory/notes/mem-judged，"
+        "上游 message: identity not found or access denied",
+        status_code=401,
+    )
+    store = UnreadableReceiptStore(exc)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["verified"] is False
+    assert result["action"] == "merge"
+    assert result["message"] == READBACK_REJECTED_MESSAGE
+    for forbidden in ("timed out", "timeout", "5xx", "超时"):
+        assert forbidden not in result["message"]
+    assert "Merged" not in result["message"]
+    assert store.added == []
+    assert store.gets == ["mem-judged"]
+
+
+@pytest.mark.asyncio
+async def test_store_memory_does_not_rewrite_when_the_readback_is_a_401() -> None:
+    """A plain credential rejection on the read-back is not a timeout.
+
+    ``remote.py::get`` raises this exact class for a 401; the write may have
+    landed, so the tool still refuses to write again, but the wording must name
+    the rejection rather than a transport failure.
+    """
+    exc = RemoteMemoryStoreAuthenticationError(
+        "上游拒绝了服务凭据：HTTP 401（code=unauthorized） on "
+        "/v1/memory/notes/mem-judged。上游明示凭据类错误，请核对 "
+        "XAGENT_MEMORY_SERVICE_KEY（无效、已吊销或不属于该实例）。",
+        status_code=401,
+    )
+    store = UnreadableReceiptStore(exc)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["verified"] is False
+    assert result["action"] == "merge"
+    assert result["message"] == READBACK_REJECTED_MESSAGE
+    for forbidden in ("timed out", "timeout", "5xx", "超时"):
+        assert forbidden not in result["message"]
+    assert store.added == []
+    assert store.gets == ["mem-judged"]
+
+
+@pytest.mark.asyncio
+async def test_store_memory_does_not_rewrite_when_the_2xx_body_is_unparsable() -> None:
+    """A 2xx read-back whose body is not JSON is unreadable, not a timeout.
+
+    ``remote.py::_json`` raises this message with no status attached, so the
+    class has to come from the text; the write may still have landed.
+    """
+    exc = RemoteMemoryStoreError(
+        "Remote memory service returned a non-JSON response: "
+        "/v1/memory/notes/mem-judged"
+    )
+    store = UnreadableReceiptStore(exc)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["verified"] is False
+    assert result["action"] == "merge"
+    assert result["message"] == READBACK_REJECTED_MESSAGE
+    for forbidden in ("timed out", "timeout", "5xx", "超时"):
+        assert forbidden not in result["message"]
+    assert store.added == []
+    assert store.gets == ["mem-judged"]
+
+
+@pytest.mark.asyncio
+async def test_store_memory_claims_no_cause_when_the_readback_cannot_be_classified() -> None:
+    """An unclassifiable read-back states no cause instead of guessing one.
+
+    The message still stops a duplicate write, but it must not name a timeout,
+    a connection failure or a 5xx it has no evidence for.
+    """
+    store = UnreadableReceiptStore(RuntimeError("boom"))
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["verified"] is False
+    assert result["message"] == RECEIPT_FAILURE_UNKNOWN_MESSAGE
+    for forbidden in ("timed out", "timeout", "5xx", "超时"):
+        assert forbidden not in result["message"]
+    assert store.added == []
+    assert store.gets == ["mem-judged"]
+
+
+@pytest.mark.asyncio
+async def test_store_memory_reports_an_unconfirmed_replacement_body() -> None:
+    """X-04 rework: a created replacement whose body differs is not a timeout.
+
+    The create answered and the note is read back, so the timeout/5xx wording
+    (accepted but unverified) would misdescribe the state. The replacement
+    exists and must not be written again.
+    """
+    store = JudgedMemoryStore(action="merge", receipt_body="an unrelated older fact")
+
+    def get(note_id: str) -> MemoryResponse:
+        store.gets.append(note_id)
+        body = (
+            store.receipt_body
+            if note_id == store.receipt_id
+            else "a different stored fact"
+        )
+        return MemoryResponse(
+            success=True, memory_id=note_id, content=_note(note_id, body or "")
+        )
+
+    store.get = get  # type: ignore[method-assign]
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["action"] == "create"
+    assert result["verified"] is False
+    assert "已新建记忆但未能确认正文一致" in result["message"]
+    assert "写入已受理但未能确认落库" not in result["message"]
+    assert "Merged" not in result["message"]
+    assert len(store.added) == 1
+    assert store.gets == ["mem-judged", "mem-1"]
+    assert tool.stored_count == 1
+
+
+@pytest.mark.asyncio
+async def test_store_memory_accepts_a_create_receipt_case_and_spacing() -> None:
+    """A create receipt whose body differs only in case/spacing is verified."""
+    store = JudgedMemoryStore(action="create")
+    store.receipt_body = "EARLIER NOTE\na   durable\nbusiness FACT."
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["action"] == "create"
+    assert result["verified"] is True
+    assert result["message"].startswith("Stored as a new memory")
+    assert store.added == []
+
+
+@pytest.mark.asyncio
+async def test_store_memory_never_recreates_a_create_receipt_body() -> None:
+    """X-04 rework: a create receipt's body mismatch never triggers a second create.
+
+    The note it names exists; only the body comparison failed. Writing again
+    would duplicate the same fact, so the write is reported unconfirmed.
+    """
+    store = JudgedMemoryStore(action="create", receipt_body="an unrelated older fact")
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable business fact.")
+
+    assert result["success"] is True
+    assert result["action"] == "create"
+    assert result["verified"] is False
+    assert "已写入但未能确认正文一致" in result["message"]
+    assert "写入已受理但未能确认落库" not in result["message"]
+    assert store.added == []
+    assert store.gets == ["mem-judged"]
+
+
+# ---------------------------------------------------------------------------
+# X-06: merging locally must not keep tags the superseded text supported
+# ---------------------------------------------------------------------------
+
+
+class LocalMergeStore(RecordingMemoryStore):
+    """Local store shape: dedup search finds a note, update rewrites it."""
+
+    def __init__(self, existing: MemoryNote) -> None:
+        super().__init__(search_results=[existing])
+        self.updated: list[MemoryNote] = []
+
+    def update(self, note: MemoryNote) -> MemoryResponse:
+        self.updated.append(note)
+        return MemoryResponse(success=True, memory_id=note.id)
+
+
+@pytest.mark.asyncio
+async def test_merge_existing_keeps_tags_the_merged_body_still_supports() -> None:
+    """X-04 rework: a merge appends to the old body, so old tags stay supported.
+
+    Charging ``drop_replaced_tags`` with the incoming fragment alone cleared a
+    value the merged note still cites in its retained history (the plate
+    number below). The merge path clears nothing it cannot prove replaced.
+    """
+    existing = MemoryNote(
+        id="mem-1",
+        content="Y-C7 我的车牌号是 京A8888，停车月卡登记用。",
+        keywords=["车牌号", "京A8888"],
+        tags=["车牌号", "京A8888"],
+    )
+    store = LocalMergeStore(existing)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="Y-C7 我的车牌号已换成 京A9999。")
+
+    assert result["success"] is True
+    assert result["action"] == "update"
+    written = store.updated[0]
+    # The old statement is kept as history, so both values are in the body.
+    assert "京A9999" in str(written.content)
+    assert "京A8888" in str(written.content)
+    assert written.tags == ["车牌号", "京A8888"]
+    assert written.keywords == ["车牌号", "京A8888"]
+
+
+@pytest.mark.asyncio
+async def test_merge_existing_does_not_clear_a_classification_tag() -> None:
+    """A classification tag the old body supported survives the merge."""
+    existing = MemoryNote(
+        id="mem-1",
+        content="部署脚本在 scripts/deploy.sh，execution 分类使用。",
+        keywords=["deploy"],
+        tags=["execution", "deploy"],
+    )
+    store = LocalMergeStore(existing)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="今天改用 make release 发布。")
+
+    assert result["success"] is True
+    written = store.updated[0]
+    assert written.tags == ["execution", "deploy"]
+    assert written.keywords == ["deploy"]
+
+
+# ---------------------------------------------------------------------------
+# X-05: a 409 judged write degrades to a plain create instead of vanishing
+# ---------------------------------------------------------------------------
+
+APPEND_ONLY_409 = (
+    "Remote memory service returned HTTP 409（code=conflict） on "
+    "/v1/memory/remember，上游 message: delivered notes are append-only: "
+    "send a follow-up delivery instead"
+)
+
+
+class AppendOnlyRememberStore(RecordingMemoryStore):
+    """Judged write refused with the service's append-only 409."""
+
+    def __init__(self, *, exc: BaseException, add_success: bool = True) -> None:
+        super().__init__(add_success=add_success)
+        self.exc = exc
+        self.remembered: list[MemoryNote] = []
+
+    def remember(self, note: MemoryNote, *, force: bool = False) -> MemoryResponse:
+        self.remembered.append(note)
+        raise self.exc
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RemoteMemoryStoreError(APPEND_ONLY_409, status_code=409),
+        RuntimeError(APPEND_ONLY_409),
+    ],
+    ids=["status-code", "message-text"],
+)
+async def test_store_memory_retries_an_append_only_conflict_as_a_create(
+    exc: BaseException,
+) -> None:
+    """za03-case2: the preference write was refused and silently lost."""
+    store = AppendOnlyRememberStore(exc=exc)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(
+        content="团队规定：报销/出差申请必须提前三天提交申请。",
+        kind="domain_insight",
+    )
+
+    assert result["success"] is True
+    assert result["stored"] is True
+    assert result["action"] == "create"
+    assert result["memory_id"] == "mem-1"
+    assert "Merged" not in result["message"]
+    # The retry carries no merge target: it is a plain create of the same text.
+    assert store.added[0].content == "团队规定：报销/出差申请必须提前三天提交申请。"
+    assert store.added[0].metadata == {
+        "kind": "domain_insight",
+        "source": "store_memory",
+    }
+    assert tool.stored_count == 1
+
+
+@pytest.mark.asyncio
+async def test_store_memory_surfaces_the_conflict_when_the_create_retry_fails() -> None:
+    store = AppendOnlyRememberStore(
+        exc=RemoteMemoryStoreError(APPEND_ONLY_409, status_code=409),
+        add_success=False,
+    )
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["success"] is False
+    assert "append-only" in result["error"]
+    assert "retried as a new memory without a merge target" in result["error"]
+    assert "boom" in result["error"]
+    assert tool.stored_count == 0
+
+
+@pytest.mark.asyncio
+async def test_store_memory_does_not_retry_other_write_failures() -> None:
+    """Only the append-only conflict has a different form that can succeed."""
+
+    class RateLimitedStore(RecordingMemoryStore):
+        def remember(self, note: MemoryNote) -> MemoryResponse:
+            raise RuntimeError("Remote memory service returned HTTP 429 — slow down")
+
+    store = RateLimitedStore()
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["success"] is False
+    assert "429" in result["error"]
+    assert store.added == []
 
 
 # ---------------------------------------------------------------------------
@@ -886,16 +1756,22 @@ async def test_delete_memory_surfaces_the_service_message() -> None:
 
 @pytest.mark.asyncio
 async def test_store_memory_surfaces_the_service_message_on_judged_write() -> None:
-    class ConflictingRememberStore(RecordingMemoryStore):
-        def remember(self, note: MemoryNote, *, force: bool = False) -> MemoryResponse:
-            raise RemoteMemoryStoreError(APPEND_ONLY_409, status_code=409)
+    """A refused judged write that has no repair path keeps the service's text."""
 
-    tool = StoreMemoryTool(memory_store=ConflictingRememberStore(), task="task")
+    class RejectedRememberStore(RecordingMemoryStore):
+        def remember(self, note: MemoryNote, *, force: bool = False) -> MemoryResponse:
+            raise RemoteMemoryStoreError(
+                "Remote memory service returned HTTP 422（code=invalid） on "
+                "/v1/memory/remember，上游 message: content rejected",
+                status_code=422,
+            )
+
+    tool = StoreMemoryTool(memory_store=RejectedRememberStore(), task="task")
 
     result = await tool.execute(content="A durable fact.")
 
     assert result["success"] is False
-    assert "send a follow-up delivery instead" in result["error"]
+    assert "content rejected" in result["error"]
 
 
 @pytest.mark.asyncio

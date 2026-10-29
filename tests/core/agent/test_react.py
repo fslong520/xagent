@@ -9004,7 +9004,11 @@ class MemoryToolStore:
 
     def add(self, note: Any) -> Any:
         self.added.append(note)
-        return SimpleNamespace(success=True, memory_id=f"mem-{len(self.added)}")
+        memory_id = f"mem-{len(self.added)}"
+        # Record it so a read-back after the write behaves like a real store:
+        # store_memory now confirms every receipt with one get().
+        self.notes[memory_id] = note
+        return SimpleNamespace(success=True, memory_id=memory_id)
 
     def get(self, memory_id: str) -> Any:
         note = self.notes.get(memory_id)

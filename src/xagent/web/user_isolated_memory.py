@@ -389,33 +389,45 @@ class UserIsolatedMemoryStore(MemoryStore):
             return self._base_store.get_stats()
 
     def _calculate_stats(self, notes: List[MemoryNote]) -> dict[str, Any]:
+        """Calculate statistics for a given set of notes.
+
+        Thin delegate to :func:`calculate_memory_stats`, kept so existing
+        callers of the method keep working.
         """
-        Calculate statistics for a given set of notes.
+        return calculate_memory_stats(notes)
 
-        Args:
-            notes: List of memory notes
-            scope: Scope description for stats
 
-        Returns:
-            Statistics dictionary
-        """
-        total_count = len(notes)
-        category_counts: dict[str, int] = {}
-        tag_counts: dict[str, int] = {}
+def calculate_memory_stats(notes: List[MemoryNote]) -> dict[str, Any]:
+    """Aggregate total/category/tag counts over ``notes``.
 
-        for note in notes:
-            # Count by category
-            category_counts[note.category] = category_counts.get(note.category, 0) + 1
+    Module-level so ports that must report the *same* number over the same
+    notes (X-02: the admin organisation scope of ``/api/memory/stats`` and
+    ``/api/memory/list``) share one implementation instead of growing a
+    second copy that can drift.
 
-            # Count tags
-            for tag in note.tags:
-                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    Args:
+        notes: The exact note list the matching list port returns.
 
-        return {
-            "total_count": total_count,
-            "category_counts": category_counts,
-            "tag_counts": tag_counts,
-        }
+    Returns:
+        ``{"total_count", "category_counts", "tag_counts"}``.
+    """
+    total_count = len(notes)
+    category_counts: dict[str, int] = {}
+    tag_counts: dict[str, int] = {}
+
+    for note in notes:
+        # Count by category
+        category_counts[note.category] = category_counts.get(note.category, 0) + 1
+
+        # Count tags
+        for tag in note.tags:
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+    return {
+        "total_count": total_count,
+        "category_counts": category_counts,
+        "tag_counts": tag_counts,
+    }
 
 
 def set_user_context(user_id: Optional[int]) -> contextvars.Token:

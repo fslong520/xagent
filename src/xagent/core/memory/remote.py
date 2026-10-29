@@ -1119,6 +1119,11 @@ class RemoteMemoryStore(MemoryStore):
 
         ``content_text`` overrides the serialized content (marker-stripped body
         from a ``[share:…]`` prefix); it is only used for str content.
+
+        ``tags`` is always sent, even when empty: the service keeps whatever
+        list a PUT carries (or refills an empty one from ``keywords``), so
+        omitting the field would silently preserve the old tags after a content
+        rewrite (X-06, probed 2026-10-29).
         """
         metadata = dict(note.metadata)
         metadata.pop("user_id", None)
@@ -1299,10 +1304,12 @@ class RemoteMemoryStore(MemoryStore):
 
         The branch decision comes back in ``MemoryResponse.metadata`` as
         ``action`` (``merge`` / ``parent`` / ``create``) plus ``parent_id``,
-        so the caller can report what happened instead of guessing. Failures
-        keep the adapter's usual semantics (§3.5.1): transport errors and
-        rejections raise, so a write that did not happen is never reported as
-        stored.
+        so the caller can report what happened instead of guessing. The
+        service's own ``degraded`` flag rides along when the payload carries
+        it, so a partially applied write is not reported as a clean one.
+        Failures keep the adapter's usual semantics (§3.5.1): transport errors
+        and rejections raise, so a write that did not happen is never reported
+        as stored.
         """
         # Same scope stamping as ``add``: the dimensions stay a client-side
         # namespace (方案 §3.2) so scoped searches keep matching the notes this
@@ -1331,13 +1338,16 @@ class RemoteMemoryStore(MemoryStore):
                 f"Remote memory service returned an unexpected payload: {REMEMBER_PATH}"
             )
         action = str(payload.get("action") or "create")
+        decision: dict[str, Any] = {
+            "action": action,
+            "parent_id": payload.get("parent_id"),
+        }
+        if "degraded" in payload:
+            decision["degraded"] = payload.get("degraded")
         return MemoryResponse(
             success=True,
             memory_id=str(payload.get("id") or note.id),
-            metadata={
-                "action": action,
-                "parent_id": payload.get("parent_id"),
-            },
+            metadata=decision,
         )
 
     def search(

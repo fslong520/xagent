@@ -40,7 +40,12 @@ MEMORY_PERSISTENCE_GUIDE = (
 "decision or period you are after finds more than a pile "
 "of keywords, with the names, dates, amounts and places "
 "inside that sentence. If it returns nothing, rephrase "
-"the same need in different words and search again. Do not "
+"the same need in different words and search again. A "
+"retrieved memory may carry an owner_user_id: when it is "
+"not the user you are answering for, say whose fact it is, "
+"never restate one person's fact under another person's "
+"name, and when one question draws on several people's "
+"facts, report each person's facts separately. Do not "
 "store routine task completions, transient chatter, the answer "
 "you just produced, widely known facts, or secrets and "
 "credentials. To hand a fact, decision or instruction to a "
@@ -86,7 +91,17 @@ MEMORY_PERSISTENCE_GUIDE = (
 "search_memory for it and delete_memory or update it in the "
 "same turn — never tell the user a stored memory cannot be "
 "removed, and never leave a stale fact in place after they "
-"asked for it to go."
+"asked for it to go. A write you were told did not happen is "
+"not saved: when store_memory or deliver_memory answers "
+"success false, stored false or an error — including a 409 "
+"conflict because the merge target is append-only — the fact "
+"is NOT recorded. Retry the write once in a form that can "
+"succeed (for a refused merge, store it as a new memory "
+"instead), and if the retry also fails, say plainly in your "
+"reply that the fact was not saved and why. Never write or "
+"imply that something was saved, remembered, recorded or "
+"noted on the strength of a failed tool result: a user who is "
+"told a fact is stored will rely on it and never repeat it."
 )
 
 AUTO_MEMORY_RULE = (
@@ -155,7 +170,10 @@ If the material you are storing opens with a [to:<recipient>] delivery marker, c
 Do NOT store routine task completions, generic tool usage, common facts, obvious strategies, transient chatter, or secrets and credentials. Write the content as a self-contained statement understandable without this conversation.
 
 If a similar memory already exists, the write is not dropped: it is merged
-into that memory or attached under it, and the result says which happened."""
+into that memory or attached under it, and the result says which happened.
+Read the result before you speak: stored false or an error means nothing was
+saved, so a 409 conflict is retried once as a new memory and, if that also
+fails, you tell the user the fact was not saved instead of implying it was."""
 
 SEARCH_MEMORY_DESCRIPTION = (
 "Search stored memories from previous tasks. Use this when earlier "

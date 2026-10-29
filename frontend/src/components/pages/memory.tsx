@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect, useRef, useCallback, useMemo, type Dispatch, type SetStateAction } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,9 @@ import { SearchInput } from "@/components/ui/search-input"
 import { PageHeader } from "@/components/ui/page-header"
 import { Badge } from "@/components/ui/badge"
 import { InfoTooltip } from "@/components/ui/tooltip"
+import { Select } from "@/components/ui/select"
+import { MultiSelect } from "@/components/ui/multi-select"
+import { Slider } from "@/components/ui/slider"
 import { getApiUrl } from "@/lib/utils"
 import { apiRequest } from "@/lib/api-wrapper"
 import { useI18n } from "@/contexts/i18n-context"
@@ -29,7 +32,10 @@ import {
   Wrench,
   Layers,
   FileText,
-  Download
+  Download,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle
 } from "lucide-react"
 
 interface MemoryItem {
@@ -49,6 +55,16 @@ interface MemoryStats {
   tag_counts: Record<string, number>
   memory_store_type: string
   error?: string
+  /** "personal" or "org" once the backend reports it; absent on older builds. */
+  scope?: string | null
+}
+
+interface MemoryFormData {
+  content: string
+  keywords: string
+  tags: string
+  category: string
+  metadata: string
 }
 
 interface MemoryFilters {
@@ -58,6 +74,70 @@ interface MemoryFilters {
   date_from?: string
   date_to?: string
   search?: string
+}
+
+/**
+ * GET /api/memory/store-info. The state is the lifecycle state
+ * (ready / not_configured / credential_unavailable / ...) for local stores and
+ * the upstream health signal (ready / degraded / unavailable) for the remote
+ * one; `detail` carries the human-readable reason or the last upstream call.
+ */
+interface MemoryStoreInfo {
+  store_type?: string | null
+  state?: string | null
+  detail?: string | null
+  mode?: string | null
+  supports_vector_search?: boolean
+  similarity_threshold?: number | null
+}
+
+type StoreStatusKind = "ready" | "degraded" | "unavailable"
+
+const DEFAULT_SIMILARITY_THRESHOLD = 0.5
+// Measured on 8100 (q=牛肉面 / q=zzz不存在的词): 0.5 -> 0/0 hits, 0.68 -> 1/1,
+// 0.70 -> 1/3, 0.72 -> 2/-, 1.5 -> 2/3. Anything above ~0.70 stops filtering, so
+// the value the store reports is only trusted up to that ceiling; the slider can
+// still be pushed further by hand when someone really wants a looser match.
+const MAX_SIMILARITY_THRESHOLD = 0.7
+const MIN_SIMILARITY_THRESHOLD = 0.3
+const MAX_ADJUSTABLE_SIMILARITY_THRESHOLD = 1.5
+const SIMILARITY_STEP = 0.01
+const DEFAULT_MEMORY_CATEGORY = "general"
+
+// The backend default (1.5) lets an unrelated query return the whole store, so
+// the front end clamps it to the ceiling measured above and falls back to 0.5
+// when the report is missing or unusable.
+function resolveSimilarityThreshold(info: MemoryStoreInfo | null): number {
+  const value = info?.similarity_threshold
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return DEFAULT_SIMILARITY_THRESHOLD
+  }
+  return Math.min(Math.max(value, MIN_SIMILARITY_THRESHOLD), MAX_SIMILARITY_THRESHOLD)
+}
+
+// Only the two documented values are acted on; a missing or unknown scope is
+// treated as "not reported" so the page looks exactly as it did before.
+function resolveStatsScope(scope?: string | null): "personal" | "org" | null {
+  const normalized = (scope || "").toLowerCase()
+  if (normalized === "org") return "org"
+  if (normalized === "personal") return "personal"
+  return null
+}
+
+// Every lifecycle state that still lets memory through maps to "ready"; the
+// retryable ones are degraded, everything else is fully unavailable.
+function resolveStoreStatusKind(state?: string | null): StoreStatusKind {
+  const normalized = (state || "").toLowerCase()
+  if (normalized === "ready") return "ready"
+  if (normalized === "degraded" || normalized === "retryable_unavailable") return "degraded"
+  return "unavailable"
+}
+
+// "上游最近一次调用成功（HTTP 200）：/v1/memory/stats，15:54:46" -> "15:54:46"
+function extractLastCallTime(detail?: string | null): string | null {
+  if (!detail) return null
+  const match = detail.match(/\d{1,2}:\d{2}(?::\d{2})?/)
+  return match ? match[0] : null
 }
 
 export function MemoryPage() {
@@ -74,21 +154,20 @@ export function MemoryPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
-  const [similarityThreshold, setSimilarityThreshold] = useState([1.5])
+  const [similarityThreshold, setSimilarityThreshold] = useState([DEFAULT_SIMILARITY_THRESHOLD])
+  const [storeInfo, setStoreInfo] = useState<MemoryStoreInfo | null>(null)
 
   const [filters, setFilters] = useState<MemoryFilters>({})
   const [limit, setLimit] = useState(50)
   const [offset, setOffset] = useState(0)
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<MemoryFormData>({
     content: "",
     keywords: "",
     tags: "",
-    category: "general",
+    category: DEFAULT_MEMORY_CATEGORY,
     metadata: ""
   })
-
-  const [categories, setCategories] = useState<string[]>(['execution_memory', 'react_memory', 'general'])
 
   // Search debouncing
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -188,8 +267,13 @@ export function MemoryPage() {
       if (filters.keywords?.length) params.append("keywords", filters.keywords.join(","))
       if (filters.date_from) params.append("date_from", filters.date_from)
       if (filters.date_to) params.append("date_to", filters.date_to)
-      if (filters.search) params.append("search", filters.search)
-      params.append("similarity_threshold", similarityThreshold[0].toString())
+      if (filters.search) {
+        params.append("search", filters.search)
+        // Only a search performs a vector lookup, so the threshold only means
+        // something when a query is present; a plain list must not be filtered
+        // by it.
+        params.append("similarity_threshold", similarityThreshold[0].toString())
+      }
       if (limit) params.append("limit", limit.toString())
       if (offset) params.append("offset", offset.toString())
 
@@ -219,7 +303,35 @@ export function MemoryPage() {
     }
   }
 
-  useEffect(() => { fetchData() }, [filters, limit, offset])
+  useEffect(() => { fetchData() }, [filters, limit, offset, similarityThreshold])
+
+  // The store report drives both the health banner and the default similarity
+  // threshold. It is optional chrome: when the probe fails the banner is simply
+  // not rendered and the threshold keeps the local fallback.
+  useEffect(() => {
+    let cancelled = false
+
+    const loadStoreInfo = async () => {
+      try {
+        const response = await apiRequest(`${getApiUrl()}/api/memory/store-info`, { headers: {} })
+        if (cancelled) return
+        if (!response.ok) {
+          setStoreInfo(null)
+          return
+        }
+        const data = (await response.json()) as MemoryStoreInfo
+        if (cancelled) return
+        setStoreInfo(data)
+        const threshold = resolveSimilarityThreshold(data)
+        setSimilarityThreshold(previous => (previous[0] === threshold ? previous : [threshold]))
+      } catch {
+        if (!cancelled) setStoreInfo(null)
+      }
+    }
+
+    loadStoreInfo()
+    return () => { cancelled = true }
+  }, [])
 
   const handleCreateMemory = async () => {
     try {
@@ -240,7 +352,7 @@ export function MemoryPage() {
       if (!response.ok) throw new Error("Failed to create memory")
 
       setIsCreateDialogOpen(false)
-      setFormData({ content: "", keywords: "", tags: "", category: "general", metadata: "" })
+      setFormData({ content: "", keywords: "", tags: "", category: DEFAULT_MEMORY_CATEGORY, metadata: "" })
       fetchData()
     } catch (err) {
       setError(err instanceof Error ? err.message : t("memory.errors.createFailed"))
@@ -268,7 +380,7 @@ export function MemoryPage() {
 
       setIsEditDialogOpen(false)
       setEditingMemory(null)
-      setFormData({ content: "", keywords: "", tags: "", category: "general", metadata: "" })
+      setFormData({ content: "", keywords: "", tags: "", category: DEFAULT_MEMORY_CATEGORY, metadata: "" })
       fetchData()
     } catch (err) {
       setError(err instanceof Error ? err.message : t("memory.errors.updateFailed"))
@@ -326,12 +438,47 @@ export function MemoryPage() {
     return "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
   }
 
+  // Categories come from the live store (stats) plus whatever the current page
+  // of memories actually carries, so a category that exists in the library
+  // always has an entry point. "general" stays because it is the create default.
+  const categories = useMemo(() => {
+    const known = new Set<string>()
+    Object.keys(stats?.category_counts || {}).forEach(cat => known.add(cat))
+    memories.forEach(memory => {
+      if (memory.category) known.add(memory.category)
+    })
+    if (editingMemory?.category) known.add(editingMemory.category)
+    known.add(DEFAULT_MEMORY_CATEGORY)
+    return Array.from(known).sort()
+  }, [stats, memories, editingMemory])
+
+  const tagOptions = useMemo(
+    () => Object.entries(stats?.tag_counts || {})
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag, count]) => ({ value: tag, label: tag, count })),
+    [stats],
+  )
+
+  const storeStatus: StoreStatusKind | null = storeInfo ? resolveStoreStatusKind(storeInfo.state) : null
+  const storeDetail = storeInfo?.detail || ""
+  const storeLastCall = extractLastCallTime(storeInfo?.detail)
+  // stats.scope drives the org badge and the per-item owner label. Missing field
+  // -> null -> nothing extra rendered.
+  const statsScope = resolveStatsScope(stats?.scope)
+
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Top Header */}
       <PageHeader
         title={t("memory.header.title")}
         description={t("memory.header.description")}
+        titleExtra={
+          statsScope === "org" ? (
+            <Badge variant="secondary" className="rounded-md text-[10px] uppercase tracking-wide">
+              {t("memory.scope.org")}
+            </Badge>
+          ) : undefined
+        }
         actions={
           <>
           <SearchInput
@@ -370,6 +517,65 @@ export function MemoryPage() {
         }
       />
 
+      {/* Search strictness control. The value only travels with a search
+          request, but the control stays visible so the current threshold is
+          never a hidden constant. */}
+      <div className="mx-4 sm:mx-8 mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border/60 bg-card px-3 py-2 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5 font-medium text-foreground">
+          {t("memory.filters.similarity.label")}
+          <InfoTooltip content={t("memory.filters.similarity.tooltip")} />
+        </span>
+        <span>{t("memory.filters.similarity.strict")}</span>
+        <Slider
+          className="w-40"
+          min={MIN_SIMILARITY_THRESHOLD}
+          max={MAX_ADJUSTABLE_SIMILARITY_THRESHOLD}
+          step={SIMILARITY_STEP}
+          value={similarityThreshold}
+          onValueChange={setSimilarityThreshold}
+          aria-label={t("memory.filters.similarity.label")}
+        />
+        <span>{t("memory.filters.similarity.lenient")}</span>
+        <span className="font-mono tabular-nums text-foreground">
+          {similarityThreshold[0].toFixed(2)}
+        </span>
+      </div>
+
+      {/* Store status strip. Optional chrome: if the probe failed the element
+          is absent and the page behaves exactly as before. */}
+      {storeInfo && storeStatus ? (
+        <div
+          role="status"
+          title={storeDetail || undefined}
+          className={cn(
+            "mx-4 sm:mx-8 mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs",
+            storeStatus === "ready" && "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200",
+            storeStatus === "degraded" && "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200",
+            storeStatus === "unavailable" && "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200"
+          )}
+        >
+          {storeStatus === "ready" ? (
+            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+          ) : storeStatus === "degraded" ? (
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          ) : (
+            <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          )}
+          <div className="min-w-0">
+            <span className="font-medium">
+              {tDynamic(`memory.storeInfo.states.${storeStatus}`, storeStatus)}
+            </span>
+            <span className="ml-2 break-words opacity-80">
+              {storeStatus === "ready"
+                ? (storeLastCall
+                    ? t("memory.storeInfo.lastCall", { time: storeLastCall })
+                    : storeDetail)
+                : (storeDetail || t("memory.storeInfo.noDetail"))}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       {/* Content Area */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Left Sidebar */}
@@ -387,6 +593,11 @@ export function MemoryPage() {
                 >
                   <Database className="h-4 w-4 mr-2" />
                   {t("memory.sidebar.allMemories")}
+                  {stats ? (
+                    <span className="ml-2 md:ml-auto text-xs text-muted-foreground">
+                      {stats.total_count ?? 0}
+                    </span>
+                  ) : null}
                 </Button>
               </div>
             </div>
@@ -418,6 +629,25 @@ export function MemoryPage() {
                 ))}
               </div>
             </div>
+
+            {tagOptions.length > 0 && (
+              <div className="space-y-1 md:space-y-3 shrink-0 flex items-center md:items-start md:flex-col">
+                <h3 className="hidden md:block text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">
+                  {t("memory.sidebar.byTag")}
+                </h3>
+                <div className="w-56 md:w-full min-w-0">
+                  <MultiSelect
+                    values={filters.tags || []}
+                    onValuesChange={(values) =>
+                      setFilters(prev => ({ ...prev, tags: values.length ? values : undefined }))
+                    }
+                    options={tagOptions}
+                    placeholder={t("memory.sidebar.tagPlaceholder")}
+                    searchable
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -553,6 +783,17 @@ export function MemoryPage() {
                                     ? t("memory.item.addedManually")
                                     : t("memory.item.addedAutomatically")} • {formatDate(memory.timestamp)}
                               </span>
+                              {/* Ownership only matters when the list spans the
+                                  whole org; in the personal scope every row has
+                                  the same owner, so it would be noise. */}
+                              {statsScope === "org" && memory.metadata?.user_id != null ? (
+                                <Badge
+                                  variant="outline"
+                                  className="w-fit rounded-md border-0 bg-muted px-1.5 py-0 text-[10px] font-normal text-muted-foreground"
+                                >
+                                  {t("memory.item.owner", { id: String(memory.metadata.user_id) })}
+                                </Badge>
+                              ) : null}
                             </div>
 
                             <p className="text-sm text-foreground/90 leading-relaxed line-clamp-3">
@@ -720,15 +961,15 @@ export function MemoryPage() {
 }
 
 interface MemoryFormProps {
-  formData: { content: string; keywords: string; tags: string; category: string; metadata: string }
-  setFormData: (data: any) => void
+  formData: MemoryFormData
+  setFormData: Dispatch<SetStateAction<MemoryFormData>>
   categories: string[]
   onSubmit: () => void
   onCancel: () => void
 }
 
 function MemoryForm({ formData, setFormData, categories, onSubmit, onCancel }: MemoryFormProps) {
-  const { t } = useI18n()
+  const { t, tDynamic } = useI18n()
   return (
     <div className="space-y-4">
       <div>
@@ -739,7 +980,7 @@ function MemoryForm({ formData, setFormData, categories, onSubmit, onCancel }: M
           id="content"
           placeholder={t("memory.form.contentPlaceholder")}
           value={formData.content}
-          onChange={(e) => setFormData((prev: any) => ({ ...prev, content: e.target.value }))}
+          onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
           rows={4}
         />
       </div>
@@ -753,7 +994,7 @@ function MemoryForm({ formData, setFormData, categories, onSubmit, onCancel }: M
             id="keywords"
             placeholder={t("memory.form.keywordsPlaceholder")}
             value={formData.keywords}
-            onChange={(e) => setFormData((prev: any) => ({ ...prev, keywords: e.target.value }))}
+            onChange={(e) => setFormData((prev) => ({ ...prev, keywords: e.target.value }))}
           />
         </div>
         <div>
@@ -765,11 +1006,25 @@ function MemoryForm({ formData, setFormData, categories, onSubmit, onCancel }: M
             id="tags"
             placeholder={t("memory.form.tagsPlaceholder")}
             value={formData.tags}
-            onChange={(e) => setFormData((prev: any) => ({ ...prev, tags: e.target.value }))}
+            onChange={(e) => setFormData((prev) => ({ ...prev, tags: e.target.value }))}
           />
         </div>
       </div>
-      {/* Category field hidden */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <Label>{t("memory.form.categoryLabel")}</Label>
+          <InfoTooltip content={t("memory.form.categoryTooltip")} />
+        </div>
+        <Select
+          value={formData.category}
+          onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
+          options={categories.map(cat => ({
+            value: cat,
+            label: tDynamic(`memory.filters.categoryOptions.${cat}`, cat.replace(/_/g, " ")),
+          }))}
+          placeholder={t("memory.filters.category.placeholder")}
+        />
+      </div>
       <div>
         <div className="mb-1.5">
           <Label htmlFor="metadata">{t("memory.form.metadataLabel")}</Label>
@@ -778,7 +1033,7 @@ function MemoryForm({ formData, setFormData, categories, onSubmit, onCancel }: M
           id="metadata"
           placeholder={t("memory.form.metadataPlaceholder")}
           value={formData.metadata}
-          onChange={(e) => setFormData((prev: any) => ({ ...prev, metadata: e.target.value }))}
+          onChange={(e) => setFormData((prev) => ({ ...prev, metadata: e.target.value }))}
           rows={3}
         />
       </div>

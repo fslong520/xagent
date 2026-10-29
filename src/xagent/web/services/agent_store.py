@@ -176,8 +176,14 @@ class AgentStore:
         }
 
     def agent_to_list_item_dict(self, agent: Agent) -> dict[str, Any]:
+        # ``user_id`` is the DB owner, read straight off the row, so list rows
+        # and the detail response (``agent_to_response_dict``) agree on who
+        # owns the agent. It is not inferred from the caller: a policy-visible
+        # agent in the list belongs to somebody else, and the builder UI keys
+        # ownership/readonly checks on this value.
         return {
             "id": agent.id,
+            "user_id": agent.user_id,
             "team_id": agent.team_id,
             "name": agent.name,
             "description": agent.description,

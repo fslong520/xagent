@@ -170,6 +170,11 @@ class AgentListItem(BaseModel):
     """Simplified agent model for list views."""
 
     id: int
+    # Owning user, same source as ``AgentResponse.user_id`` (the Agent row's
+    # ``user_id`` column), not the caller's id: a policy-visible agent listed
+    # here is somebody else's, and clients need the owner to tell the two
+    # apart.
+    user_id: int
     team_id: Optional[int] = None
     name: str
     description: Optional[str]
