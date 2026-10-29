@@ -345,7 +345,15 @@ async def _json_body(request: Request) -> Mapping[str, Any]:
 
 
 def _message_payload(body: Mapping[str, Any]) -> Mapping[str, Any]:
+    # Two envelopes reach this route: the plain A2A shape (``{"message": ...}``)
+    # and a JSON-RPC call (``{"jsonrpc": "2.0", "method": "message:send",
+    # "params": {"message": ...}}``). Only the first used to be read, so a
+    # well-formed JSON-RPC send was answered 400 for "missing message".
     message = body.get("message")
+    if not isinstance(message, Mapping):
+        params = body.get("params")
+        if isinstance(params, Mapping):
+            message = params.get("message")
     if not isinstance(message, Mapping):
         raise a2a_error(
             "invalid_argument",

@@ -80,7 +80,12 @@ logger = logging.getLogger(__name__)
 
 MEMORY_TABLE_NAME = "memories"
 AUTHORITY_CONFIG_ID = "global-memory-embedding-authority"
-DEFAULT_SIMILARITY_THRESHOLD = 1.5
+#: Cosine distance ceiling (smaller = stricter), not a similarity floor. 1.5
+#: filtered nothing and let an unrelated query return most of the store; 0.40
+#: keeps notes at similarity >= 0.60. Measured 2026-10-29 against ext2: relevant
+#: notes 0.75-0.76 similarity, unrelated 0.42-0.52. Kept in step with
+#: :data:`xagent.core.memory.remote.DEFAULT_SEARCH_SIMILARITY_THRESHOLD`.
+DEFAULT_SIMILARITY_THRESHOLD = 0.40
 
 EmbeddingFactory = Callable[[EmbeddingModelConfig], BaseEmbedding]
 

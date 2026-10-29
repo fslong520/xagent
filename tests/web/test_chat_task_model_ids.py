@@ -2499,3 +2499,24 @@ def test_task_create_warns_for_a_plain_empty_seed_assistant_message_too(
         "normalized to" in record.message and str(task_id) in record.message
         for record in caplog.records
     )
+
+
+def test_task_create_request_defaults_memory_threshold_to_the_distance_ceiling() -> None:
+    """The task's memory search ceiling is 0.40 cosine distance (similarity >= 0.60).
+
+    It used to be 1.5, which asked the service for everything up to a distance
+    of 1.5 and so filtered nothing (measured 2026-10-29: relevant 0.24-0.25,
+    unrelated 0.48-0.58). The field is a distance ceiling, so the default has to
+    stay clearly below 1.0.
+    """
+    from xagent.web.schemas.chat import TaskCreateRequest
+
+    request = TaskCreateRequest(title="threshold default")
+
+    assert request.memory_similarity_threshold == pytest.approx(0.40)
+    # An explicit None still means "no opinion": the store applies its own
+    # default instead of the request model forcing a number.
+    explicit_none = TaskCreateRequest(
+        title="threshold none", memory_similarity_threshold=None
+    )
+    assert explicit_none.memory_similarity_threshold is None

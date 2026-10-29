@@ -64,9 +64,13 @@ class TaskCreateRequest(BaseModel):
     llm_ids: Optional[List[Optional[str]]] = (
         None  # Model identifiers to use: exactly 4 elements in order [default, fast_small, vision, compact]
     )
-    memory_similarity_threshold: Optional[float] = (
-        1.5  # Memory search similarity threshold
-    )
+    # Cosine **distance** ceiling for memory search (smaller = stricter). The
+    # memory service bounds cosine distance with this value while reporting
+    # ``score`` as similarity (larger = closer), so 0.40 means "similarity >=
+    # 0.60". Measured 2026-10-29: relevant notes scored 0.75-0.76 (distance
+    # 0.24-0.25), unrelated ones 0.42-0.52 (0.48-0.58); the old 1.5 filtered
+    # nothing and returned most of the store.
+    memory_similarity_threshold: Optional[float] = 0.40
     agent_type: Optional[str] = "standard"
     agent_config: Optional[Dict[str, Any]] = None  # Agent-specific configuration
     # Transport-shape violations intentionally remain Pydantic 422 responses;

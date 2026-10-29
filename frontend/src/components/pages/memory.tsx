@@ -93,20 +93,24 @@ interface MemoryStoreInfo {
 
 type StoreStatusKind = "ready" | "degraded" | "unavailable"
 
-const DEFAULT_SIMILARITY_THRESHOLD = 0.5
-// Measured on 8100 (q=牛肉面 / q=zzz不存在的词): 0.5 -> 0/0 hits, 0.68 -> 1/1,
-// 0.70 -> 1/3, 0.72 -> 2/-, 1.5 -> 2/3. Anything above ~0.70 stops filtering, so
-// the value the store reports is only trusted up to that ceiling; the slider can
-// still be pushed further by hand when someone really wants a looser match.
-const MAX_SIMILARITY_THRESHOLD = 0.7
-const MIN_SIMILARITY_THRESHOLD = 0.3
-const MAX_ADJUSTABLE_SIMILARITY_THRESHOLD = 1.5
+const DEFAULT_SIMILARITY_THRESHOLD = 0.40
+// The store reports a cosine *distance* ceiling (smaller = stricter) while each
+// note carries a similarity score (larger = closer), so 0.40 means
+// "similarity >= 0.60". Measured 2026-10-29 against ext2: the relevant notes
+// scored 0.7585 ("年度报销额度", distance 0.2415) and 0.7510 ("供应商对账口径",
+// 0.2490); unrelated ones sat at 0.42-0.52 similarity (0.48-0.58 distance) and
+// "zzz不存在的词" topped out at 0.4576 (0.5424). The store still reports the
+// legacy 1.5, which filters nothing, so anything above the ceiling is clamped
+// down; the slider can still be loosened by hand up to 0.60.
+const MAX_SIMILARITY_THRESHOLD = 0.40
+const MIN_SIMILARITY_THRESHOLD = 0.25
+const MAX_ADJUSTABLE_SIMILARITY_THRESHOLD = 0.60
 const SIMILARITY_STEP = 0.01
 const DEFAULT_MEMORY_CATEGORY = "general"
 
-// The backend default (1.5) lets an unrelated query return the whole store, so
-// the front end clamps it to the ceiling measured above and falls back to 0.5
-// when the report is missing or unusable.
+// The legacy store report (1.5) lets an unrelated query return the whole store,
+// so the front end clamps it to the ceiling measured above and falls back to
+// 0.40 when the report is missing or unusable.
 function resolveSimilarityThreshold(info: MemoryStoreInfo | null): number {
   const value = info?.similarity_threshold
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {

@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 from xagent.core.memory.base import MemoryStore
 from xagent.core.memory.core import MemoryNote
+from xagent.core.memory.remote import RemoteMemoryStoreError
 from xagent.web.api.auth import auth_router, hash_password
 from xagent.web.api.memory import MemoryManagementRouter
 from xagent.web.auth_config import JWT_ALGORITHM, JWT_SECRET_KEY
@@ -411,6 +412,9 @@ class TestMemoryCreateEndpoint:
         data = response.json()
         assert data["success"] is True
         assert data["memory_id"] == "new_memory_123"
+        # The receipt and the GET response must name the note the same way;
+        # clients used to receive only memory_id here and id everywhere else.
+        assert data["id"] == data["memory_id"]
         assert "Memory created successfully" in data["message"]
 
         # Verify that add was called with MemoryNote
@@ -475,6 +479,21 @@ class TestMemoryCreateEndpoint:
 
         assert response.status_code == 500
         assert response.json()["detail"] == "Failed to create memory"
+
+    def test_create_surfaces_upstream_409(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """The create route forwards a 409 like delete/update do."""
+        mock_memory_store.add.side_effect = RemoteMemoryStoreError(
+            "delivered notes are append-only", status_code=409
+        )
+
+        response = client.post(
+            "/api/memory/", json={"content": "Test memory"}, headers=auth_headers
+        )
+
+        assert response.status_code == 409
+        assert "append-only" in response.json()["detail"]
 
 
 class TestMemoryUpdateEndpoint:
@@ -686,6 +705,47 @@ class TestMemoryUpdateEndpoint:
         assert response.status_code == 500
         assert "Failed to update memory" in response.json()["detail"]
 
+    def test_update_delivered_memory_surfaces_upstream_409(
+        self, client, mock_memory_store, sample_memory_notes, auth_headers
+    ):
+        """A delivered note is append-only upstream; 409 must not become a 500."""
+        mock_memory_store.get.return_value = Mock(
+            success=True, content=sample_memory_notes[0]
+        )
+        mock_memory_store.update.side_effect = RemoteMemoryStoreError(
+            "delivered notes are append-only and cannot be updated",
+            status_code=409,
+        )
+
+        response = client.put(
+            "/api/memory/fb83ec9f",
+            json={"content": "rewrite the delivered note"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 409
+        assert "append-only" in response.json()["detail"]
+
+    def test_update_other_upstream_failure_keeps_the_500_wording(
+        self, client, mock_memory_store, sample_memory_notes, auth_headers
+    ):
+        """Only 409 is forwarded; every other upstream status keeps the 500."""
+        mock_memory_store.get.return_value = Mock(
+            success=True, content=sample_memory_notes[0]
+        )
+        mock_memory_store.update.side_effect = RemoteMemoryStoreError(
+            "upstream exploded", status_code=502
+        )
+
+        response = client.put(
+            "/api/memory/memory_1",
+            json={"content": "Updated content"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to update memory: upstream exploded"
+
 
 class TestMemoryDeleteEndpoint:
     """Test cases for memory delete endpoint."""
@@ -726,6 +786,33 @@ class TestMemoryDeleteEndpoint:
 
         assert response.status_code == 500
         assert "Failed to delete memory" in response.json()["detail"]
+
+    def test_delete_delivered_memory_surfaces_upstream_409(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """A delivered note is append-only upstream; 409 must not become a 500."""
+        mock_memory_store.delete.side_effect = RemoteMemoryStoreError(
+            "delivered notes are append-only and cannot be deleted",
+            status_code=409,
+        )
+
+        response = client.delete("/api/memory/fb83ec9f", headers=auth_headers)
+
+        assert response.status_code == 409
+        assert "append-only" in response.json()["detail"]
+
+    def test_delete_other_upstream_failure_keeps_the_500_wording(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """Only 409 is forwarded; every other upstream status keeps the 500."""
+        mock_memory_store.delete.side_effect = RemoteMemoryStoreError(
+            "upstream exploded", status_code=502
+        )
+
+        response = client.delete("/api/memory/memory_1", headers=auth_headers)
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to delete memory: upstream exploded"
 
 
 class TestMemoryStatsEndpoint:

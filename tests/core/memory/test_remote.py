@@ -497,6 +497,22 @@ def test_search_forwards_query_filters_and_threshold() -> None:
     }
 
 
+def test_search_without_a_threshold_sends_the_measured_distance_ceiling() -> None:
+    """No caller threshold must not travel as ``null`` (= most of the store).
+
+    ``similarity_threshold`` is a cosine distance ceiling upstream, so the
+    fallback is the measured 0.40 (similarity >= 0.60), not the 1.5 placeholder.
+    """
+    store = RecordingStore(_response(200, []))
+
+    store.search("hello")
+
+    call = store.session.calls[-1]
+    assert call["url"] == f"{SERVICE_URL}/v1/memory/search"
+    assert call["json"]["similarity_threshold"] == pytest.approx(0.40)
+    assert remote_module.DEFAULT_SEARCH_SIMILARITY_THRESHOLD == pytest.approx(0.40)
+
+
 def test_search_default_does_not_merge_scope_dimensions(scope: Any) -> None:
     """Dimensions are stamp-only: without the opt-in key they never filter.
 

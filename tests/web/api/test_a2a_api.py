@@ -283,6 +283,74 @@ def test_message_send_creates_hidden_a2a_task() -> None:
     assert schedule_bg.call_args.kwargs["task_id"] == int(task["id"])
 
 
+def test_message_send_accepts_a_json_rpc_envelope(monkeypatch) -> None:
+    """A JSON-RPC call carries the message under params, not at the top level."""
+    agent_id, full_key = _create_published_agent_with_key()
+    monkeypatch.setattr(a2a_api, "A2A_BLOCKING_WAIT_TIMEOUT_SECONDS", 0.0)
+
+    with patch(
+        "xagent.web.services.task_orchestrator._schedule_bg",
+        new=MagicMock(),
+    ):
+        response = client.post(
+            f"/api/a2a/agents/{agent_id}/message:send",
+            headers=_bearer(full_key),
+            json={
+                "jsonrpc": "2.0",
+                "method": "message:send",
+                "id": "rpc-1",
+                "params": {
+                    "message": {
+                        "messageId": "msg-rpc-1",
+                        "contextId": "ctx-rpc",
+                        "role": "ROLE_USER",
+                        "parts": [{"text": "hello via json-rpc"}],
+                    }
+                },
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    task = response.json()["task"]
+    assert task["contextId"] == "ctx-rpc"
+    assert task["status"]["state"] == "TASK_STATE_WORKING"
+
+    db = _direct_db_session()
+    try:
+        row = db.query(Task).filter(Task.id == int(task["id"])).one()
+        assert row.input == "hello via json-rpc"
+    finally:
+        db.close()
+
+
+def test_message_send_rejects_a_json_rpc_envelope_without_a_message() -> None:
+    agent_id, full_key = _create_published_agent_with_key()
+
+    missing = client.post(
+        f"/api/a2a/agents/{agent_id}/message:send",
+        headers=_bearer(full_key),
+        json={"jsonrpc": "2.0", "method": "message:send", "params": {}},
+    )
+
+    assert missing.status_code == 400
+    error = missing.json()["error"]
+    assert error["message"] == "Request body must include a message object."
+    assert error["details"][0]["reason"] == "INVALID_ARGUMENT"
+
+    # params that is not an object cannot carry a message either.
+    malformed = client.post(
+        f"/api/a2a/agents/{agent_id}/message:send",
+        headers=_bearer(full_key),
+        json={"jsonrpc": "2.0", "method": "message:send", "params": ["nope"]},
+    )
+
+    assert malformed.status_code == 400
+    assert (
+        malformed.json()["error"]["message"]
+        == "Request body must include a message object."
+    )
+
+
 def test_message_send_rejects_key_bound_to_different_agent() -> None:
     agent_id, full_key = _create_published_agent_with_key()
     headers = _admin_headers()

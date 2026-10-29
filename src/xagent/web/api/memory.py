@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from xagent.core.memory.base import MemoryStore
 from xagent.core.memory.core import MemoryNote, drop_replaced_tags
+from xagent.core.memory.remote import RemoteMemoryStoreError
 
 from ..auth_dependencies import get_current_user, is_admin_user
 from ..dynamic_memory_store import get_memory_store, get_memory_store_manager
@@ -276,6 +277,16 @@ class MemoryManagementRouter:
                         )
             except HTTPException:
                 raise
+            except RemoteMemoryStoreError as exc:
+                # The upstream status is the useful part: a 409 says the note is
+                # a delivered copy and append-only, which a generic 500 hides
+                # behind "Failed to delete memory". Every other status keeps the
+                # route's original 500 wording.
+                if exc.status_code == 409:
+                    raise HTTPException(status_code=409, detail=str(exc)) from None
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to delete memory: {str(exc)}"
+                )
             except Exception as e:
                 raise HTTPException(
                     status_code=500, detail=f"Failed to delete memory: {str(e)}"
@@ -352,6 +363,14 @@ class MemoryManagementRouter:
 
             except HTTPException:
                 raise
+            except RemoteMemoryStoreError as exc:
+                # See delete_memory: pass an upstream 409 through so "delivered
+                # notes are append-only" reaches the caller instead of a 500.
+                if exc.status_code == 409:
+                    raise HTTPException(status_code=409, detail=str(exc)) from None
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to update memory: {str(exc)}"
+                )
             except Exception as e:
                 raise HTTPException(
                     status_code=500, detail=f"Failed to update memory: {str(e)}"
@@ -416,6 +435,11 @@ class MemoryManagementRouter:
                     if response.success:
                         return {
                             "success": True,
+                            # Both keys carry the same value: the receipt always
+                            # said ``memory_id`` while GET answers with ``id``,
+                            # so a client following the create receipt could not
+                            # fetch the note without remapping the field.
+                            "id": response.memory_id,
                             "memory_id": response.memory_id,
                             "message": "Memory created successfully",
                         }
@@ -430,6 +454,14 @@ class MemoryManagementRouter:
                 # it the broad handler re-wrapped every HTTPException raised
                 # inside the block, status code included, as a 500.
                 raise
+            except RemoteMemoryStoreError as exc:
+                # See delete_memory: pass an upstream 409 through, keep the
+                # original 500 wording for every other status.
+                if exc.status_code == 409:
+                    raise HTTPException(status_code=409, detail=str(exc)) from None
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to create memory: {str(exc)}"
+                )
             except Exception as e:
                 raise HTTPException(
                     status_code=500, detail=f"Failed to create memory: {str(e)}"

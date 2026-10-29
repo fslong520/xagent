@@ -310,7 +310,8 @@ export function ChatInput({
   }, [fileMention.fileList, filesDisabled, openFilePreview]);
   const [agentConfig, setAgentConfig] = useState<AgentConfig>({
     model: "",
-    memorySimilarityThreshold: 1.5,
+    // Distance ceiling, not similarity: 0.4 keeps notes with similarity >= 0.60.
+    memorySimilarityThreshold: 0.4,
   });
   const [defaultAgentConfig, setDefaultAgentConfig] = useState<{
     model: string;

@@ -1660,6 +1660,39 @@ def test_publication_fails_closed_when_the_certificate_is_gone(monkeypatch, tmp_
     assert _table_state(tmp_path) == tampered[0]
 
 
+# --------------------------------------------------------------------------
+# The default search threshold is a measured distance ceiling.
+# --------------------------------------------------------------------------
+
+
+def test_default_similarity_threshold_is_the_measured_distance_ceiling():
+    """0.40, not 1.5 -- and the same constant the remote adapter defaults to.
+
+    1.5 filtered nothing: an unrelated query returned most of the store.
+    0.40 keeps notes at similarity >= 0.60 (measured 2026-10-29 against the
+    remote service), and the two defaults have to stay in step or store-info
+    would advertise a value search never used.
+    """
+    from xagent.core.memory.remote import DEFAULT_SEARCH_SIMILARITY_THRESHOLD
+
+    assert memory_lifecycle.DEFAULT_SIMILARITY_THRESHOLD == 0.40
+    assert memory_lifecycle.DEFAULT_SIMILARITY_THRESHOLD == (
+        DEFAULT_SEARCH_SIMILARITY_THRESHOLD
+    )
+
+
+def test_default_similarity_threshold_honours_and_repairs_the_environment(monkeypatch):
+    """The env override wins when sane, and never ships garbage to search."""
+    monkeypatch.delenv("MEMORY_SIMILARITY_THRESHOLD", raising=False)
+    assert memory_lifecycle.default_similarity_threshold() == 0.40
+
+    monkeypatch.setenv("MEMORY_SIMILARITY_THRESHOLD", "0.33")
+    assert memory_lifecycle.default_similarity_threshold() == 0.33
+
+    monkeypatch.setenv("MEMORY_SIMILARITY_THRESHOLD", "not-a-number")
+    assert memory_lifecycle.default_similarity_threshold() == 0.40
+
+
 def test_publication_fails_closed_when_the_vector_space_moved(monkeypatch, tmp_path):
     _seed_vector_table(tmp_path)
 

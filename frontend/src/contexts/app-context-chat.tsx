@@ -7046,7 +7046,10 @@ export function AppProvider({
         const requestBody: any = {
           title: message,
           description: message,
-          memory_similarity_threshold: config?.memorySimilarityThreshold ?? 1.5,
+          // 0.40 is a cosine *distance* ceiling (similarity >= 0.60), matching
+          // TaskCreateRequest and RemoteMemoryStore.search; the old 1.5
+          // filtered nothing and returned most of the store.
+          memory_similarity_threshold: config?.memorySimilarityThreshold ?? 0.40,
         }
         if (executionMode) {
           requestBody.execution_mode = executionMode

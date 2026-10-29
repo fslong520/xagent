@@ -59,7 +59,9 @@ export function ConfigDialog({ onConfigChange, currentConfig, trigger }: ConfigD
     smallFastModel: currentConfig?.smallFastModel,
     visualModel: currentConfig?.visualModel,
     compactModel: currentConfig?.compactModel,
-    memorySimilarityThreshold: currentConfig?.memorySimilarityThreshold ?? 1.5
+    // 0.4 is a cosine distance ceiling (similarity >= 0.60); the old 1.5
+    // filtered nothing. See TaskCreateRequest.memory_similarity_threshold.
+    memorySimilarityThreshold: currentConfig?.memorySimilarityThreshold ?? 0.4
   })
   const { t } = useI18n()
 
@@ -326,13 +328,13 @@ export function ConfigDialog({ onConfigChange, currentConfig, trigger }: ConfigD
                     <div className="flex items-center justify-between">
                       <Label className="text-sm">{t('agent.configDialog.memoryThreshold.label')}</Label>
                       <Badge variant="outline" className="text-xs">
-                        {config.memorySimilarityThreshold?.toFixed(1) ?? "1.5"}
+                        {config.memorySimilarityThreshold?.toFixed(1) ?? "0.4"}
                       </Badge>
                     </div>
                     <Slider
-                      value={[config.memorySimilarityThreshold ?? 1.5]}
+                      value={[config.memorySimilarityThreshold ?? 0.4]}
                       onValueChange={(value) => setConfig(prev => ({ ...prev, memorySimilarityThreshold: value[0] }))}
-                      max={2.0}
+                      max={0.6}
                       min={0.1}
                       step={0.1}
                       className="w-full"

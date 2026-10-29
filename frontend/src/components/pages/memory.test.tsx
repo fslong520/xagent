@@ -64,7 +64,7 @@ const storeInfoReady = {
   detail: "上游最近一次调用成功（HTTP 200）：/v1/memory/stats，15:54:46",
   mode: "vector",
   supports_vector_search: true,
-  similarity_threshold: 0.7,
+  similarity_threshold: 0.4,
 }
 
 const statsPayload = {
@@ -176,7 +176,7 @@ describe("MemoryPage", () => {
       () =>
         expect(
           listUrls().some(
-            url => url.includes("search=zzz") && url.includes("similarity_threshold=0.7"),
+            url => url.includes("search=zzz") && url.includes("similarity_threshold=0.4"),
           ),
         ).toBe(true),
       { timeout: 4000 },
@@ -251,35 +251,35 @@ describe("MemoryPage", () => {
     expect(screen.getByText("probe marker")).toBeTruthy()
   })
 
-  it("clamps a permissive store threshold to the measured ceiling", async () => {
+  it("clamps the legacy store threshold to the measured ceiling", async () => {
     mockBackend({ storeInfo: { ...storeInfoReady, similarity_threshold: 1.5 } })
     render(<MemoryPage />)
 
-    // 1.5 must not reach the request; the measured ceiling is 0.70.
-    await waitFor(() => expect(screen.getByText("0.70")).toBeTruthy())
+    // The store still reports the legacy 1.5; the measured ceiling is 0.40.
+    await waitFor(() => expect(screen.getByText("0.40")).toBeTruthy())
 
     const url = await searchFor("zzz")
-    expect(searchThreshold(url)).toBeCloseTo(0.7, 5)
+    expect(searchThreshold(url)).toBeCloseTo(0.4, 5)
   })
 
-  it("falls back to 0.5 when store-info carries no usable threshold", async () => {
+  it("falls back to 0.40 when store-info carries no usable threshold", async () => {
     mockBackend({ storeInfo: {} })
-    render(<MemoryPage />)
-
-    await waitFor(() => expect(screen.getByText("0.50")).toBeTruthy())
-
-    const url = await searchFor("zzz")
-    expect(searchThreshold(url)).toBeCloseTo(0.5, 5)
-  })
-
-  it("keeps a store threshold below the ceiling untouched", async () => {
-    mockBackend({ storeInfo: { ...storeInfoReady, similarity_threshold: 0.4 } })
     render(<MemoryPage />)
 
     await waitFor(() => expect(screen.getByText("0.40")).toBeTruthy())
 
     const url = await searchFor("zzz")
     expect(searchThreshold(url)).toBeCloseTo(0.4, 5)
+  })
+
+  it("keeps a store threshold below the ceiling untouched", async () => {
+    mockBackend({ storeInfo: { ...storeInfoReady, similarity_threshold: 0.3 } })
+    render(<MemoryPage />)
+
+    await waitFor(() => expect(screen.getByText("0.30")).toBeTruthy())
+
+    const url = await searchFor("zzz")
+    expect(searchThreshold(url)).toBeCloseTo(0.3, 5)
   })
 
   const ownedMemories = {

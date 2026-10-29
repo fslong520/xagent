@@ -107,6 +107,20 @@ NOT_FOUND_OR_DENIED_ERROR = "Memory note not found or access denied"
 #: Default reported by ``get_stats`` when the service omits the store type.
 DEFAULT_STORE_TYPE = "remote"
 
+#: Cosine-**distance** ceiling sent to ``/v1/memory/search`` when the caller
+#: does not pass one. The service's ``similarity_threshold`` is a distance
+#: ceiling (smaller = stricter) while the ``score`` it returns is similarity
+#: (larger = closer), so 0.40 means "similarity >= 0.60" -- not the 1.5 that
+#: was used as a placeholder and filtered nothing.
+#:
+#: Measured on 2026-10-29 against the ext2 stock: relevant notes scored
+#: 0.7585 ("年度报销额度", distance 0.2415) and 0.7510 ("供应商对账口径",
+#: 0.2490); unrelated notes sat at 0.42-0.52 similarity (0.48-0.58 distance);
+#: the nonsense query "zzz不存在的词" topped out at 0.4576 (0.5424). 0.40
+#: separates the relevant from the irrelevant; anything near 0.70 lets most of
+#: the store back in.
+DEFAULT_SEARCH_SIMILARITY_THRESHOLD = 0.40
+
 #: T14 §B1-1 -- directed delivery. A note whose content starts with
 #: ``[to:<target>]`` is delivered to another user's memory through the
 #: service's deliver endpoint instead of being written as the caller's own
@@ -1358,11 +1372,20 @@ class RemoteMemoryStore(MemoryStore):
         similarity_threshold: Optional[float] = None,
     ) -> List[MemoryNote]:
         path = "/v1/memory/search"
+        # An absent threshold used to travel as ``null``, which the service read
+        # as "no ceiling" and answered with most of the store. Fall back to the
+        # measured distance ceiling instead so "no opinion" still means "only
+        # what is actually close".
+        threshold = (
+            DEFAULT_SEARCH_SIMILARITY_THRESHOLD
+            if similarity_threshold is None
+            else similarity_threshold
+        )
         body = {
             "query": query,
             "k": k,
             "filters": self._filters_payload(filters),
-            "similarity_threshold": similarity_threshold,
+            "similarity_threshold": threshold,
         }
         response = self._request("POST", path, body=body)
         self._raise_for_error(path, response)
