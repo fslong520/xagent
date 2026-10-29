@@ -86,6 +86,11 @@ READ_TIMEOUT_SECONDS = 2.0
 WRITE_TIMEOUT_SECONDS = 5.0
 CONNECT_TIMEOUT_SECONDS = 2.0
 
+#: User-Agent sent on every outbound call to the memory service. One shared
+#: value on the session and on each per-request header dict; supersedes the
+#: previous "xagent-memory-remote/1" that was set on the session alone.
+MEMORY_SERVICE_USER_AGENT = "xagent-memsrv-client/1.0"
+
 #: Byte-for-byte the local wrapper's denial message
 #: (``web/user_isolated_memory.py``), so callers cannot tell the two paths
 #: apart and the service's "exists but not visible" answer does not leak.
@@ -217,7 +222,7 @@ def _get_shared_session() -> requests.Session:
         with _shared_session_lock:
             if _shared_session is None:
                 session = requests.Session()
-                session.headers.update({"User-Agent": "xagent-memory-remote/1"})
+                session.headers.update({"User-Agent": MEMORY_SERVICE_USER_AGENT})
                 _shared_session = session
     return _shared_session
 
@@ -307,6 +312,7 @@ def _probe_agent_seats(
             headers={
                 "Authorization": f"Bearer {service_key}",
                 "Accept": "application/json",
+                "User-Agent": MEMORY_SERVICE_USER_AGENT,
             },
             timeout=AGENT_SEATS_PROBE_TIMEOUT,
         )
@@ -449,6 +455,7 @@ def _probe_readyz(session: Optional[requests.Session]) -> tuple[bool, Optional[s
         return False, READINESS_UNCONFIGURED_REASON
     service_key = get_memory_service_key()
     headers = {"Authorization": f"Bearer {service_key}"} if service_key else {}
+    headers["User-Agent"] = MEMORY_SERVICE_USER_AGENT
     try:
         response = (session if session is not None else _get_shared_session()).get(
             f"{base_url.rstrip('/')}{READY_PATH}",
@@ -643,6 +650,7 @@ class RemoteMemoryStore(MemoryStore):
         headers = {
             "Authorization": f"Bearer {self._service_key}",
             "Content-Type": "application/json",
+            "User-Agent": MEMORY_SERVICE_USER_AGENT,
         }
         agent_identity = _agent_identity_override.get()
         if agent_identity is not None:
