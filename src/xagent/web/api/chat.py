@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List, NoReturn, Optional, Sequence, cast
 
@@ -12,6 +13,11 @@ from sqlalchemy.orm import Session
 
 from ...config import (
     get_default_task_execution_mode,
+)
+from ...core.execution_scope import (
+    EXECUTION_SCOPE_AGENT_CONFIG_KEY,
+    ExecutionScope,
+    execution_scope_from_agent_config,
 )
 from ...core.model.chat.token_context import (
     aggregate_media_usage_by_model,
@@ -123,6 +129,35 @@ def _build_task_agent_config(
     if selected_file_ids:
         task_agent_config[SELECTED_FILE_IDS_AGENT_CONFIG_KEY] = selected_file_ids
     return task_agent_config or None
+
+
+def _persist_task_memory_dimensions(task: Task) -> None:
+    """Persist the task/agent memory dimensions into the task's scope snapshot.
+
+    ``resolve_execution_scope`` reads the persisted snapshot
+    (``EXECUTION_SCOPE_AGENT_CONFIG_KEY``) back on every execution --
+    including after a process restart -- so stamping the dimensions here
+    keeps resumed runs producing per-task/per-agent memory stamps without a
+    registered resolver. An existing snapshot keeps its workspace fields and
+    its own dimension values (``ExecutionScope.to_dict`` always carries the
+    current shape version); this only fills the task/agent keys. The key is
+    client-reserved (``CLIENT_RESERVED_AGENT_CONFIG_KEYS``), so a client
+    can never smuggle one in ahead of this write.
+    """
+    existing = (
+        execution_scope_from_agent_config(task.agent_config)
+        if task.agent_config
+        else None
+    )
+    dimensions = dict(existing.memory_dimensions) if existing else {}
+    dimensions.setdefault("task", str(task.id))
+    agent_id = task.agent_id
+    if agent_id is not None:
+        dimensions.setdefault("agent", str(agent_id))
+    scope = replace(existing or ExecutionScope(), memory_dimensions=dimensions)
+    config = dict(task.agent_config or {})
+    config[EXECUTION_SCOPE_AGENT_CONFIG_KEY] = scope.to_dict()
+    task.agent_config = config
 
 
 def _load_agent_for_task_create(
@@ -623,6 +658,9 @@ async def create_task(
         task.agent_type_enum = agent_type_enum
         db.add(task)
         db.flush()
+        # ``task.id`` exists after the flush; persist the scope snapshot so
+        # resolution (and the memory-dimension stamps) survive restarts.
+        _persist_task_memory_dimensions(task)
 
         # Set LLM configuration for this task in agent manager
         task_llm_ids_to_set = [

@@ -78,6 +78,13 @@ from xagent.core.user_context import current_user_id
 
 logger = logging.getLogger(__name__)
 
+# Client-only opt-in key: pass ``filters={SCOPE_DIMENSIONS_FILTER_KEY: True}``
+# to merge the active scope's memory dimensions into a search/list filter.
+# Dimensions are otherwise stamp-only (cooperative tags), so a task-scoped
+# writer never blinds cross-task recall by default. The key is stripped
+# before the request reaches the service.
+SCOPE_DIMENSIONS_FILTER_KEY = "__scope_dimensions__"
+
 #: Read path timeout (方案 §3.3): the interactive path must fail fast rather
 #: than block the caller's event loop on a slow service.
 READ_TIMEOUT_SECONDS = 2.0
@@ -1024,27 +1031,34 @@ class RemoteMemoryStore(MemoryStore):
     def _filters_payload(
         self, filters: Optional[dict[str, Any]]
     ) -> Optional[dict[str, Any]]:
-        """Attach this client's scope filters and pass everything else through.
+        """Forward caller filters, applying scope rules only when asked.
 
-        Without an active scope the caller's filters are forwarded verbatim
-        (shallow copy, so a caller-reused dict is never mutated). With a scope,
-        the scope's dimension stamps are merged into the ``metadata`` filter
-        and ``strict_memory_isolation`` adds the ``__scope_exclusive__``
-        directive -- identical to ``UserIsolatedMemoryStore._add_user_filter``,
-        except that no ``user_id`` filter is ever added: ownership is the
-        service's job (§3.2).
+        Dimensions are stamp-only by default: a scope's ``memory_dimensions``
+        are written onto notes (add/remember) but never merged into search
+        filters implicitly -- a task-scoped writer would otherwise search only
+        its own task's notes, blinding cross-task recall and dedup. Callers
+        opt in with ``filters={SCOPE_DIMENSIONS_FILTER_KEY: True}``; the key
+        is stripped before the request is sent. ``strict_memory_isolation``
+        without dimensions keeps its ``__scope_exclusive__`` directive
+        unchanged (cooperative one-way visibility). As before, no ``user_id``
+        filter is ever added: ownership is the service's job (§3.2).
         """
         scope = get_execution_scope()
-        dimension_metadata = memory_dimension_metadata(scope)
+        merged = dict(filters) if filters else {}
+        wants_dimensions = bool(merged.pop(SCOPE_DIMENSIONS_FILTER_KEY, False))
+        dimension_metadata = (
+            memory_dimension_metadata(scope)
+            if wants_dimensions and scope is not None
+            else {}
+        )
         exclusive = bool(
             scope is not None
             and scope.strict_memory_isolation
             and not scope.memory_dimensions
         )
         if not dimension_metadata and not exclusive:
-            return dict(filters) if filters else None
+            return merged or None
 
-        merged = dict(filters) if filters else {}
         if dimension_metadata:
             raw_metadata = merged.get("metadata")
             metadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
@@ -1056,28 +1070,33 @@ class RemoteMemoryStore(MemoryStore):
 
     @staticmethod
     def _scope_gates_by_id_access() -> bool:
-        """Whether the active scope constrains by-id (get/update/delete)."""
+        """Whether the active scope constrains by-id (get/update/delete).
+
+        Only a strict dimension-less scope gates by id (the one-way
+        visibility rule). Dimensions are stamp-only cooperative tags, so a
+        dimensioned scope never narrows by-id access; ownership stays the
+        service's job.
+        """
         scope = get_execution_scope()
         if scope is None:
             return False
-        return bool(scope.memory_dimensions) or scope.strict_memory_isolation
+        return bool(scope.strict_memory_isolation) and not scope.memory_dimensions
 
     @staticmethod
     def _scope_permits(note: MemoryNote) -> bool:
         """Whether the active scope may touch ``note`` by id.
 
-        Mirrors the filter semantics of ``search``/``list_all``; scope is a
-        cooperative namespace, so this is the only place by-id access is
-        narrowed on the client. Ownership is enforced by the service.
+        A strict dimension-less scope keeps one-way visibility: a note
+        stamped with any scope dimension is invisible to it. A dimensioned
+        scope does not narrow by-id access (dimensions are stamp-only,
+        cooperative); ownership is enforced by the service.
         """
         scope = get_execution_scope()
-        dimension_metadata = memory_dimension_metadata(scope)
-        if dimension_metadata:
-            return all(
-                note.metadata.get(key) == value
-                for key, value in dimension_metadata.items()
-            )
-        if scope is not None and scope.strict_memory_isolation:
+        if (
+            scope is not None
+            and scope.strict_memory_isolation
+            and not scope.memory_dimensions
+        ):
             return not metadata_carries_scope_dimensions(note.metadata)
         return True
 

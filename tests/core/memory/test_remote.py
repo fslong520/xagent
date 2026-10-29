@@ -39,6 +39,7 @@ from xagent.core.memory.remote import (
     READINESS_UNAVAILABLE_REASON,
     READINESS_UNCONFIGURED_REASON,
     READY_PATH,
+    SCOPE_DIMENSIONS_FILTER_KEY,
     WHOAMI_PATH,
     RemoteMemoryStore,
     RemoteMemoryStoreAuthenticationError,
@@ -372,6 +373,45 @@ def test_update_checks_scope_before_writing(strict_scope: Any) -> None:
     assert [call["method"] for call in store.session.calls] == ["GET"]
 
 
+def test_by_id_access_not_narrowed_by_dimensions(scope: Any) -> None:
+    """Dimensions are stamp-only: a dimensioned scope does not gate by id."""
+    store = RecordingStore(
+        _response(
+            200,
+            {"id": "note-1", "content": "x", "metadata": {"execution_scope_a": "9"}},
+        )
+    )
+
+    response = store.get("note-1")
+
+    assert response.success is True
+    assert [call["method"] for call in store.session.calls] == ["GET"]
+
+
+def test_strict_with_dimensions_does_not_gate_by_id() -> None:
+    """strict + own dimensions: the one-way rule needs a dimension-less scope."""
+    token = set_execution_scope(
+        ExecutionScope(memory_dimensions={"task": "7"}, strict_memory_isolation=True)
+    )
+    try:
+        store = RecordingStore(
+            _response(
+                200,
+                {
+                    "id": "note-1",
+                    "content": "x",
+                    "metadata": {"execution_scope_a": "1"},
+                },
+            )
+        )
+
+        response = store.get("note-1")
+    finally:
+        reset_execution_scope(token)
+
+    assert response.success is True
+
+
 def test_delete_deletes_by_id() -> None:
     store = RecordingStore(_response(204))
 
@@ -434,14 +474,34 @@ def test_search_forwards_query_filters_and_threshold() -> None:
     }
 
 
-def test_search_merges_scope_dimensions_into_metadata_filter(scope: Any) -> None:
+def test_search_default_does_not_merge_scope_dimensions(scope: Any) -> None:
+    """Dimensions are stamp-only: without the opt-in key they never filter.
+
+    Auto-merging would blind cross-task recall and store_memory dedup the
+    moment a task scope carries dimensions.
+    """
     store = RecordingStore(_response(200, []))
 
     store.search("hello", filters={"category": "general"})
 
+    assert store.session.calls[-1]["json"]["filters"] == {"category": "general"}
+
+
+def test_search_opt_in_merges_scope_dimensions(scope: Any) -> None:
+    """The opt-in key merges the active scope's dimensions and is stripped."""
+    store = RecordingStore(_response(200, []))
+    filters = {"category": "general", SCOPE_DIMENSIONS_FILTER_KEY: True}
+
+    store.search("hello", filters=filters)
+
     assert store.session.calls[-1]["json"]["filters"] == {
         "category": "general",
         "metadata": {"execution_scope_client_application_id": "42"},
+    }
+    # The caller's dict is never mutated (the reserved key stays put).
+    assert filters == {
+        "category": "general",
+        SCOPE_DIMENSIONS_FILTER_KEY: True,
     }
 
 
@@ -477,6 +537,16 @@ def test_list_all_posts_filters() -> None:
     assert call["method"] == "POST"
     assert call["url"] == f"{SERVICE_URL}/v1/memory/list"
     assert call["json"] == {"filters": {"category": "general"}}
+
+
+def test_list_all_opt_in_merges_scope_dimensions(scope: Any) -> None:
+    store = RecordingStore(_response(200, []))
+
+    store.list_all({SCOPE_DIMENSIONS_FILTER_KEY: True})
+
+    assert store.session.calls[-1]["json"]["filters"] == {
+        "metadata": {"execution_scope_client_application_id": "42"}
+    }
 
 
 def test_get_stats_normalizes_the_contract_keys() -> None:

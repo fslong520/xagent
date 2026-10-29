@@ -40,7 +40,7 @@ import uuid
 import weakref
 from collections.abc import Callable
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
@@ -2423,6 +2423,48 @@ def _finalize_task_execution_result_isolated(
             )
 
 
+def _with_task_memory_dimensions(
+    scope: Optional[ExecutionScope],
+    task_id: int,
+    agent_id: Optional[int],
+) -> ExecutionScope:
+    """Stamp the task/agent memory dimensions onto a resolved execution scope.
+
+    Every task execution stamps ``task`` (and ``agent`` when the task has
+    one) so memory notes written during the run carry per-task/per-agent
+    ``execution_scope_*`` metadata -- without this, nothing in the web
+    embedding ever produced scope dimensions and task/agent memory
+    partitioning never engaged. Keys already present on the resolved scope
+    win: a resolver or persisted snapshot that named its own ``task``/
+    ``agent`` value is authoritative; this only fills the gaps.
+    """
+    base = scope or ExecutionScope()
+    dimensions = dict(base.memory_dimensions)
+    dimensions.setdefault("task", str(task_id))
+    if agent_id is not None:
+        dimensions.setdefault("agent", str(agent_id))
+    return replace(base, memory_dimensions=dimensions)
+
+
+async def _load_task_agent_id(task_id: int) -> Optional[int]:
+    """Read a task's agent_id for the resume path's memory-dimension stamp.
+
+    The resume path has no task setup snapshot in hand at scope-resolution
+    time, so the agent id comes from one narrow column query (same pattern
+    as the snapshot loader).
+    """
+
+    def _query() -> Optional[int]:
+        SessionLocal = get_session_local()
+        with SessionLocal() as db:
+            row = db.query(Task.agent_id).filter(Task.id == task_id).first()
+        if row is None or row[0] is None:
+            return None
+        return int(row[0])
+
+    return await run_db_io_cancellation_safe(_query)
+
+
 async def execute_task_background(
     task_id: int,
     user_message: str,
@@ -2480,6 +2522,14 @@ async def execute_task_background(
                 f"Task {task_id} not found",
                 error_code=ClientErrorCode.TASK_UNAVAILABLE,
             )
+
+        # Stamp task/agent memory dimensions so every note written during
+        # this run carries them (memory_dimension_metadata on add/remember).
+        execution_scope = _with_task_memory_dimensions(
+            execution_scope,
+            task_id,
+            snapshot.task.agent_id,
+        )
 
         context_dict = context if isinstance(context, dict) else {}
         mcp_actor_execution_identity: MCPActorExecutionIdentity | None = None
@@ -3544,6 +3594,14 @@ async def execute_resume_background(
                 Optional[ExecutionScope],
                 resolved_execution_scope,
             )
+
+        # Resumed runs stamp the same task/agent memory dimensions as fresh
+        # ones, so notes written after a restart keep their scope stamps.
+        execution_scope = _with_task_memory_dimensions(
+            execution_scope,
+            task_id,
+            await _load_task_agent_id(task_id),
+        )
 
         if lease is None:
             prior_status_box: list[TaskStatus] = []
