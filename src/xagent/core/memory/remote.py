@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import logging
 import re
 import threading
@@ -140,6 +141,138 @@ READINESS_CACHE_SECONDS = 30.0
 READINESS_UNAVAILABLE_REASON = "remote_memory_unavailable"
 #: Reason reported when the remote backend is selected without a usable URL.
 READINESS_UNCONFIGURED_REASON = "remote_memory_unconfigured"
+
+#: Identity-surface probe used only to *classify* a 401 (never on the happy
+#: path). The service answers this with a bare key (no identity header), so a
+#: 200 here proves the key is valid and the caller's 401 came from the
+#: unrecognised ``X-User-External-Id`` instead.
+WHOAMI_PATH = "/v1/whoami"
+#: Per-key cache for that classification probe. Bounded so a key rotation is
+#: noticed quickly, and keyed by the key fingerprint so concurrent identities
+#: never share a verdict.
+KEY_VALIDITY_CACHE_SECONDS = 60.0
+_key_validity_cache: dict[str, tuple[float, Optional[bool]]] = {}
+_key_validity_cache_lock = threading.Lock()
+
+#: Upstream health signal of this process (缺陷二/store-info). Every answered
+#: HTTP response -- even a 4xx/5xx -- proves the upstream answered; only a
+#: transport failure records "unreachable". ``get_store_info`` folds this into
+#: its state instead of reporting the local lifecycle state as if it described
+#: the upstream.
+_upstream_health: dict[str, Any] = {
+    "last_success_at": None,  # wall-clock epoch of the last answered call
+    "last_success_status": None,
+    "last_failure_at": None,  # wall-clock epoch of the last transport failure
+    "last_failure_reason": None,
+    "last_event_at": None,  # epoch of whichever event came last
+    "last_event_kind": None,  # "answer" | "transport_error"
+    "last_status": None,  # status of the last answered call
+    "last_path": None,
+    "last_error_code": None,
+    "last_error_message": None,
+    "consecutive_transport_failures": 0,
+}
+_upstream_health_lock = threading.Lock()
+
+
+def _record_upstream_answer(path: str, response: requests.Response) -> None:
+    """Record that the upstream answered (any HTTP status counts as served)."""
+    payload: Any
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    error = ((payload or {}).get("error") or {}) if isinstance(payload, dict) else {}
+    now = time.time()
+    with _upstream_health_lock:
+        _upstream_health["last_event_at"] = now
+        _upstream_health["last_event_kind"] = "answer"
+        _upstream_health["last_status"] = response.status_code
+        _upstream_health["last_path"] = path
+        _upstream_health["last_error_code"] = error.get("code")
+        _upstream_health["last_error_message"] = error.get("message")
+        _upstream_health["consecutive_transport_failures"] = 0
+        if 200 <= response.status_code < 300:
+            _upstream_health["last_success_at"] = now
+            _upstream_health["last_success_status"] = response.status_code
+
+
+def _record_transport_failure(path: str, reason: str) -> None:
+    """Record that the upstream could not be reached at all."""
+    now = time.time()
+    with _upstream_health_lock:
+        _upstream_health["last_event_at"] = now
+        _upstream_health["last_event_kind"] = "transport_error"
+        _upstream_health["last_failure_at"] = now
+        _upstream_health["last_failure_reason"] = reason
+        _upstream_health["last_path"] = path
+        _upstream_health["consecutive_transport_failures"] += 1
+
+
+def remote_upstream_health() -> dict[str, Any]:
+    """Snapshot of the upstream health signal (copy; thread-safe)."""
+    with _upstream_health_lock:
+        return dict(_upstream_health)
+
+
+def _format_event_time(epoch: Optional[float]) -> str:
+    if epoch is None:
+        return "从未"
+    return datetime.fromtimestamp(epoch).strftime("%H:%M:%S")
+
+
+def remote_upstream_report() -> tuple[str, str]:
+    """Honest ``(state, detail)`` for the upstream behind a remote store.
+
+    ``state`` is one of ``ready`` / ``degraded`` / ``unavailable``:
+
+    * ``ready`` -- the latest signal is an answered call below 500, or (with
+      no call yet this process) a passing ``/readyz`` probe;
+    * ``degraded`` -- the latest signal is a 5xx answer, or a transport
+      failure after the upstream had answered successfully before;
+    * ``unavailable`` -- the upstream has never answered in this process and
+      the latest signal is a failure.
+
+    The ``/readyz`` fallback is the probe ``remote_memory_ready`` already
+    caches (``READINESS_CACHE_SECONDS``), so this costs no extra traffic on
+    repeated reads and never probes per memory request.
+    """
+    health = remote_upstream_health()
+    event_kind = health["last_event_kind"]
+    if event_kind is None:
+        available, reason = remote_memory_ready()
+        now = _format_event_time(time.time())
+        if available:
+            return "ready", f"本进程尚无上游调用记录；/readyz 探测可达（{now}）"
+        return (
+            "unavailable",
+            f"本进程尚无上游调用记录；/readyz 探测不可达"
+            f"（reason={reason}，{now}）",
+        )
+    if event_kind == "transport_error":
+        detail = (
+            f"上游最近一次调用不可达（{health['last_failure_reason']}）："
+            f"{health['last_path']}，连续失败 "
+            f"{health['consecutive_transport_failures']} 次，"
+            f"{_format_event_time(health['last_event_at'])}"
+        )
+        if health["last_success_at"] is None:
+            return "unavailable", detail
+        return "degraded", detail
+    status = health["last_status"]
+    when = _format_event_time(health["last_event_at"])
+    if status is not None and status >= 500:
+        code = health["last_error_code"]
+        code_note = f"（code={code}）" if code else ""
+        return (
+            "degraded",
+            f"上游最近一次调用返回 HTTP {status}{code_note}："
+            f"{health['last_path']}，{when}",
+        )
+    return (
+        "ready",
+        f"上游最近一次调用成功（HTTP {status}）：{health['last_path']}，{when}",
+    )
 
 #: The explicit-owner override of the *current* context (T14 §B1-2). It is a
 #: context variable rather than an instance attribute because one adapter
@@ -682,7 +815,7 @@ class RemoteMemoryStore(MemoryStore):
         read_timeout = self._write_timeout if write else self._read_timeout
         timeout = (self._connect_timeout, read_timeout)
         try:
-            return self._session.request(
+            response = self._session.request(
                 method,
                 url,
                 json=body,
@@ -691,13 +824,22 @@ class RemoteMemoryStore(MemoryStore):
                 timeout=timeout,
             )
         except requests.exceptions.Timeout as error:
+            _record_transport_failure(
+                path, f"{'写' if write else '读'}超时 {read_timeout:.1f}s"
+            )
             raise RemoteMemoryStoreError(
-                f"Remote memory request timed out: {method} {path}"
+                f"Remote memory upstream unreachable (request timed out after "
+                f"{read_timeout:.1f}s -- a transport failure, not a credential "
+                f"rejection): {method} {path}"
             ) from error
         except requests.exceptions.RequestException as error:
+            _record_transport_failure(path, f"连接失败（{type(error).__name__}）")
             raise RemoteMemoryStoreError(
-                f"Remote memory request failed: {method} {path}"
+                f"Remote memory upstream unreachable (connection failure -- not "
+                f"a credential rejection): {method} {path} — {error}"
             ) from error
+        _record_upstream_answer(path, response)
+        return response
 
     @staticmethod
     def _json(path: str, response: requests.Response) -> Any:
@@ -708,31 +850,140 @@ class RemoteMemoryStore(MemoryStore):
                 f"Remote memory service returned a non-JSON response: {path}"
             ) from error
 
-    @staticmethod
-    def _raise_for_error(path: str, response: requests.Response) -> None:
-        """Raise unless the service answered with a 2xx (§3.5.1)."""
+    def _raise_for_error(self, path: str, response: requests.Response) -> None:
+        """Raise unless the service answered with a 2xx (§3.5.1).
+
+        A 401 is *classified* instead of being blamed on the credential by
+        default (缺陷一). The upstream answers a bad key, a revoked key and an
+        unknown ``X-User-External-Id`` with the very same generic
+        ``{"error":{"code":"unauthorized","message":"unauthorized"}}`` body
+        (Go ``internal/app/identity/service.go:28``), so the raised text is
+        decided from observable evidence: credential wording in the upstream
+        message, or a bare-key ``/v1/whoami`` probe when an identity header
+        was sent. Every 401 text carries the HTTP status, the upstream
+        ``error.code``/``error.message`` and the actionable next step.
+        """
         status = response.status_code
         if 200 <= status < 300:
             return
         # the service's own message carries the repair ("send a follow-up delivery
         # instead" for a 409) — dropping it left the model retrying blind
-        detail = ""
+        code: Optional[str] = None
+        message = ""
         try:
             payload = response.json()
-            message = ((payload or {}).get("error") or {}).get("message")
-            if isinstance(message, str) and message:
-                detail = f" — {message}"
+            error = (payload or {}).get("error") or {}
+            if isinstance(error.get("code"), str):
+                code = error["code"]
+            if isinstance(error.get("message"), str):
+                message = error["message"]
         except ValueError:
             pass
         if status == 401:
             raise RemoteMemoryStoreAuthenticationError(
-                f"Remote memory service rejected the service credential: {path}",
+                self._classify_401(path, code, message),
                 status_code=status,
             )
+        code_note = f"（code={code}）" if code else ""
+        detail = f"，上游 message: {message}" if message else ""
         raise RemoteMemoryStoreError(
-            f"Remote memory service returned HTTP {status}: {path}{detail}",
+            f"Remote memory service returned HTTP {status}{code_note} on "
+            f"{path}{detail}",
             status_code=status,
         )
+
+    def _classify_401(self, path: str, code: Optional[str], message: str) -> str:
+        """Explain one 401 as honestly as the evidence allows.
+
+        Three outcomes, in evidence order:
+
+        * the upstream message names the credential itself → report a key
+          rejection and skip the probe;
+        * an identity header was sent → one cached bare-key
+          :data:`WHOAMI_PATH` probe separates "key invalid" (probe 401) from
+          "identity not provisioned" (probe 200);
+        * the probe could not decide → say so and name both hypotheses
+          instead of asserting either one.
+        """
+        code_note = f"（code={code}）" if code else ""
+        message_note = f"，上游 message: {message}" if message else ""
+        lowered = f"{code or ''} {message}".lower()
+        if any(
+            marker in lowered
+            for marker in ("credential", "api key", "api_key", "token", "key")
+        ):
+            return (
+                f"上游拒绝了服务凭据：HTTP 401{code_note} on {path}{message_note}。"
+                f"上游明示凭据类错误，请核对 XAGENT_MEMORY_SERVICE_KEY"
+                f"（无效、已吊销或不属于该实例）。"
+            )
+        external_id = self._headers().get("X-User-External-Id")
+        if external_id is not None:
+            valid, note = self._probe_key_validity()
+            if valid is True:
+                return (
+                    f"身份未开通：HTTP 401{code_note} on {path}{message_note}。"
+                    f"服务 key 本身有效（{WHOAMI_PATH} 探测 200），但 "
+                    f"external_id={external_id} 在上游身份目录不存在或未激活，"
+                    f"需在 memsrv org 建号后重试。"
+                )
+            if valid is False:
+                return (
+                    f"上游拒绝了服务凭据：HTTP 401{code_note} on {path}{message_note}。"
+                    f"key 无效（{WHOAMI_PATH} 探测同样 401），请核对 "
+                    f"XAGENT_MEMORY_SERVICE_KEY。"
+                )
+            return (
+                f"上游返回 HTTP 401{code_note} on {path}{message_note}，"
+                f"且诊断探测未能完成（{note}）：可能是 key 无效/被拒，"
+                f"也可能是 external_id={external_id} 未在 memsrv 开通。"
+            )
+        return (
+            f"上游返回 HTTP 401{code_note} on {path}{message_note}："
+            f"本次请求未携带 external_id，上游拒绝的是服务凭据本身"
+            f"（key 无效、已吊销或不属于该实例）。"
+        )
+
+    def _probe_key_validity(self) -> tuple[Optional[bool], str]:
+        """Judge the key with one cached bare ``/v1/whoami`` call.
+
+        Returns ``(True, note)`` when the key is accepted without any
+        identity header, ``(False, note)`` when even the bare call is 401, and
+        ``(None, note)`` when the probe cannot decide (transport failure or a
+        non-401 error status). Only definitive verdicts are cached; the probe
+        never raises, and it never touches the upstream health signal -- it is
+        a diagnostic, not business traffic.
+        """
+        fingerprint = hashlib.sha256(self._service_key.encode("utf-8")).hexdigest()[
+            :16
+        ]
+        now = time.monotonic()
+        with _key_validity_cache_lock:
+            cached = _key_validity_cache.get(fingerprint)
+        if cached is not None and now - cached[0] < KEY_VALIDITY_CACHE_SECONDS:
+            return cached[1], "按缓存判定"
+        try:
+            response = self._session.request(
+                "GET",
+                f"{self._base_url}{WHOAMI_PATH}",
+                headers={
+                    "Authorization": f"Bearer {self._service_key}",
+                    "User-Agent": MEMORY_SERVICE_USER_AGENT,
+                },
+                timeout=(self._connect_timeout, self._read_timeout),
+            )
+        except requests.exceptions.RequestException as error:
+            return None, f"探测请求失败（{type(error).__name__}: {error}）"
+        verdict: Optional[bool]
+        if 200 <= response.status_code < 300:
+            verdict = True
+        elif response.status_code == 401:
+            verdict = False
+        else:
+            return None, f"探测返回 HTTP {response.status_code}，无法判定"
+        with _key_validity_cache_lock:
+            _key_validity_cache[fingerprint] = (now, verdict)
+        return verdict, "探测已完成"
 
     @staticmethod
     def _note_items(path: str, payload: Any) -> List[Mapping[str, Any]]:
@@ -1231,6 +1482,7 @@ __all__ = [
     "READY_PATH",
     "READ_TIMEOUT_SECONDS",
     "REMEMBER_PATH",
+    "WHOAMI_PATH",
     "RemoteMemoryStore",
     "RemoteMemoryStoreAuthenticationError",
     "RemoteMemoryStoreConfigurationError",
@@ -1239,4 +1491,6 @@ __all__ = [
     "explicit_memory_owner",
     "remote_memory_ready",
     "remote_memory_store_from_config",
+    "remote_upstream_health",
+    "remote_upstream_report",
 ]

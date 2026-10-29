@@ -15,10 +15,12 @@ Three wiring points are pinned here:
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import pytest
 
+from xagent.core.memory import remote as remote_module
 from xagent.core.memory.core import MemoryNote, MemoryResponse
 from xagent.core.memory.remote import (
     READINESS_UNAVAILABLE_REASON,
@@ -151,6 +153,123 @@ def test_registration_installs_the_resolver_in_the_shared_hook() -> None:
     installed = memory_policy_module._trusted_memory_policy_resolver  # noqa: SLF001
 
     assert installed is lifecycle_module.resolve_remote_memory_policy
+
+
+# ---------------------------------------------------------------------------
+# 缺陷二: store-info must describe the *upstream*, not only the local
+# lifecycle publication. A ready lifecycle state is overridden by the
+# adapter's health signal; a fenced lifecycle state always wins.
+# ---------------------------------------------------------------------------
+
+
+def _health(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "last_success_at": None,
+        "last_success_status": None,
+        "last_failure_at": None,
+        "last_failure_reason": None,
+        "last_event_at": None,
+        "last_event_kind": None,
+        "last_status": None,
+        "last_path": None,
+        "last_error_code": None,
+        "last_error_message": None,
+        "consecutive_transport_failures": 0,
+    }
+    base.update(overrides)
+    return base
+
+
+def _remote_manager(monkeypatch: Any) -> DynamicMemoryStoreManager:
+    _select_remote(monkeypatch)
+    manager = DynamicMemoryStoreManager()
+    manager.admit()
+    return manager
+
+
+def test_store_info_is_ready_when_the_last_upstream_call_succeeded(
+    monkeypatch: Any,
+) -> None:
+    manager = _remote_manager(monkeypatch)
+    monkeypatch.setattr(
+        remote_module,
+        "_upstream_health",
+        _health(
+            last_event_at=time.time(),
+            last_event_kind="answer",
+            last_status=200,
+            last_path="/v1/memory/list",
+            last_success_at=time.time(),
+        ),
+    )
+
+    info = manager.get_store_info()
+
+    assert info["store_type"] == "RemoteMemoryStore"
+    assert info["state"] == "ready"
+    assert "上游最近一次调用成功" in info["detail"]
+
+
+def test_store_info_degrades_after_an_upstream_5xx_answer(monkeypatch: Any) -> None:
+    manager = _remote_manager(monkeypatch)
+    monkeypatch.setattr(
+        remote_module,
+        "_upstream_health",
+        _health(
+            last_event_at=time.time(),
+            last_event_kind="answer",
+            last_status=503,
+            last_path="/v1/memory/notes",
+            last_error_code="resource_exhausted",
+            last_success_at=time.time(),
+        ),
+    )
+
+    info = manager.get_store_info()
+
+    assert info["state"] == "degraded"
+    assert "HTTP 503" in info["detail"]
+    assert "code=resource_exhausted" in info["detail"]
+
+
+def test_store_info_is_unavailable_when_the_upstream_never_answered(
+    monkeypatch: Any,
+) -> None:
+    manager = _remote_manager(monkeypatch)
+    monkeypatch.setattr(
+        remote_module,
+        "_upstream_health",
+        _health(
+            last_event_at=time.time(),
+            last_event_kind="transport_error",
+            last_failure_at=time.time(),
+            last_failure_reason="连接失败（ConnectionError）",
+            last_path="/v1/memory/list",
+            consecutive_transport_failures=3,
+        ),
+    )
+
+    info = manager.get_store_info()
+
+    assert info["state"] == "unavailable"
+    assert "不可达" in info["detail"]
+
+
+def test_store_info_keeps_the_lifecycle_truth_when_memory_is_fenced(
+    monkeypatch: Any,
+) -> None:
+    _select_remote(monkeypatch, key=None)
+    manager = DynamicMemoryStoreManager()
+    manager.admit()
+
+    def must_not_probe() -> None:
+        raise AssertionError("a fenced store must not consult the upstream")
+
+    monkeypatch.setattr(manager_module, "remote_upstream_report", must_not_probe)
+    info = manager.get_store_info()
+
+    assert info["state"] == MemoryLifecycleState.RESTART_REQUIRED.value
+    assert info["store_type"] is None
 
 
 def test_agent_bound_tasks_get_memory_when_the_service_is_ready(

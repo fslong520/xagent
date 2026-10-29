@@ -24,7 +24,7 @@ from typing import Optional, Union
 from ..core.memory.base import MemoryStore
 from ..core.memory.in_memory import InMemoryMemoryStore
 from ..core.memory.lancedb import LanceDBMemoryStore
-from ..core.memory.remote import RemoteMemoryStore
+from ..core.memory.remote import RemoteMemoryStore, remote_upstream_report
 from .memory_lifecycle import (
     AdmissionResult,
     AuthorityCredentialUnavailable,
@@ -387,7 +387,7 @@ class DynamicMemoryStoreManager:
         # Report what the storage adapter actually is, through both the
         # revocation and the user-isolation wrapper.
         base_store = unwrap_memory_store(store)
-        return {
+        info = {
             "store_type": type(base_store).__name__ if base_store is not None else None,
             "is_lancedb": isinstance(base_store, LanceDBMemoryStore),
             "state": status.state.value,
@@ -396,6 +396,29 @@ class DynamicMemoryStoreManager:
             "supports_vector_search": status.vector_search,
             "similarity_threshold": threshold,
         }
+        # 缺陷二: on the remote backend the lifecycle state describes only the
+        # *local* publication -- it says nothing about whether the upstream
+        # memory service answers. Fold the adapter's upstream health signal
+        # into the report so an operator never reads "ready" while every
+        # upstream call is failing. A non-ready lifecycle state is the bigger
+        # truth and always wins: memory is fenced off regardless of upstream,
+        # so the upstream is not even probed in that case.
+        if (
+            isinstance(base_store, RemoteMemoryStore)
+            and status.state is MemoryLifecycleState.READY
+        ):
+            try:
+                remote_state, remote_detail = remote_upstream_report()
+            except Exception:
+                logger.warning(
+                    "Remote upstream health report failed; keeping the "
+                    "lifecycle state in the store-info answer",
+                    exc_info=True,
+                )
+            else:
+                info["state"] = remote_state
+                info["detail"] = remote_detail
+        return info
 
 
 # Global instance

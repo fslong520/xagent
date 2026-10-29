@@ -39,6 +39,7 @@ from xagent.core.memory.remote import (
     READINESS_UNAVAILABLE_REASON,
     READINESS_UNCONFIGURED_REASON,
     READY_PATH,
+    WHOAMI_PATH,
     RemoteMemoryStore,
     RemoteMemoryStoreAuthenticationError,
     RemoteMemoryStoreConfigurationError,
@@ -97,6 +98,29 @@ class RecordingStore(RemoteMemoryStore):
             session=self.session,  # type: ignore[arg-type]
             user_id_provider=lambda: user_id,
         )
+
+
+@pytest.fixture(autouse=True)
+def _isolated_remote_diagnostics():
+    """Keep the 401-classification cache and the health signal test-local."""
+    remote_module._key_validity_cache.clear()
+    remote_module._upstream_health.update(
+        {
+            "last_success_at": None,
+            "last_success_status": None,
+            "last_failure_at": None,
+            "last_failure_reason": None,
+            "last_event_at": None,
+            "last_event_kind": None,
+            "last_status": None,
+            "last_path": None,
+            "last_error_code": None,
+            "last_error_message": None,
+            "consecutive_transport_failures": 0,
+        }
+    )
+    yield
+    remote_module._key_validity_cache.clear()
 
 
 def _note(**overrides: Any) -> MemoryNote:
@@ -573,6 +597,296 @@ def test_401_raises_authentication_error() -> None:
 
     with pytest.raises(RemoteMemoryStoreAuthenticationError):
         store.search("hello")
+
+
+# ---------------------------------------------------------------------------
+# 缺陷一: a 401 must be classified from observable evidence, never blamed on
+# the credential by default; transport failures must say "upstream
+# unreachable", not "credential"; other failures carry status/code/message.
+# ---------------------------------------------------------------------------
+
+_GENERIC_401 = {"error": {"code": "unauthorized", "message": "unauthorized"}}
+
+
+def test_401_with_credential_wording_blames_the_key_without_probing() -> None:
+    store = RecordingStore(
+        _response(
+            401, {"error": {"code": "unauthorized", "message": "invalid api key"}}
+        )
+    )
+
+    with pytest.raises(RemoteMemoryStoreAuthenticationError) as error:
+        store.search("hello")
+
+    text = str(error.value)
+    assert "拒绝了服务凭据" in text
+    assert "invalid api key" in text
+    assert "HTTP 401" in text
+    # an explicit credential error needs no diagnostic probe
+    assert len(store.session.calls) == 1
+
+
+def test_401_with_unknown_external_id_reports_identity_not_provisioned() -> None:
+    store = RecordingStore(
+        _response(401, _GENERIC_401),
+        _response(200, {"identity": {"external_id": "1"}}),
+        user_id=2,
+    )
+
+    with pytest.raises(RemoteMemoryStoreAuthenticationError) as error:
+        store.search("hello")
+
+    text = str(error.value)
+    assert "身份未开通" in text
+    assert "external_id=2" in text
+    assert "memsrv org" in text
+    # the bare-key probe separates the two 401 causes
+    probe = store.session.calls[1]
+    assert probe["url"] == f"{SERVICE_URL}{WHOAMI_PATH}"
+    assert probe["headers"]["Authorization"] == f"Bearer {SERVICE_KEY}"
+    assert "X-User-External-Id" not in probe["headers"]
+
+
+def test_401_blames_the_key_when_the_bare_key_is_also_rejected() -> None:
+    store = RecordingStore(
+        _response(401, _GENERIC_401),
+        _response(401, _GENERIC_401),
+        user_id=2,
+    )
+
+    with pytest.raises(RemoteMemoryStoreAuthenticationError) as error:
+        store.search("hello")
+
+    text = str(error.value)
+    assert "拒绝了服务凭据" in text
+    assert "探测同样 401" in text
+
+
+def test_401_names_both_hypotheses_when_the_probe_cannot_decide() -> None:
+    store = RecordingStore(
+        _response(401, _GENERIC_401),
+        requests.exceptions.ConnectionError("refused"),
+        user_id=2,
+    )
+
+    with pytest.raises(RemoteMemoryStoreAuthenticationError) as error:
+        store.search("hello")
+
+    text = str(error.value)
+    assert "未能完成" in text
+    assert "key 无效" in text
+    assert "external_id=2" in text
+
+
+def test_401_without_an_identity_header_reports_the_key_itself() -> None:
+    store = RecordingStore(_response(401, _GENERIC_401))
+
+    with pytest.raises(RemoteMemoryStoreAuthenticationError) as error:
+        store.search("hello")
+
+    text = str(error.value)
+    assert "未携带 external_id" in text
+    assert len(store.session.calls) == 1
+
+
+def test_401_classification_reuses_the_cached_key_verdict() -> None:
+    store = RecordingStore(
+        _response(401, _GENERIC_401),
+        _response(200, {"identity": {"external_id": "1"}}),
+        _response(401, _GENERIC_401),
+        user_id=2,
+    )
+
+    with pytest.raises(RemoteMemoryStoreAuthenticationError) as first:
+        store.search("hello")
+    with pytest.raises(RemoteMemoryStoreAuthenticationError) as second:
+        store.list_all()
+
+    assert "身份未开通" in str(first.value)
+    assert "身份未开通" in str(second.value)
+    # three calls total: 401, one probe, 401 -- the verdict is cached
+    assert len(store.session.calls) == 3
+
+
+def test_timeout_reports_an_unreachable_upstream_not_a_credential() -> None:
+    store = RecordingStore(requests.exceptions.Timeout("slow"))
+
+    with pytest.raises(RemoteMemoryStoreError) as error:
+        store.search("hello")
+
+    text = str(error.value)
+    assert "unreachable" in text
+    assert "not a credential rejection" in text
+    assert "timed out" in text
+
+
+def test_connection_failure_reports_an_unreachable_upstream_not_a_credential() -> (
+    None
+):
+    store = RecordingStore(requests.exceptions.ConnectionError("refused"))
+
+    with pytest.raises(RemoteMemoryStoreError) as error:
+        store.list_all()
+
+    text = str(error.value)
+    assert "unreachable" in text
+    assert "not a credential rejection" in text
+    assert "refused" in text
+
+
+def test_non_401_failure_carries_status_code_and_upstream_message() -> None:
+    store = RecordingStore(
+        _response(500, {"error": {"code": "internal", "message": "boom"}})
+    )
+
+    with pytest.raises(RemoteMemoryStoreError) as error:
+        store.search("hello")
+
+    text = str(error.value)
+    assert "HTTP 500" in text
+    assert "code=internal" in text
+    assert "boom" in text
+    assert error.value.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# 缺陷二: the upstream health signal every answered/failed call records, and
+# the ready/degraded/unavailable derivation store-info publishes from it.
+# ---------------------------------------------------------------------------
+
+
+def _health(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "last_success_at": None,
+        "last_success_status": None,
+        "last_failure_at": None,
+        "last_failure_reason": None,
+        "last_event_at": None,
+        "last_event_kind": None,
+        "last_status": None,
+        "last_path": None,
+        "last_error_code": None,
+        "last_error_message": None,
+        "consecutive_transport_failures": 0,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_answered_calls_record_the_upstream_health_signal() -> None:
+    store = RecordingStore(_response(200, []))
+
+    store.list_all()
+
+    health = remote_module.remote_upstream_health()
+    assert health["last_event_kind"] == "answer"
+    assert health["last_status"] == 200
+    assert health["last_success_at"] is not None
+    assert health["consecutive_transport_failures"] == 0
+
+
+def test_transport_failures_record_the_upstream_health_signal() -> None:
+    store = RecordingStore(requests.exceptions.ConnectionError("refused"))
+
+    with pytest.raises(RemoteMemoryStoreError):
+        store.list_all()
+
+    health = remote_module.remote_upstream_health()
+    assert health["last_event_kind"] == "transport_error"
+    assert health["consecutive_transport_failures"] == 1
+    assert "连接失败" in health["last_failure_reason"]
+
+
+def test_upstream_report_is_ready_after_an_answered_call() -> None:
+    health = _health(
+        last_event_at=1761710000.0,
+        last_event_kind="answer",
+        last_status=200,
+        last_path="/v1/memory/list",
+        last_success_at=1761710000.0,
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(remote_module, "_upstream_health", health)
+        state, detail = remote_module.remote_upstream_report()
+
+    assert state == "ready"
+    assert "HTTP 200" in detail
+    assert "/v1/memory/list" in detail
+
+
+def test_upstream_report_degrades_on_a_5xx_answer() -> None:
+    health = _health(
+        last_event_at=1761710000.0,
+        last_event_kind="answer",
+        last_status=503,
+        last_path="/v1/memory/list",
+        last_error_code="resource_exhausted",
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(remote_module, "_upstream_health", health)
+        state, detail = remote_module.remote_upstream_report()
+
+    assert state == "degraded"
+    assert "HTTP 503" in detail
+    assert "code=resource_exhausted" in detail
+
+
+def test_upstream_report_degrades_on_a_transport_failure_after_success() -> None:
+    health = _health(
+        last_event_at=1761710000.0,
+        last_event_kind="transport_error",
+        last_failure_at=1761710000.0,
+        last_failure_reason="读超时 2.0s",
+        last_path="/v1/memory/search",
+        last_success_at=1761709000.0,
+        consecutive_transport_failures=2,
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(remote_module, "_upstream_health", health)
+        state, detail = remote_module.remote_upstream_report()
+
+    assert state == "degraded"
+    assert "不可达" in detail
+    assert "/v1/memory/search" in detail
+
+
+def test_upstream_report_is_unavailable_without_any_successful_call() -> None:
+    health = _health(
+        last_event_at=1761710000.0,
+        last_event_kind="transport_error",
+        last_failure_at=1761710000.0,
+        last_failure_reason="连接失败（ConnectionError）",
+        last_path="/v1/memory/list",
+        consecutive_transport_failures=1,
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(remote_module, "_upstream_health", health)
+        state, detail = remote_module.remote_upstream_report()
+
+    assert state == "unavailable"
+    assert "不可达" in detail
+
+
+def test_upstream_report_falls_back_to_the_cached_readiness_probe() -> None:
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(remote_module, "_upstream_health", _health())
+        patch.setattr(
+            remote_module, "remote_memory_ready", lambda **_kwargs: (True, None)
+        )
+        state, detail = remote_module.remote_upstream_report()
+    assert state == "ready"
+    assert "/readyz" in detail
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(remote_module, "_upstream_health", _health())
+        patch.setattr(
+            remote_module,
+            "remote_memory_ready",
+            lambda **_kwargs: (False, READINESS_UNAVAILABLE_REASON),
+        )
+        state, detail = remote_module.remote_upstream_report()
+    assert state == "unavailable"
+    assert READINESS_UNAVAILABLE_REASON in detail
 
 
 def test_non_json_success_payload_raises() -> None:
