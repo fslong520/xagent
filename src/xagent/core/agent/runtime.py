@@ -452,13 +452,17 @@ class PatternRuntime:
             return False
         if "Traditional Chinese" in self.budget_warning_language:
             message = (
-                f"本次執行已使用 {budget.used_tokens} / {budget.policy.max_tokens} tokens，"
-                "接近設定上限。達到上限後將停止新增呼叫，並保留已有結果。"
+                f"This run has used {budget.used_tokens} / "
+                f"{budget.policy.max_tokens} tokens and is approaching the "
+                "configured limit. At the limit, new calls stop and existing "
+                "results are kept."
             )
         elif "Chinese" in self.budget_warning_language:
             message = (
-                f"本次执行已使用 {budget.used_tokens} / {budget.policy.max_tokens} tokens，"
-                "接近设置上限。达到上限后将停止新增调用，并保留已有结果。"
+                f"This run has used {budget.used_tokens} / "
+                f"{budget.policy.max_tokens} tokens and is approaching the "
+                "configured limit. At the limit, new calls stop and existing "
+                "results are kept."
             )
         else:
             message = (

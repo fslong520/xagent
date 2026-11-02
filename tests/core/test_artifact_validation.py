@@ -189,7 +189,7 @@ def test_read_only_xlsx_checks_cells_beyond_stale_dimensions():
         b"one column",
         b"a;b\n1;2",
         b"a,b\n1,2,3",
-        "名字,值\n甲,1".encode("utf-16"),
+        "\u540d\u5b57,\u503c\n\u7532,1".encode("utf-16"),
     ],
 )
 def test_csv_does_not_impose_business_schema(data):

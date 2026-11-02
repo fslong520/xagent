@@ -93,8 +93,8 @@ SCOPE = 'kb_id in ["kb-1", "kb-2"] and visible == true'
             {"p0": "%kiwi%"},
         ),
         (
-            {"metadata.页码": 1},
-            '(metadata["页码"] == {p0})',
+            {"metadata.\u9875\u7801": 1},
+            '(metadata["\u9875\u7801"] == {p0})',
             {"p0": 1},
         ),
     ],
@@ -196,7 +196,7 @@ def test_keyword_score_squashes_bm25_like_the_lancedb_fts_score() -> None:
     ("term", "pattern"),
     [
         ("kiwi", "%kiwi%"),
-        ("向量 检索", "%向量 检索%"),
+        ("\u5411\u91cf \u68c0\u7d22", "%\u5411\u91cf \u68c0\u7d22%"),
         ("50%", "%50_%"),
         ("%50", "%_50%"),
         ("%", "%_%"),

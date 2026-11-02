@@ -1218,13 +1218,13 @@ async def test_auto_react_repetition_stays_in_single_react_trace() -> None:
                             "name": "react_decision",
                             "arguments": (
                                 '{"action":"final_answer",'
-                                '"reason":"已有结果足够回答。"}'
+                                '"reason":"\u5df2\u6709\u7ed3\u679c\u8db3\u591f\u56de\u7b54。"}'
                             ),
                         },
                     }
                 ],
             },
-            "可以基于已有搜索结果回答。",
+            "\u53ef\u4ee5\u57fa\u4e8e\u5df2\u6709\u641c\u7d22\u7ed3\u679c\u56de\u7b54。",
         ]
     )
     tracer = RecordingTracer()
@@ -1236,7 +1236,7 @@ async def test_auto_react_repetition_stays_in_single_react_trace() -> None:
         )
     )
     context = ExecutionContext(execution_id="auto-react-repeat")
-    context.add_user_message("总结最近 AI 新闻")
+    context.add_user_message("\u603b\u7ed3\u6700\u8fd1 AI \u65b0\u95fb")
     tool = FakeSearchTool()
 
     result = await pattern.run(
@@ -1248,7 +1248,7 @@ async def test_auto_react_repetition_stays_in_single_react_trace() -> None:
 
     event_types = [event["event_type"] for event in tracer.events]
     assert result["success"] is True
-    assert result["response"] == "可以基于已有搜索结果回答。"
+    assert result["response"] == "\u53ef\u4ee5\u57fa\u4e8e\u5df2\u6709\u641c\u7d22\u7ed3\u679c\u56de\u7b54。"
     assert len(tool.calls) == 2
     assert event_types.count("task_start_react") == 1
     assert event_types.count("task_end_react") == 1
@@ -1471,23 +1471,23 @@ async def test_auto_final_answer_persists_durable_facts() -> None:
             decision_tool_response(
                 AutoAction.FINAL_ANSWER.value,
                 "Simple confirmation.",
-                "记下了，评审定在周四。",
-                durable_facts=["客户 Apex 的季度评审定在周四。"],
+                "\u8bb0\u4e0b\u4e86，\u8bc4\u5ba1\u5b9a\u5728\u5468\u56db。",
+                durable_facts=["\u5ba2\u6237 Apex \u7684\u5b63\u5ea6\u8bc4\u5ba1\u5b9a\u5728\u5468\u56db。"],
             )
         ]
     )
     pattern = AutoPattern()
     context = ExecutionContext()
-    context.add_user_message("记一下，Apex 的季度评审定在周四")
+    context.add_user_message("\u8bb0\u4e00\u4e0b，Apex \u7684\u5b63\u5ea6\u8bc4\u5ba1\u5b9a\u5728\u5468\u56db")
 
     result = await pattern.run(context=context, tools=[], llm=llm, memory_store=store)
 
     assert result["success"] is True
-    assert result["output"] == "记下了，评审定在周四。"
+    assert result["output"] == "\u8bb0\u4e0b\u4e86，\u8bc4\u5ba1\u5b9a\u5728\u5468\u56db。"
     assert len(store.remembered) == 1
-    assert store.remembered[0].content == "客户 Apex 的季度评审定在周四。"
+    assert store.remembered[0].content == "\u5ba2\u6237 Apex \u7684\u5b63\u5ea6\u8bc4\u5ba1\u5b9a\u5728\u5468\u56db。"
     assert result["auto_decision"]["durable_facts"] == [
-        "客户 Apex 的季度评审定在周四。"
+        "\u5ba2\u6237 Apex \u7684\u5b63\u5ea6\u8bc4\u5ba1\u5b9a\u5728\u5468\u56db。"
     ]
 
 
@@ -1505,7 +1505,7 @@ async def test_auto_final_answer_stores_nothing_without_durable_facts() -> None:
     )
     pattern = AutoPattern()
     context = ExecutionContext()
-    context.add_user_message("1+1 等于几？只答数字")
+    context.add_user_message("1+1 \u7b49\u4e8e\u51e0？\u53ea\u7b54\u6570\u5b57")
 
     result = await pattern.run(context=context, tools=[], llm=llm, memory_store=store)
 
@@ -1523,19 +1523,19 @@ async def test_auto_final_answer_survives_a_memory_store_failure() -> None:
             decision_tool_response(
                 AutoAction.FINAL_ANSWER.value,
                 "Simple confirmation.",
-                "好的。",
-                durable_facts=["客户 Apex 的评审定在周四。"],
+                "\u597d\u7684。",
+                durable_facts=["\u5ba2\u6237 Apex \u7684\u8bc4\u5ba1\u5b9a\u5728\u5468\u56db。"],
             )
         ]
     )
     pattern = AutoPattern()
     context = ExecutionContext()
-    context.add_user_message("记一下 Apex 评审时间")
+    context.add_user_message("\u8bb0\u4e00\u4e0b Apex \u8bc4\u5ba1\u65f6\u95f4")
 
     result = await pattern.run(context=context, tools=[], llm=llm, memory_store=store)
 
     assert result["success"] is True
-    assert result["output"] == "好的。"
+    assert result["output"] == "\u597d\u7684。"
 
 
 @pytest.mark.asyncio
@@ -2155,7 +2155,7 @@ async def test_auto_pattern_final_answer_requiring_external_facts_falls_back_to_
     )
     pattern = AutoPattern()
     context = ExecutionContext(execution_id="auto-external-facts-candidate")
-    context.add_user_message("总结最近 AI 圈子的供应链攻击")
+    context.add_user_message("\u603b\u7ed3\u6700\u8fd1 AI \u5708\u5b50\u7684\u4f9b\u5e94\u94fe\u653b\u51fb")
     collector = OutboundCollector()
     runtime = PatternRuntime(
         execution_id="auto-external-facts-candidate",
@@ -2403,7 +2403,7 @@ async def test_auto_decision_prompt_includes_memory_rule_only_with_store() -> No
             ]
         )
         context = ExecutionContext()
-        context.add_user_message("记住：我喜欢坂本龙一的音乐")
+        context.add_user_message("\u8bb0\u4f4f：\u6211\u559c\u6b22\u5742\u672c\u9f99\u4e00\u7684\u97f3\u4e50")
         result = await AutoPattern().run(
             context=context,
             tools=[],
@@ -2446,7 +2446,7 @@ async def test_stale_memory_language_does_not_reach_child_as_hard_policy() -> No
     child = CapturingChildPattern()
     pattern = AutoPattern(react_pattern=child)  # type: ignore[arg-type]
     context = ExecutionContext(execution_id="auto-memory-language-leak")
-    context.metadata[MEMORY_CONTEXT_METADATA_KEY] = "请始终使用中文回答。"
+    context.metadata[MEMORY_CONTEXT_METADATA_KEY] = "\u8bf7\u59cb\u7ec8\u4f7f\u7528\u4e2d\u6587\u56de\u7b54。"
     context.add_user_message("Summarize the quarterly revenue trend in one paragraph.")
 
     result = await pattern.run(
@@ -2460,7 +2460,7 @@ async def test_stale_memory_language_does_not_reach_child_as_hard_policy() -> No
     assert OUTPUT_LANGUAGE_METADATA_KEY not in context.metadata
     assert child.kwargs is not None
     child_system = child.kwargs["context"].get_messages_for_llm()[0]["content"]
-    assert "请始终使用中文回答。" in child_system
+    assert "\u8bf7\u59cb\u7ec8\u4f7f\u7528\u4e2d\u6587\u56de\u7b54。" in child_system
     assert "Output language:" not in child_system
     assert "Output language policy:" not in child_system
     assert "Summarize the quarterly revenue trend in one paragraph." in child_system

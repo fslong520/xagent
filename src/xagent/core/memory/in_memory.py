@@ -4,7 +4,7 @@ import uuid
 from typing import Any, List, Optional
 
 from .base import MemoryStore
-from .core import MemoryNote, MemoryResponse
+from .core import MemoryNote, MemoryResponse, note_in_space
 
 
 class InMemoryMemoryStore(MemoryStore):
@@ -66,7 +66,12 @@ class InMemoryMemoryStore(MemoryStore):
     def clear(self) -> None:
         self._store.clear()
 
-    def list_all(self, filters: Optional[dict[str, Any]] = None) -> List[MemoryNote]:
+    def list_all(
+        self,
+        filters: Optional[dict[str, Any]] = None,
+        *,
+        space: Optional[str] = None,
+    ) -> List[MemoryNote]:
         if filters:
             other_filters = self._flat_other_filters(filters)
             results = [
@@ -76,6 +81,10 @@ class InMemoryMemoryStore(MemoryStore):
             ]
         else:
             results = list(self._store.values())
+
+        if space:
+            # XN-1: the space view selects on the note's provenance field.
+            results = [note for note in results if note_in_space(note, space)]
 
         # Sort by timestamp (newest first)
         results.sort(key=lambda x: x.timestamp, reverse=True)

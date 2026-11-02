@@ -2366,12 +2366,10 @@ describe("resolves every connectorRuntime key the dialog uses", () => {
     )
     expect(Array.from(usedKeys).sort()).toEqual(Array.from(definedKeys).sort())
 
-    for (const locale of ["en", "zh"] as const) {
-      for (const key of usedKeys) {
-        expect(resolveTranslation(locale, key as never)).not.toBe(key)
-      }
+    for (const key of usedKeys) {
+      expect(resolveTranslation("en", key as never)).not.toBe(key)
     }
-    expect(translations.zh.connectorRuntime.keyNameWarning).toContain("在改名之前这个连接器每次都会失败")
+    expect(translations.en.connectorRuntime.keyNameWarning).toContain("Until it is renamed, this connector will fail every time")
   })
 })
 

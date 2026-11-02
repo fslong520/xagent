@@ -829,7 +829,7 @@ def test_kb_ingest_accepts_unicode_collection_name(test_env, temp_uploads):
     app, headers, user, _ = test_env
     client = TestClient(app)
 
-    collection_name = "示例知识库集合"
+    collection_name = "\u793a\u4f8b\u77e5\u8bc6\u5e93\u96c6\u5408"
     filename = "test_doc.txt"
 
     with patch("xagent.web.api.kb.run_document_ingestion") as mock_ingest:
@@ -1134,7 +1134,7 @@ def test_kb_delete_accepts_unicode_collection_name(test_env, temp_uploads):
     app, headers, user, _ = test_env
     client = TestClient(app)
 
-    collection_name = "示例知识库集合"
+    collection_name = "\u793a\u4f8b\u77e5\u8bc6\u5e93\u96c6\u5408"
     coll_dir = temp_uploads / f"user_{user.id}" / collection_name
     coll_dir.mkdir(parents=True, exist_ok=True)
     (coll_dir / "some_file.txt").write_text("data")
@@ -1224,7 +1224,7 @@ def test_kb_ingest_rejects_utf8_byte_overflow_collection_name(test_env, temp_upl
     app, headers, user, _ = test_env
     client = TestClient(app)
 
-    collection_name = "知" * 86
+    collection_name = "\u77e5" * 86
     filename = "test_doc.txt"
 
     with patch("xagent.web.api.kb.run_document_ingestion"):
@@ -1905,8 +1905,8 @@ def test_kb_rename_accepts_unicode_collection_name(test_env, temp_uploads):
     app, headers, user, _ = test_env
     client = TestClient(app)
 
-    old_collection_name = "示例知识库集合"
-    new_collection_name = "知识库归档"
+    old_collection_name = "\u793a\u4f8b\u77e5\u8bc6\u5e93\u96c6\u5408"
+    new_collection_name = "\u77e5\u8bc6\u5e93\u5f52\u6863"
 
     old_coll_dir = temp_uploads / f"user_{user.id}" / old_collection_name
     old_coll_dir.mkdir(parents=True, exist_ok=True)
@@ -2345,7 +2345,8 @@ def test_delete_after_rename_not_blocked_when_new_collection_is_visible(test_env
 
     assert rename_resp.status_code == 200, rename_resp.text
 
-    # 对照：可见性切换为新集合后，不应再是 access-check 的 403
+    # Control case: after switching visibility to the new collection this must
+    # no longer be an access-check 403
     with patch("xagent.web.api.kb.list_collections", return_value=visible_new):
         delete_resp = client.delete(
             f"/api/kb/collections/{new_collection_name}/documents/demo.txt?file_id=fake-file-id",
@@ -4006,7 +4007,7 @@ def test_kb_ingest_cloud_download_failure_restores_existing_file(
 
 @pytest.mark.parametrize(
     "original_filename",
-    ["a" * 255 + ".pptx", "資料" * 100 + ".pptx"],
+    ["a" * 255 + ".pptx", "\u8cc7\u6599" * 100 + ".pptx"],
 )
 def test_build_cloud_storage_filename_respects_utf8_filesystem_limit(
     original_filename,
@@ -4028,7 +4029,7 @@ def test_build_cloud_storage_filename_is_deterministic_after_truncation() -> Non
     """Truncating a stem must not discard the file-ID collision guard."""
     from xagent.web.api.kb import _build_cloud_storage_filename
 
-    original_filename = "資料" * 100 + ".pptx"
+    original_filename = "\u8cc7\u6599" * 100 + ".pptx"
 
     first = _build_cloud_storage_filename(original_filename, "drive-file-1")
     assert first == _build_cloud_storage_filename(original_filename, "drive-file-1")
@@ -4640,7 +4641,7 @@ def test_check_documents_exist_accepts_unicode_collection_name(test_env, temp_up
     app, headers, user, _ = test_env
     client = TestClient(app)
 
-    collection_name = "示例知识库集合"
+    collection_name = "\u793a\u4f8b\u77e5\u8bc6\u5e93\u96c6\u5408"
 
     with (
         patch(
@@ -5030,7 +5031,7 @@ def test_delete_document_accepts_unicode_collection_name(test_env, temp_uploads)
     app, headers, user, _ = test_env
     client = TestClient(app)
 
-    collection_name = "示例知识库集合"
+    collection_name = "\u793a\u4f8b\u77e5\u8bc6\u5e93\u96c6\u5408"
     file_path = temp_uploads / f"user_{user.id}" / collection_name / "demo.txt"
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text("content")
@@ -5908,7 +5909,7 @@ def test_get_parse_result_accepts_unicode_collection_name(test_env, temp_uploads
     app, headers, user, _ = test_env
     client = TestClient(app)
 
-    collection_name = "示例知识库集合"
+    collection_name = "\u793a\u4f8b\u77e5\u8bc6\u5e93\u96c6\u5408"
     elements = [{"type": "text", "text": "hello", "metadata": {}}]
     pagination = {"page": 1, "page_size": 20, "total_count": 1, "total_pages": 1}
 

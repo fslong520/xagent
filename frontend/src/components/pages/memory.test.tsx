@@ -33,6 +33,11 @@ vi.mock("@/contexts/i18n-context", () => {
     "memory.scope.org": "Organization scope",
     "memory.scope.personal": "My memories",
     "memory.item.owner": "user #{id}",
+    "memory.sidebar.sharedSpaces": "Shared Spaces",
+    "memory.sidebar.space.company": "Company",
+    "memory.sidebar.space.department": "Department",
+    "memory.item.shared.company": "Shared · Company",
+    "memory.item.shared.department": "Shared · Department",
   }
   const dynamicLabels: Record<string, string> = {
     "memory.storeInfo.states.ready": "Memory store ready",
@@ -61,7 +66,7 @@ import { MemoryPage } from "./memory"
 const storeInfoReady = {
   store_type: "RemoteMemoryStore",
   state: "ready",
-  detail: "上游最近一次调用成功（HTTP 200）：/v1/memory/stats，15:54:46",
+  detail: "Upstream last call succeeded (HTTP 200): /v1/memory/stats, 15:54:46",
   mode: "vector",
   supports_vector_search: true,
   similarity_threshold: 0.4,
@@ -228,7 +233,7 @@ describe("MemoryPage", () => {
       storeInfo: {
         ...storeInfoReady,
         state: "degraded",
-        detail: "上游最近一次调用失败（HTTP 500），16:01:02",
+        detail: "Upstream last call failed (HTTP 500), 16:01:02",
       },
     })
     render(<MemoryPage />)
@@ -305,5 +310,50 @@ describe("MemoryPage", () => {
     await waitFor(() => expect(screen.getByText("probe marker")).toBeTruthy())
     expect(screen.queryByText("Organization scope")).toBeNull()
     expect(screen.queryByText("user #2")).toBeNull()
+  })
+
+  const sharedMemories = {
+    ...memoriesPayload,
+    memories: [
+      { ...memoriesPayload.memories[0], space_kind: "company", space_id: 1 },
+      { ...memoriesPayload.memories[1], space_kind: null, space_id: null },
+    ],
+  }
+
+  it("requests the selected shared space from the list API and badges shared items", async () => {
+    mockBackend({ memories: sharedMemories })
+    render(<MemoryPage />)
+
+    await waitFor(() => expect(screen.getByText("probe marker")).toBeTruthy())
+    expect(screen.getByText("Shared Spaces")).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "Company" }))
+    await waitFor(
+      () => expect(listUrls().some(url => url.includes("space=company"))).toBe(true),
+      { timeout: 4000 },
+    )
+
+    // A shared item carries the marker; space_kind null stays a personal row.
+    expect(screen.getByText("Shared · Company")).toBeTruthy()
+    expect(screen.getAllByText(/Shared ·/)).toHaveLength(1)
+
+    // Clicking the active entry returns to the personal list.
+    fireEvent.click(screen.getByRole("button", { name: "Company" }))
+    await waitFor(() => {
+      const latest = listUrls().at(-1)!
+      expect(latest).not.toContain("space=")
+    }, { timeout: 4000 })
+  })
+
+  it("sends no space parameter and shows no shared badge when the upstream omits space fields", async () => {
+    // Older upstream builds do not return space_kind/space_id at all; the page
+    // must render every row as personal instead of breaking or mislabelling.
+    mockBackend()
+    render(<MemoryPage />)
+
+    await waitFor(() => expect(screen.getByText("probe marker")).toBeTruthy())
+
+    expect(listUrls().every(url => !url.includes("space="))).toBe(true)
+    expect(screen.queryByText(/Shared ·/)).toBeNull()
   })
 })

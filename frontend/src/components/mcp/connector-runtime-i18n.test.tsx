@@ -68,14 +68,11 @@ function CustomApiHarness() {
 }
 
 describe("connector runtime translations", () => {
-  it.each([
-    ["en", "Runtime Inputs", "Bindings"],
-    ["zh", "运行时入参", "绑定"],
-  ] as const)("renders %s MCP labels through the real provider", (locale, title, bindings) => {
-    const { container } = render(<RuntimeFormHarness locale={locale} />)
+  it("renders MCP labels through the real provider", () => {
+    const { container } = render(<RuntimeFormHarness locale="en" />)
 
-    expect(screen.getByText(title)).toBeInTheDocument()
-    expect(screen.getByText(bindings)).toBeInTheDocument()
+    expect(screen.getByText("Runtime Inputs")).toBeInTheDocument()
+    expect(screen.getByText("Bindings")).toBeInTheDocument()
     expect(container.textContent).not.toContain("tools.mcp.runtime.")
   })
 

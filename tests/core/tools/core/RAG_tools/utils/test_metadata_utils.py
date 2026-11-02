@@ -59,13 +59,13 @@ class TestSerializeMetadata:
 
     def test_serialize_unicode_characters(self):
         """Test serializing metadata with Unicode characters."""
-        metadata = {"title": "文档标题", "section": "章节一"}
+        metadata = {"title": "\u6587\u6863\u6807\u9898", "section": "\u7ae0\u8282\u4e00"}
         result = serialize_metadata(metadata)
 
         assert result is not None
         # Should preserve Unicode characters (ensure_ascii=False)
-        assert "文档标题" in result
-        assert "章节一" in result
+        assert "\u6587\u6863\u6807\u9898" in result
+        assert "\u7ae0\u8282\u4e00" in result
         parsed = json.loads(result)
         assert parsed == metadata
 
@@ -136,10 +136,10 @@ class TestDeserializeMetadata:
 
     def test_deserialize_unicode_characters(self):
         """Test deserializing JSON with Unicode characters."""
-        metadata_json = '{"title": "文档标题", "section": "章节一"}'
+        metadata_json = '{"title": "\u6587\u6863\u6807\u9898", "section": "\u7ae0\u8282\u4e00"}'
         result = deserialize_metadata(metadata_json)
 
-        assert result == {"title": "文档标题", "section": "章节一"}
+        assert result == {"title": "\u6587\u6863\u6807\u9898", "section": "\u7ae0\u8282\u4e00"}
 
     def test_deserialize_invalid_json_returns_none(self):
         """Test that deserializing invalid JSON returns None without raising."""
@@ -203,9 +203,9 @@ class TestMetadataUtilsRoundTrip:
     def test_round_trip_unicode(self):
         """Test round-trip with Unicode characters."""
         original = {
-            "title": "文档标题",
-            "content": "这是内容",
-            "mixed": "Mixed: 文档 with English",
+            "title": "\u6587\u6863\u6807\u9898",
+            "content": "\u8fd9\u662f\u5185\u5bb9",
+            "mixed": "Mixed: \u6587\u6863 with English",
         }
 
         serialized = serialize_metadata(original)

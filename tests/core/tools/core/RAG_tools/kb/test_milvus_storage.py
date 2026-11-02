@@ -221,7 +221,7 @@ def test_model_ids_that_tag_alike_get_collections_of_their_own(client: Any) -> N
 
 
 @pytest.mark.parametrize(
-    "model", ["智谱/GLM 4.5-embedding", "vendor/" + "long-model-name-" * 30]
+    "model", ["\u667a\u8c31/GLM 4.5-embedding", "vendor/" + "long-model-name-" * 30]
 )
 def test_any_model_id_names_a_collection_milvus_accepts(
     client: Any, model: str

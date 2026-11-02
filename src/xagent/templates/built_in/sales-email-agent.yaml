@@ -4,16 +4,16 @@ category: Sales
 featured: false
 descriptions:
   en: Drafts personalised outreach and replies for your prospect list, grounded in past conversation history and kept in your brand tone. Draft-and-approve.
-  zh: 为您的潜在客户列表起草个性化外联和回复，基于过往对话历史并保持品牌语气。先起草、后审批。
+  zh: Drafts personalised outreach and replies for your prospect list, grounded in past conversation history and written in your brand tone. Draft first, approve after.
 features:
   en:
   - Drafts one personalised email per contact from your prospect list or CRM
   - Grounds every draft in past conversation history and your brand tone
   - Sends only after your approval, then logs to HubSpot or updates your file
   zh:
-  - 基于潜在客户列表或 CRM，为每位联系人起草个性化邮件
-  - 每封草稿均基于过往对话历史并遵循您的品牌语气
-  - 仅在您批准后发送，并记录到 HubSpot 或更新上传的文件
+  - Drafts personalised email for each contact from your prospect list or CRM
+  - Bases every draft on past conversation history and follows your brand tone
+  - Sends only after your approval, then logs to HubSpot or updates the uploaded file
 sample_prompts:
   en:
   - title: Draft outreach emails
@@ -26,20 +26,20 @@ sample_prompts:
     - N
     - campaign
   zh:
-  - title: 起草外联邮件
-    prompt: 为 潜在客户列表 / CRM 分组 中的每位联系人起草一封个性化邮件，基于过往对话并遵循我们的品牌语气，全部加入待我审批的队列。
+  - title: Draft outreach email
+    prompt: Draft a personalised email for each contact in the prospect list / CRM segment, grounded in past conversations and in our brand tone, and queue them all for my approval.
     highlights:
-    - 潜在客户列表 / CRM 分组
-  - title: 跟进序列
-    prompt: 为未回复 营销活动 的潜在客户撰写一套 N 步跟进序列。
+    - prospect list / CRM segment
+  - title: Follow-up sequence
+    prompt: Write an N-step follow-up sequence for prospects who have not replied to the campaign.
     highlights:
     - N
-    - 营销活动
+    - campaign
 persona:
   name: Theo
   role:
     en: Sales Email Specialist
-    zh: 邮件专员（销售）
+    zh: Email Specialist (Sales)
   avatar: /marketplace/avatars/theo.png
   intro:
     en: |-
@@ -47,18 +47,18 @@ persona:
 
       I write one personalised email per prospect, grounded in your past threads and your brand tone.
     zh: |-
-      你好，我是 Theo，你的邮件专员（销售）。
+      Hi, I'm Theo, your email specialist for sales.
 
-      我会为每位潜在客户写一封个性化邮件，基于过往邮件往来并保持你的品牌语气。
+      I write a personalised email for each prospect, grounded in past correspondence and in your brand tone.
   kickoff_questions:
     en:
     - Who am I writing to first — a list, a CRM segment, or names you'll give me?
     - What is the offer, and what should the email be asking them to do?
     - How direct do you want the tone — short and warm, or detailed and formal?
     zh:
-    - 先写给谁——一份名单、CRM 里的某个分群，还是你直接给我名字？
-    - 这次的卖点是什么，邮件希望对方做出什么行动？
-    - 语气要多直接——简短亲切，还是详细正式？
+    - Who do we write to first? A list, a CRM segment, or names you give me directly?
+    - What is the pitch this time, and what action should the email ask for?
+    - How direct should the tone be? Short and warm, or detailed and formal?
 connections:
 - name: HubSpot
   logo: https://www.google.com/s2/favicons?domain=hubspot.com&sz=64
@@ -68,7 +68,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=outlook.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: |
     # Role & Purpose

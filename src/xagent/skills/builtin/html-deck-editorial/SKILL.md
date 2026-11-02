@@ -2,8 +2,8 @@
 name: html-deck-editorial
 description: |
   One self-contained HTML slide deck with magazine-grade editorial styling:
-  "html deck", "editorial slides", "美观 PPT", "网页版幻灯片". Not for posters,
-  ad creatives, or standalone images.
+  "html deck", "editorial slides", "beautiful slides", "web deck". Not for
+  posters, ad creatives, or standalone images.
 when_to_use: |
   A slide-style HTML deliverable where editorial polish outweighs Office
   compatibility. Use pptx-editorial for native .pptx, static-visual-design for
@@ -35,11 +35,11 @@ available image-generation tool directly.
 
 ## ⚠️ Hard rules — NO exceptions
 
-0. **MATCH THE USER'S LANGUAGE.** If the prompt is Chinese (中文), ALL slide
-   content (kickers, titles, body, captions) must be in Chinese. NEVER copy
-   English template phrases like `RESEARCH BRIEF` / `THE NEXT PARADIGM` into
-   a Chinese deck — translate them (`研究简报` / `下一个范式`). Same applies
-   to other languages.
+0. **MATCH THE USER'S LANGUAGE.** If the user prompts in a non-English
+   language, ALL slide content (kickers, titles, body, captions) must be in
+   that language. NEVER copy English template phrases like `RESEARCH BRIEF` /
+   `THE NEXT PARADIGM` into a non-English deck — translate them into the
+   user's language instead.
 
 1. **One file only.** All custom CSS + JS inline. No external `<script src=>`,
    no images you don't generate inline (use CSS color blocks or SVG).

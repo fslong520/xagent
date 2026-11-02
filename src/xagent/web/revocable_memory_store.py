@@ -106,7 +106,16 @@ class RevocableMemoryStore(MemoryStore):
     def clear(self) -> None:
         self._live().clear()
 
-    def list_all(self, filters: Optional[dict[str, Any]] = None) -> List[MemoryNote]:
+    def list_all(
+        self,
+        filters: Optional[dict[str, Any]] = None,
+        *,
+        space: Optional[str] = None,
+    ) -> List[MemoryNote]:
+        # Forwarded only when set: a delegate written before XN-1 has no such
+        # keyword, and an unset view must not change any call it receives.
+        if space:
+            return self._live().list_all(filters, space=space)
         return self._live().list_all(filters)
 
     def get_stats(self) -> dict[str, Any]:

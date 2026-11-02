@@ -1,6 +1,6 @@
 const COMPACTABLE_CHANNEL_TERMS: Record<string, string[]> = {
   telegram: ["telegram"],
-  feishu: ["feishu", "lark", "飞书"],
+  feishu: ["feishu", "lark", "\u98de\u4e66"],
   slack: ["slack"],
 }
 

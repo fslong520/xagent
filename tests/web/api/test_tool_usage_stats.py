@@ -38,7 +38,7 @@ async def test_usage_aggregates_completed_events_across_tasks(engine, task_id):
             (
                 task_id,
                 "tool_execution_end",
-                {"tool_name": "计算器🔎", "success": False},
+                {"tool_name": "\u8ba1\u7b97\u5668🔎", "success": False},
             ),
             (task_id, "tool_execution_end", {}),
             (task_id, "tool_execution_end", {"tool_name": ""}),
@@ -58,7 +58,7 @@ async def test_usage_aggregates_completed_events_across_tasks(engine, task_id):
         db.add(ToolUsage(tool_name="search", usage_count=999))
         db.commit()
         counts = {row.tool_name: row.usage_count for row in _tool_usage_query(db).all()}
-        assert counts == {"search": 3, "计算器🔎": 1}
+        assert counts == {"search": 3, "\u8ba1\u7b97\u5668🔎": 1}
         response = {row["tool_name"]: row for row in await get_tool_usage(db)}
         assert {name: row["usage_count"] for name, row in response.items()} == counts
         assert response["search"]["success_count"] == 2
@@ -68,8 +68,8 @@ async def test_usage_aggregates_completed_events_across_tasks(engine, task_id):
         if last_used.tzinfo is None:  # SQLite stores UTC without an offset.
             last_used = last_used.replace(tzinfo=timezone.utc)
         assert last_used == start + timedelta(seconds=3)
-        assert response["计算器🔎"]["success_count"] == 0
-        assert response["计算器🔎"]["error_count"] == 1
+        assert response["\u8ba1\u7b97\u5668🔎"]["success_count"] == 0
+        assert response["\u8ba1\u7b97\u5668🔎"]["error_count"] == 1
 
 
 def test_tool_trace_persists_without_accessing_shared_counters(engine, task_id):

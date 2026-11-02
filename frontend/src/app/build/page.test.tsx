@@ -13,7 +13,7 @@ const dispatchMock = vi.hoisted(() => vi.fn())
 const setTaskIdMock = vi.hoisted(() => vi.fn())
 const setPendingMessageMock = vi.hoisted(() => vi.fn())
 const resolveAgentLogoUrlMock = vi.hoisted(() => vi.fn())
-const localeMock = vi.hoisted(() => ({ value: "en" as "en" | "zh" }))
+const localeMock = vi.hoisted(() => ({ value: "en" as "en" }))
 
 vi.mock("@/lib/api-wrapper", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api-wrapper")>(
@@ -385,55 +385,6 @@ describe("BuildsPage rendering", () => {
     const customCard = screen.getByText("Custom Agent").closest("[class*='cursor-pointer']")
     expect(customCard).not.toHaveTextContent("Research Specialist")
     expect(customCard).not.toHaveTextContent("Operations Research")
-  })
-
-  it("clears stale template enrichment (rather than keeping the previous locale's) after a failed refetch", async () => {
-    let templatesCall = 0
-    apiRequestMock.mockImplementation((url: string) => {
-      if (url.startsWith("http://api.local/api/agents")) {
-        return Promise.resolve(jsonResponse([
-          { ...agent, id: 1, name: "Hired Agent", template_id: "sample-template" },
-        ]))
-      }
-      if (url.startsWith("http://api.local/api/templates/")) {
-        templatesCall += 1
-        if (templatesCall === 1) {
-          return Promise.resolve(jsonResponse([
-            {
-              id: "sample-template",
-              name: "Sample Template",
-              category: "operations_research",
-              description: "",
-              features: [],
-              connections: [],
-              setup_time: "",
-              tags: [],
-              author: "",
-              version: "1.0",
-              views: 0,
-              likes: 0,
-              used_count: 0,
-              persona: { name: "Hired Agent", role: "Research Specialist", avatar: null, intro: "", kickoff_questions: [] },
-            },
-          ]))
-        }
-        return Promise.resolve(new Response(null, { status: 500 }))
-      }
-      return Promise.resolve(jsonResponse([]))
-    })
-
-    const view = render(<BuildsPage />)
-    await waitFor(() => {
-      expect(screen.getByText("Research Specialist")).toBeInTheDocument()
-    })
-
-    localeMock.value = "zh"
-    view.rerender(<BuildsPage />)
-
-    await waitFor(() => {
-      expect(screen.queryByText("Research Specialist")).not.toBeInTheDocument()
-    })
-    expect(screen.queryByText("Operations Research")).not.toBeInTheDocument()
   })
 })
 

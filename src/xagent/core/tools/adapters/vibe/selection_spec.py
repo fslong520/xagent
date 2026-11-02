@@ -133,7 +133,7 @@ class ToolSelectionSpec(ABC):
     """Sealed type for tool selection.
 
     Three concrete subclasses, accessed through :meth:`from_raw`:
-      - ``_SpecAll`` — legacy "未配置" / no restriction; build every
+      - ``_SpecAll`` — legacy "not configured" / no restriction; build every
         default tool. Factory does not filter by name.
       - ``_SpecNone`` — explicit "zero tools"; factory returns ``[]``.
       - ``_SpecByCategories`` — filter by category, with optional
@@ -297,7 +297,7 @@ class ToolSelectionSpec(ABC):
 
         Empty / unset input semantics:
           - ``tool_categories=None`` → ``_SpecAll``
-            (legacy "未配置" — build every default tool).
+            (legacy "not configured" — build every default tool).
           - ``tool_categories=[]`` → ``_SpecNone``
             (caller explicitly selected zero tools — no tools injected).
           - ``explicit_none=True`` → ``_SpecNone`` regardless of
@@ -478,7 +478,7 @@ def should_load_mcp_server_configs(
 
 @dataclass(frozen=True)
 class _SpecAll(ToolSelectionSpec):
-    """ALL mode — legacy "未配置" / no restriction.
+    """ALL mode — legacy "not configured" / no restriction.
 
     Exposes ``categories`` / ``mcp_servers`` / ``published_agent_ids``
     at ``None`` for backward compat with callsites that read those

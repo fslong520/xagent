@@ -1,6 +1,7 @@
 """
-合并后的WebSocket测试
-整合了多个WebSocket相关的测试文件，消除重复代码
+Consolidated WebSocket tests.
+
+Merges several WebSocket-related test modules to eliminate duplicated code.
 """
 
 import json
@@ -14,65 +15,65 @@ from tests.shared import create_test_components
 
 @pytest.mark.slow
 class TestWebSocket(unittest.IsolatedAsyncioTestCase):
-    """合并后的WebSocket测试"""
+    """Consolidated WebSocket tests"""
 
     def setUp(self):
-        """设置测试组件"""
+        """Set up the test components"""
         self.components = create_test_components()
         self.test_messages = []
         self.test_connections = {}
 
     async def test_websocket_connection_management(self):
-        """测试WebSocket连接管理"""
-        print("\n=== 测试WebSocket连接管理 ===")
+        """Test WebSocket connection management"""
+        print("\n=== WebSocket connection management ===")
 
-        # 导入WebSocket管理器
+        # Import the WebSocket manager
         from xagent.web.api.websocket import ConnectionManager
 
         manager = ConnectionManager()
 
-        # 测试连接
+        # Test connections
         websocket1 = AsyncMock()
         websocket2 = AsyncMock()
 
-        # 模拟连接
+        # Simulate connections
         await manager.connect(websocket1, 1)
         await manager.connect(websocket2, 2)
 
-        # 验证连接
+        # Verify connections
         self.assertEqual(len(manager.active_connections), 2)
         self.assertIn(1, manager.active_connections)
         self.assertIn(2, manager.active_connections)
 
-        # 测试断开连接
+        # Test disconnection
         manager.disconnect(websocket1)
 
-        # 验证断开连接
+        # Verify disconnection
         self.assertEqual(len(manager.active_connections), 1)
         self.assertNotIn(1, manager.active_connections)
         self.assertIn(2, manager.active_connections)
 
-        print("连接管理验证: ✅")
-        print(f"  活跃连接数: {len(manager.active_connections)}")
-        print(f"  剩余连接: {list(manager.active_connections.keys())}")
+        print("Connection management verified: ✅")
+        print(f"  Active connections: {len(manager.active_connections)}")
+        print(f"  Remaining connections: {list(manager.active_connections.keys())}")
 
     async def test_websocket_message_broadcast(self):
-        """测试WebSocket消息广播"""
-        print("\n=== 测试WebSocket消息广播 ===")
+        """Test WebSocket message broadcasting"""
+        print("\n=== WebSocket message broadcast ===")
 
         from xagent.web.api.websocket import ConnectionManager
 
         manager = ConnectionManager()
 
-        # 创建模拟的WebSocket连接
+        # Create mock WebSocket connections
         websocket1 = AsyncMock()
         websocket2 = AsyncMock()
 
-        # 连接
+        # Connect
         await manager.connect(websocket1, 1)
         await manager.connect(websocket2, 2)
 
-        # 广播消息
+        # Broadcast a message
         test_message = {
             "type": "test_message",
             "data": {"content": "Hello, WebSocket!"},
@@ -80,20 +81,20 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
 
         await manager.broadcast_to_task(test_message, 1)
 
-        # 验证消息发送
+        # Verify the message delivery
         websocket1.send_text.assert_called_once_with(json.dumps(test_message))
-        websocket2.send_text.assert_not_called()  # 不应该发送到task_2
+        websocket2.send_text.assert_not_called()  # must not reach task_2
 
-        print("消息广播验证: ✅")
-        print("  目标task: task_1")
-        print(f"  websocket1调用次数: {websocket1.send_text.call_count}")
-        print(f"  websocket2调用次数: {websocket2.send_text.call_count}")
+        print("Message broadcast verified: ✅")
+        print("  Target task: task_1")
+        print(f"  websocket1 call count: {websocket1.send_text.call_count}")
+        print(f"  websocket2 call count: {websocket2.send_text.call_count}")
 
     async def test_websocket_message_handling(self):
-        """测试WebSocket消息处理"""
-        print("\n=== 测试WebSocket消息处理 ===")
+        """Test WebSocket message handling"""
+        print("\n=== WebSocket message handling ===")
 
-        # 测试不同类型的消息处理
+        # Test handling of different message types
         test_messages = [
             {"type": "subscribe", "task_id": "task_1"},
             {"type": "unsubscribe", "task_id": "task_1"},
@@ -102,73 +103,73 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
         ]
 
         for message in test_messages:
-            # 模拟消息处理
+            # Simulate message handling
             message_type = message.get("type")
 
             if message_type == "subscribe":
-                # 订阅逻辑
+                # Subscribe logic
                 task_id = message.get("task_id")
-                print(f"  处理订阅消息: task_id={task_id}")
+                print(f"  Handling subscribe message: task_id={task_id}")
 
             elif message_type == "unsubscribe":
-                # 取消订阅逻辑
+                # Unsubscribe logic
                 task_id = message.get("task_id")
-                print(f"  处理取消订阅消息: task_id={task_id}")
+                print(f"  Handling unsubscribe message: task_id={task_id}")
 
             elif message_type == "ping":
-                # ping响应
-                print(f"  处理ping消息: {message.get('data')}")
+                # Ping response
+                print(f"  Handling ping message: {message.get('data')}")
 
             elif message_type == "get_status":
-                # 状态查询
+                # Status query
                 task_id = message.get("task_id")
-                print(f"  处理状态查询: task_id={task_id}")
+                print(f"  Handling status query: task_id={task_id}")
 
-        print("消息处理验证: ✅")
-        print(f"  处理消息数量: {len(test_messages)}")
+        print("Message handling verified: ✅")
+        print(f"  Messages handled: {len(test_messages)}")
 
     async def test_websocket_error_handling(self):
-        """测试WebSocket错误处理"""
-        print("\n=== 测试WebSocket错误处理 ===")
+        """Test WebSocket error handling"""
+        print("\n=== WebSocket error handling ===")
 
         from xagent.web.api.websocket import ConnectionManager
 
         manager = ConnectionManager()
 
-        # 创建会抛出异常的WebSocket
+        # Create a WebSocket that raises
         failing_websocket = AsyncMock()
         failing_websocket.send_text.side_effect = Exception("Connection failed")
 
-        # 连接
+        # Connect
         await manager.connect(failing_websocket, "task_1")
 
-        # 尝试发送消息 - 应该处理异常
+        # Attempt to send a message - the exception should be handled
         test_message = {"type": "test", "data": {"content": "test"}}
 
         try:
             await manager.broadcast_to_task(test_message, 1)
         except Exception as e:
-            print(f"  捕获到异常: {e}")
+            print(f"  Caught exception: {e}")
 
-        # 验证连接仍然存在
+        # Verify the connection still exists
         self.assertEqual(len(manager.active_connections), 1)
 
-        print("错误处理验证: ✅")
-        print(f"  连接数保持: {len(manager.active_connections)}")
+        print("Error handling verified: ✅")
+        print(f"  Connection count preserved: {len(manager.active_connections)}")
 
     async def test_websocket_trace_integration(self):
-        """测试WebSocket与追踪集成"""
-        print("\n=== 测试WebSocket与追踪集成 ===")
+        """Test WebSocket integration with tracing"""
+        print("\n=== WebSocket trace integration ===")
 
         from xagent.web.api.websocket import ConnectionManager
 
         manager = ConnectionManager()
 
-        # 创建模拟WebSocket
+        # Create a mock WebSocket
         websocket = AsyncMock()
         await manager.connect(websocket, 1)
 
-        # 创建追踪事件
+        # Create trace events
         trace_events = [
             {
                 "type": "trace_start",
@@ -187,34 +188,34 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
             },
         ]
 
-        # 模拟追踪事件通过WebSocket发送
+        # Simulate sending trace events over the WebSocket
         for event in trace_events:
             websocket_message = {"type": "trace_event", "data": event}
             await manager.broadcast_to_task(websocket_message, 1)
 
-        # 验证WebSocket发送
+        # Verify the WebSocket delivery
         self.assertEqual(websocket.send_text.call_count, len(trace_events))
 
-        print("追踪集成验证: ✅")
-        print(f"  发送追踪事件数: {len(trace_events)}")
-        print(f"  WebSocket调用次数: {websocket.send_text.call_count}")
+        print("Trace integration verified: ✅")
+        print(f"  Trace events sent: {len(trace_events)}")
+        print(f"  WebSocket call count: {websocket.send_text.call_count}")
 
     async def test_websocket_step_update(self):
-        """测试WebSocket步骤更新"""
-        print("\n=== 测试WebSocket步骤更新 ===")
+        """Test WebSocket step updates"""
+        print("\n=== WebSocket step update ===")
 
         from xagent.web.api.websocket import ConnectionManager
 
         manager = ConnectionManager()
 
-        # 创建多个WebSocket连接
+        # Create several WebSocket connections
         websockets = []
         for i in range(3):
             websocket = AsyncMock()
             await manager.connect(websocket, i)
             websockets.append(websocket)
 
-        # 发送步骤更新
+        # Send a step update
         step_update = {
             "type": "step_update",
             "task_id": "task_1",
@@ -227,31 +228,31 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
 
         await manager.broadcast_to_task(step_update, 1)
 
-        # 验证只有task_1的WebSocket接收到消息
+        # Verify only the task_1 WebSocket received the message
         websockets[0].send_text.assert_not_called()
         websockets[1].send_text.assert_called_once_with(json.dumps(step_update))
         websockets[2].send_text.assert_not_called()
 
-        print("步骤更新验证: ✅")
-        print("  目标task: task_1")
-        print("  正确接收的WebSocket: 1/3")
+        print("Step update verified: ✅")
+        print("  Target task: task_1")
+        print("  WebSockets that received it: 1/3")
 
     async def test_websocket_task_isolation(self):
-        """测试WebSocket任务隔离"""
-        print("\n=== 测试WebSocket任务隔离 ===")
+        """Test WebSocket task isolation"""
+        print("\n=== WebSocket task isolation ===")
 
         from xagent.web.api.websocket import ConnectionManager
 
         manager = ConnectionManager()
 
-        # 创建不同任务的WebSocket连接
+        # Create WebSocket connections for different tasks
         task_connections = {}
         for i in [1, 2, 3]:
             websocket = AsyncMock()
             await manager.connect(websocket, i)
             task_connections[i] = websocket
 
-        # 向不同任务发送消息
+        # Send messages to different tasks
         for i in [1, 2, 3]:
             message = {
                 "type": "task_message",
@@ -260,29 +261,29 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
             }
             await manager.broadcast_to_task(message, i)
 
-        # 验证任务隔离
+        # Verify task isolation
         for task_id, websocket in task_connections.items():
             self.assertEqual(websocket.send_text.call_count, 1)
             call_args = websocket.send_text.call_args[0][0]
-            # 消息是JSON字符串，需要解析
+            # The message is a JSON string and must be parsed
             import json
 
             parsed_message = json.loads(call_args)
             self.assertEqual(parsed_message["task_id"], f"task_{task_id}")
 
-        print("任务隔离验证: ✅")
-        print(f"  任务数量: {len(task_connections)}")
-        print("  每个任务接收消息数: 1")
+        print("Task isolation verified: ✅")
+        print(f"  Task count: {len(task_connections)}")
+        print("  Messages received per task: 1")
 
     async def test_websocket_connection_limits(self):
-        """测试WebSocket连接限制"""
-        print("\n=== 测试WebSocket连接限制 ===")
+        """Test WebSocket connection limits"""
+        print("\n=== WebSocket connection limits ===")
 
         from xagent.web.api.websocket import ConnectionManager
 
         manager = ConnectionManager()
 
-        # 创建大量连接
+        # Create a large number of connections
         max_connections = 100
         websockets = []
 
@@ -291,17 +292,17 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
             await manager.connect(websocket, i)
             websockets.append(websocket)
 
-        # 验证连接数量
+        # Verify the connection count
         self.assertEqual(len(manager.active_connections), max_connections)
 
-        # 测试广播性能
+        # Test broadcast performance
         test_message = {"type": "broadcast_test", "data": {"content": "test"}}
 
         import time
 
         start_time = time.thread_time()
 
-        # 向所有连接广播消息
+        # Broadcast a message to every connection
         for i in range(max_connections):
             await manager.broadcast_to_task(test_message, i)
 
@@ -315,21 +316,25 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
                 json.loads(websocket.send_text.call_args.args[0]), test_message
             )
 
-        self.assertLess(duration, 5.0, f"{max_connections}次广播应该在5个 CPU 秒内完成")
+        self.assertLess(
+            duration,
+            5.0,
+            f"{max_connections} broadcasts should finish within 5 CPU seconds",
+        )
 
-        print("连接限制验证: ✅")
-        print(f"  最大连接数: {max_connections}")
-        print(f"  广播 CPU 耗时: {duration:.3f}秒")
-        print(f"  平均每次广播: {duration / max_connections * 1000:.3f}毫秒")
+        print("Connection limit verified: ✅")
+        print(f"  Max connections: {max_connections}")
+        print(f"  Broadcast CPU time: {duration:.3f}s")
+        print(f"  Average per broadcast: {duration / max_connections * 1000:.3f}ms")
 
     async def test_websocket_message_validation(self):
-        """测试WebSocket消息验证"""
-        print("\n=== 测试WebSocket消息验证 ===")
+        """Test WebSocket message validation"""
+        print("\n=== WebSocket message validation ===")
 
-        # 测试不同类型的消息验证
+        # Test validation of different message shapes
         test_cases = [
             {
-                "name": "有效消息",
+                "name": "valid message",
                 "message": {
                     "type": "trace_event",
                     "task_id": "task_1",
@@ -338,24 +343,28 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
                 "should_pass": True,
             },
             {
-                "name": "缺少类型",
+                "name": "missing type",
                 "message": {"task_id": "task_1", "data": {"event_type": "test"}},
                 "should_pass": False,
             },
             {
-                "name": "缺少task_id",
+                "name": "missing task_id",
                 "message": {"type": "trace_event", "data": {"event_type": "test"}},
                 "should_pass": False,
             },
-            {"name": "空消息", "message": {}, "should_pass": False},
-            {"name": "非字典消息", "message": "invalid_message", "should_pass": False},
+            {"name": "empty message", "message": {}, "should_pass": False},
+            {
+                "name": "non-dict message",
+                "message": "invalid_message",
+                "should_pass": False,
+            },
         ]
 
         for test_case in test_cases:
             message = test_case["message"]
             should_pass = test_case["should_pass"]
 
-            # 简单的消息验证逻辑
+            # Simple message validation logic
             is_valid = True
             if not isinstance(message, dict):
                 is_valid = False
@@ -365,23 +374,25 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
                 is_valid = False
 
             self.assertEqual(
-                is_valid, should_pass, f"消息 '{test_case['name']}' 验证失败"
+                is_valid,
+                should_pass,
+                f"message '{test_case['name']}' failed validation",
             )
 
             print(f"  {test_case['name']}: {'✅' if is_valid == should_pass else '❌'}")
 
-        print("消息验证验证: ✅")
-        print(f"  测试用例数: {len(test_cases)}")
+        print("Message validation verified: ✅")
+        print(f"  Test cases: {len(test_cases)}")
 
     async def test_websocket_stream_event_format(self):
-        """测试WebSocket流式事件格式统一"""
-        print("\n=== 测试WebSocket流式事件格式统一 ===")
+        """Test that the WebSocket stream event format is uniform"""
+        print("\n=== WebSocket stream event format ===")
 
         from datetime import datetime, timezone
 
         from xagent.web.services.task_execution import create_stream_event
 
-        # 测试创建流式事件
+        # Test stream event creation
         test_data = {
             "step_id": "step1",
             "step_name": "test_step",
@@ -396,7 +407,7 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
             timestamp=datetime.now(timezone.utc),
         )
 
-        # 验证流式事件格式
+        # Verify the stream event format
         self.assertEqual(stream_event["type"], "trace_event")
         self.assertEqual(stream_event["event_type"], "dag_step_info")
         self.assertEqual(stream_event["task_id"], 1)
@@ -404,63 +415,63 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
         self.assertIn("timestamp", stream_event)
         self.assertEqual(stream_event["data"], test_data)
 
-        print("流式事件格式验证: ✅")
-        print(f"  事件类型: {stream_event['event_type']}")
-        print(f"  任务ID: {stream_event['task_id']}")
-        print(f"  事件ID: {stream_event['event_id']}")
-        print(f"  数据键: {list(stream_event['data'].keys())}")
+        print("Stream event format verified: ✅")
+        print(f"  Event type: {stream_event['event_type']}")
+        print(f"  Task ID: {stream_event['task_id']}")
+        print(f"  Event ID: {stream_event['event_id']}")
+        print(f"  Data keys: {list(stream_event['data'].keys())}")
 
     async def test_websocket_reconnection_handling(self):
-        """测试WebSocket重连处理"""
-        print("\n=== 测试WebSocket重连处理 ===")
+        """Test WebSocket reconnection handling"""
+        print("\n=== WebSocket reconnection ===")
 
         from xagent.web.api.websocket import ConnectionManager
 
         manager = ConnectionManager()
 
-        # 创建WebSocket连接
+        # Create a WebSocket connection
         websocket1 = AsyncMock()
         await manager.connect(websocket1, 1)
 
-        # 模拟连接断开
+        # Simulate a dropped connection
         manager.disconnect(websocket1)
 
-        # 验证连接已断开
+        # Verify the connection was dropped
         self.assertEqual(len(manager.active_connections), 0)
 
-        # 重新连接
+        # Reconnect
         websocket2 = AsyncMock()
         await manager.connect(websocket2, 1)
 
-        # 验证重新连接成功
+        # Verify the reconnection succeeded
         self.assertEqual(len(manager.active_connections), 1)
         self.assertIn(1, manager.active_connections)
 
-        # 测试重连后消息发送
+        # Test message delivery after reconnecting
         test_message = {"type": "reconnection_test", "data": {"content": "test"}}
         await manager.broadcast_to_task(test_message, 1)
 
-        # 验证新连接能接收消息
+        # Verify the new connection receives messages
         websocket2.send_text.assert_called_once_with(json.dumps(test_message))
 
-        print("重连处理验证: ✅")
-        print("  断开后连接数: 0")
-        print(f"  重连后连接数: {len(manager.active_connections)}")
-        print(f"  消息发送成功: {websocket2.send_text.call_count}")
+        print("Reconnection verified: ✅")
+        print("  Connections after drop: 0")
+        print(f"  Connections after reconnect: {len(manager.active_connections)}")
+        print(f"  Messages delivered: {websocket2.send_text.call_count}")
 
     async def test_historical_data_streaming(self):
-        """测试历史数据流式发送"""
-        print("\n=== 测试历史数据流式发送 ===")
+        """Test streaming of historical data"""
+        print("\n=== Historical data streaming ===")
 
         from datetime import datetime, timezone
         from unittest.mock import AsyncMock
 
         from xagent.web.services.task_execution import create_stream_event
 
-        # 创建模拟的WebSocket和数据库
+        # Create a mock WebSocket
         websocket = AsyncMock()
 
-        # 模拟数据库数据
+        # Simulate database data
         now = datetime.now(timezone.utc)
         mock_task_data = {
             "id": 1,
@@ -471,7 +482,7 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
             "updated_at": now.isoformat(),
         }
 
-        # 模拟历史数据事件
+        # Simulate historical data events
         historical_events = [
             create_stream_event("task_info", 1, mock_task_data, now),
             create_stream_event(
@@ -494,14 +505,14 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
             ),
         ]
 
-        # 模拟发送历史数据
+        # Simulate sending the historical data
         for event in historical_events:
             await websocket.send_text(json.dumps(event))
 
-        # 验证历史数据发送
+        # Verify the historical data delivery
         self.assertEqual(websocket.send_text.call_count, len(historical_events))
 
-        # 验证事件格式
+        # Verify the event format
         for i, call in enumerate(websocket.send_text.call_args_list):
             sent_data = json.loads(call[0][0])
             self.assertEqual(sent_data["type"], "trace_event")
@@ -509,9 +520,9 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
             self.assertIn("timestamp", sent_data)
             self.assertEqual(sent_data["task_id"], 1)
 
-        print("历史数据流式发送验证: ✅")
-        print(f"  发送事件数量: {len(historical_events)}")
-        print(f"  WebSocket调用次数: {websocket.send_text.call_count}")
+        print("Historical data streaming verified: ✅")
+        print(f"  Events sent: {len(historical_events)}")
+        print(f"  WebSocket call count: {websocket.send_text.call_count}")
 
     async def test_rewrite_file_links_supports_legacy_preview_paths(self):
         from xagent.web.services.task_execution import _rewrite_file_links_to_file_id
@@ -560,8 +571,8 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rewritten, output_text)
 
     async def test_websocket_trace_handler_integration(self):
-        """测试WebSocket追踪处理器集成"""
-        print("\n=== 测试WebSocket追踪处理器集成 ===")
+        """Test WebSocket trace handler integration"""
+        print("\n=== WebSocket trace handler integration ===")
 
         from unittest.mock import AsyncMock, patch
 
@@ -576,7 +587,7 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
         from xagent.web.services import task_events
         from xagent.web.services.task_event_trace_handler import TaskEventTraceHandler
 
-        # 创建模拟的WebSocket管理器
+        # Create a mock WebSocket manager
         mock_manager = AsyncMock()
 
         # This case assumes the task has an audience. Register a stand-in
@@ -585,7 +596,7 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
         audience_manager = ConnectionManager()
         audience_manager.register_connection(AsyncMock(), 1)
 
-        # 用patch替换manager
+        # Replace the manager via patch
         with (
             patch(
                 "xagent.web.services.task_event_trace_handler.publish_task_event",
@@ -597,10 +608,10 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
                 audience_manager.has_connections_for_task,
             ),
         ):
-            # 创建WebSocket追踪处理器
+            # Create the WebSocket trace handler
             handler = TaskEventTraceHandler(task_id=1)
 
-            # 创建测试事件
+            # Create a test event
             event_type = TraceEventType(
                 TraceScope.STEP, TraceAction.START, TraceCategory.DAG
             )
@@ -611,16 +622,16 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
                 data={"step_name": "test_step", "tool_name": "test_tool"},
             )
 
-            # 处理事件
+            # Handle the event
             await handler.handle_event(trace_event)
 
-            # 验证事件被转换为流式格式并发送
+            # Verify the event was converted to the stream format and sent
             mock_manager.broadcast_to_task.assert_called_once()
 
-            # 获取发送的消息
+            # Fetch the sent message
             sent_message = mock_manager.broadcast_to_task.call_args[0][0]
 
-            # 验证消息格式
+            # Verify the message format
             self.assertEqual(sent_message["type"], "trace_event")
             self.assertEqual(sent_message["event_type"], "dag_step_start")
             self.assertEqual(sent_message["task_id"], 1)
@@ -628,55 +639,55 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
             self.assertIn("timestamp", sent_message)
             self.assertIn("data", sent_message)
 
-            # 验证数据内容
+            # Verify the payload content
             self.assertEqual(sent_message["data"]["step_name"], "test_step")
             self.assertEqual(sent_message["data"]["tool_name"], "test_tool")
 
-            print("WebSocket追踪处理器集成验证: ✅")
-            print(f"  事件类型: {sent_message['event_type']}")
-            print(f"  任务ID: {sent_message['task_id']}")
-            print(f"  步骤名称: {sent_message['data']['step_name']}")
-            print(f"  工具名称: {sent_message['data']['tool_name']}")
+            print("WebSocket trace handler integration verified: ✅")
+            print(f"  Event type: {sent_message['event_type']}")
+            print(f"  Task ID: {sent_message['task_id']}")
+            print(f"  Step name: {sent_message['data']['step_name']}")
+            print(f"  Tool name: {sent_message['data']['tool_name']}")
 
     async def test_websocket_pause_resume_handlers_exist(self):
-        """测试WebSocket暂停恢复处理器存在性"""
-        print("\n=== 测试WebSocket暂停恢复处理器存在性 ===")
+        """Test that the WebSocket pause/resume handlers exist"""
+        print("\n=== WebSocket pause/resume handlers ===")
 
-        # 测试导入
+        # Test the imports
         from xagent.web.api.websocket import handle_pause_task, handle_resume_task
 
-        # 验证函数存在
+        # Verify the functions exist
         assert callable(handle_pause_task)
         assert callable(handle_resume_task)
 
-        print("  WebSocket暂停恢复处理器存在性验证完成")
+        print("  WebSocket pause/resume handler presence verified")
 
     async def test_websocket_pause_resume_error_handling_simple(self):
-        """测试WebSocket暂停恢复错误处理（简化版）"""
-        print("\n=== 测试WebSocket暂停恢复错误处理（简化版） ===")
+        """Test WebSocket pause/resume error handling (simplified)"""
+        print("\n=== WebSocket pause/resume error handling (simplified) ===")
 
         from unittest.mock import AsyncMock, patch
 
         from xagent.web.api.websocket import handle_pause_task
 
-        # 创建模拟WebSocket
+        # Create a mock WebSocket
         websocket = AsyncMock()
         task_id = 123
 
-        # 模拟agent manager返回None（agent不存在的情况）
+        # Simulate the agent manager returning None (no such agent)
         mock_agent_manager = AsyncMock()
         mock_agent_manager.get_agent_for_task = AsyncMock(return_value=None)
 
-        # 模拟chat模块的agent_manager
+        # Simulate the chat module's agent_manager
         mock_chat_module = AsyncMock()
         mock_chat_module.agent_manager = mock_agent_manager
 
-        # 模拟全局manager
+        # Simulate the global manager
         mock_manager = AsyncMock()
 
         with patch.dict("sys.modules", {"xagent.web.api.chat": mock_chat_module}):
             with patch("xagent.web.api.websocket.manager", mock_manager):
-                # 测试暂停 - 应该发送错误消息
+                # Test pause - an error message should be sent
                 message_data = {
                     "type": "pause_task",
                     "task_id": task_id,
@@ -685,10 +696,10 @@ class TestWebSocket(unittest.IsolatedAsyncioTestCase):
 
                 await handle_pause_task(websocket, task_id, message_data)
 
-                # 验证发送了错误消息
+                # Verify an error message was sent
                 mock_manager.send_personal_message.assert_called()
 
-        print("  WebSocket暂停恢复错误处理测试完成")
+        print("  WebSocket pause/resume error handling test done")
 
 
 if __name__ == "__main__":

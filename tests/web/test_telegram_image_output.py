@@ -239,17 +239,19 @@ async def test_cancelled_telegram_trace_handler_never_resumes_updates() -> None:
 
 def test_markdown_to_tg_html_renders_tables_as_wrapped_lists() -> None:
     html = markdown_to_tg_html(
-        "| 特性 | 说明 |\n"
+        "| Feature | Notes |\n"
         "|---|---|\n"
-        "| 统一可观测引擎 | 指标、日志、链路、宽事件统一在一个数据库中。 |\n"
-        "| 对象存储优先 | 成本最高降低 50 倍。 |\n"
+        "| Unified observability | Metrics, logs, traces and wide events "
+        "in one DB. |\n"
+        "| Object storage first | Up to 50x cheaper. |\n"
     )
 
     assert "<pre>" not in html
     assert (
-        "• <b>统一可观测引擎</b>: 指标、日志、链路、宽事件统一在一个数据库中。" in html
+        "• <b>Unified observability</b>: Metrics, logs, traces and wide events "
+        "in one DB." in html
     )
-    assert "• <b>对象存储优先</b>: 成本最高降低 50 倍。" in html
+    assert "• <b>Object storage first</b>: Up to 50x cheaper." in html
 
 
 def test_markdown_to_tg_html_renders_multi_column_tables_as_field_lists() -> None:

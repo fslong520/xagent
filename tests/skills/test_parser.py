@@ -13,12 +13,12 @@ from src.xagent.skills.parser import SkillParser
 
 @pytest.fixture
 def temp_skill_dir():
-    """创建临时 skill 目录"""
+    """Create a temporary skill directory"""
     temp_dir = tempfile.mkdtemp()
     skill_dir = Path(temp_dir) / "test_skill"
     skill_dir.mkdir()
 
-    # 创建 SKILL.md
+    # Create SKILL.md
     (skill_dir / "SKILL.md").write_text(
         """# Test Skill
 
@@ -35,20 +35,20 @@ When testing is needed.
 """
     )
 
-    # 创建 template.md
+    # Create template.md
     (skill_dir / "template.md").write_text("Template: {task}")
 
     yield skill_dir
 
-    # 清理
+    # Clean up
     shutil.rmtree(temp_dir)
 
 
 class TestSkillParser:
-    """测试 SkillParser"""
+    """Tests for SkillParser"""
 
     def test_parse_skill(self, temp_skill_dir):
-        """测试解析 skill"""
+        """Test parsing a skill"""
         skill = SkillParser.parse(temp_skill_dir)
 
         assert skill["name"] == "test_skill"
@@ -61,13 +61,13 @@ class TestSkillParser:
         assert skill["path"] == str(temp_skill_dir)
 
     def test_extract_tags(self, temp_skill_dir):
-        """测试标签提取"""
+        """Test tag extraction"""
         skill = SkillParser.parse(temp_skill_dir)
-        # 这个 skill 应该包含 testing 标签
+        # This skill should carry the testing tag
         assert "testing" in skill["tags"] or "debugging" in skill["tags"]
 
     def test_parse_skill_without_skilled_md(self, tmp_path):
-        """测试缺少 SKILL.md 的目录"""
+        """Test a directory without SKILL.md"""
         skill_dir = tmp_path / "invalid_skill"
         skill_dir.mkdir()
 
@@ -75,7 +75,7 @@ class TestSkillParser:
             SkillParser.parse(skill_dir)
 
     def test_parse_skill_with_optional_files(self, tmp_path):
-        """测试带有可选文件的 skill"""
+        """Test a skill with optional files"""
         skill_dir = tmp_path / "complete_skill"
         skill_dir.mkdir()
 
@@ -94,7 +94,7 @@ Follow the steps.
 """
         )
 
-        # 创建 examples 目录
+        # Create an examples directory
         examples_dir = skill_dir / "examples"
         examples_dir.mkdir()
         (examples_dir / "example1.md").write_text("Example 1")

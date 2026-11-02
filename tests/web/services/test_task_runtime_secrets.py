@@ -175,7 +175,7 @@ def test_cleanup_cannot_observe_inputs_before_transaction_binds_run(task_id):
         )
 
 
-@pytest.mark.parametrize("key", [None, "", "invalid-key", "非密钥"])
+@pytest.mark.parametrize("key", [None, "", "invalid-key", "not-a-key"])
 def test_invalid_key_refuses_staging_without_writing(task_id, monkeypatch, key):
     monkeypatch.delenv("ENCRYPTION_KEY", raising=False)
     if key is not None:

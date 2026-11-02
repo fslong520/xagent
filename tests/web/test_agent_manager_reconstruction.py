@@ -103,23 +103,23 @@ def _build_reconstruction_snapshot(
 
 
 class TestAgentServiceManagerReconstruction:
-    """测试AgentServiceManager的任务重建功能"""
+    """Task reconstruction in AgentServiceManager."""
 
     @pytest.fixture
     def agent_manager(self):
-        """创建AgentServiceManager实例"""
+        """Create an AgentServiceManager instance."""
         return AgentServiceManager()
 
     @pytest.fixture
     def mock_db(self):
-        """创建mock数据库会话"""
+        """Create a mock database session."""
         db = MagicMock()
         db.query = MagicMock()
         return db
 
     @pytest.fixture
     def mock_user(self):
-        """创建mock用户"""
+        """Create a mock user."""
         return User(
             id=1,
             username="test_user",
@@ -129,7 +129,7 @@ class TestAgentServiceManagerReconstruction:
 
     @pytest.fixture
     def sample_task(self):
-        """创建示例任务"""
+        """Create a sample task."""
         return Task(
             id=1,
             user_id=1,
@@ -143,7 +143,7 @@ class TestAgentServiceManagerReconstruction:
 
     @pytest.fixture
     def sample_trace_events(self):
-        """创建示例追踪事件"""
+        """Create sample trace events."""
         return [
             TraceEvent(
                 id=1,
@@ -169,7 +169,7 @@ class TestAgentServiceManagerReconstruction:
 
     @pytest.fixture
     def sample_dag_execution(self):
-        """创建示例DAG执行记录"""
+        """Create a sample DAG execution record."""
         return DAGExecution(
             id=1,
             task_id=1,
@@ -250,7 +250,7 @@ class TestAgentServiceManagerReconstruction:
             ),
             patch("xagent.web.sandbox_manager.get_sandbox_manager", return_value=None),
         ):
-            # 创建mock AgentService实例
+            # Create a mock AgentService instance
             mock_agent_service = MagicMock()
             mock_agent_service_class.return_value = mock_agent_service
 
@@ -275,7 +275,7 @@ class TestAgentServiceManagerReconstruction:
     async def test_get_agent_for_task_existing_task_no_reconstruction(
         self, agent_manager, mock_db, sample_task, mock_user
     ):
-        """测试获取已存在任务的agent，但没有历史数据"""
+        """Fetching an agent for an existing task with no history data."""
         snapshot = _build_reconstruction_snapshot(
             sample_task,
             mock_user,
@@ -790,7 +790,7 @@ class TestAgentServiceManagerReconstruction:
         sample_dag_execution,
         mock_user,
     ):
-        """测试获取已存在任务的agent，并进行重建"""
+        """Fetching an agent for an existing task triggers reconstruction."""
         sample_task.status = TaskStatus.RUNNING
         runtime_llm = MagicMock()
         snapshot = _build_reconstruction_snapshot(
@@ -800,7 +800,7 @@ class TestAgentServiceManagerReconstruction:
             dag_execution=sample_dag_execution,
             task_llm=runtime_llm,
         )
-        # 使用更高级的方法直接patch AgentService创建
+        # Patch AgentService creation directly through the higher-level entry
         with (
             patch(
                 "xagent.web.services.agent_service_manager.AgentService"
@@ -811,12 +811,12 @@ class TestAgentServiceManagerReconstruction:
             ),
             patch("xagent.web.sandbox_manager.get_sandbox_manager", return_value=None),
         ):
-            # 创建mock AgentService实例
+            # Create a mock AgentService instance
             mock_agent_instance = MagicMock()
             mock_agent_instance.reconstruct_from_history = AsyncMock()
             mock_agent_service_class.return_value = mock_agent_instance
 
-            # 调用方法
+            # Call the method
             agent = await agent_manager.get_agent_for_task(
                 1,
                 None,
@@ -824,11 +824,11 @@ class TestAgentServiceManagerReconstruction:
                 task_setup_snapshot=snapshot,
             )
 
-        # 验证结果
+        # Verify the result
         assert agent is not None
         assert 1 in agent_manager._agents
         assert agent_manager._agents[1] == mock_agent_instance
-        # 验证reconstruct_from_history被调用
+        # Verify reconstruct_from_history was called
         mock_agent_instance.reconstruct_from_history.assert_called_once()
 
     @pytest.mark.asyncio
@@ -841,8 +841,8 @@ class TestAgentServiceManagerReconstruction:
         sample_trace_events,
         sample_dag_execution,
     ):
-        """测试从历史数据重建agent成功"""
-        # Mock AgentService创建和reconstruct_from_history
+        """Rebuilding the agent from history data succeeds."""
+        # Mock AgentService creation and reconstruct_from_history
         runtime_llm = MagicMock()
         runtime_llm.model_name = "task-qwen"
         snapshot = _build_reconstruction_snapshot(
@@ -862,21 +862,21 @@ class TestAgentServiceManagerReconstruction:
                 "xagent.web.services.agent_service_manager.AgentService"
             ) as mock_agent_service_class,
         ):
-            # 设置mock AgentService实例
+            # Set the mock AgentService instance
             mock_agent_instance = MagicMock()
             mock_agent_instance.reconstruct_from_history = AsyncMock()
             mock_agent_service_class.return_value = mock_agent_instance
 
-            # 调用方法
+            # Call the method
             await agent_manager._reconstruct_agent_from_history(
                 1,
                 None,
                 task_setup_snapshot=snapshot,
             )
 
-        # 验证agent被创建
+        # Verify the agent was created
         assert 1 in agent_manager._agents
-        # 验证reconstruct_from_history被调用
+        # Verify reconstruct_from_history was called
         mock_agent_instance.reconstruct_from_history.assert_called_once()
         _, agent_kwargs = mock_agent_service_class.call_args
         with patch(
@@ -1010,14 +1010,14 @@ class TestAgentServiceManagerReconstruction:
         sample_task,
         mock_user,
     ):
-        """测试没有历史数据时的重建"""
+        """Reconstruction with no history data."""
         snapshot = _build_reconstruction_snapshot(
             sample_task,
             mock_user,
             task_llm=MagicMock(),
         )
 
-        # 调用方法应该抛出异常
+        # Calling the method should raise
         with pytest.raises(ValueError) as exc_info:
             await agent_manager._reconstruct_agent_from_history(
                 1,
@@ -1026,13 +1026,13 @@ class TestAgentServiceManagerReconstruction:
             )
 
         assert "No historical data found" in str(exc_info.value)
-        # 验证没有创建agent
+        # Verify no agent was created
         assert 1 not in agent_manager._agents
 
     @pytest.mark.asyncio
     async def test_reconstruct_agent_from_history_error_handling(self, agent_manager):
-        """测试重建过程中的错误处理"""
-        # 调用方法应该抛出异常
+        """Error handling during reconstruction."""
+        # Calling the method should raise
         with (
             patch(
                 "xagent.web.services.agent_service_manager.load_task_setup_snapshot_sync",

@@ -124,7 +124,7 @@ _LAYOUT_PLACEHOLDERS: dict[str, tuple[str | None, str | None]] = {
 #     alone so markdown-style emphasis isn't corrupted.
 #
 # The "glued to a letter" lookahead is Unicode-aware (Python's default
-# \w), so e.g. "-中文条目" is recognized and stripped the same way
+# \w), so e.g. "-glued-text" is recognized and stripped the same way
 # "-Nospace" is — intentional, not an ASCII-only oversight.
 #
 # Only "•"/"-"/"*" are recognized. Other list conventions (numbered lists

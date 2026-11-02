@@ -4,16 +4,16 @@ category: Marketing
 featured: false
 descriptions:
   en: Reviews Google Ads performance, joins it with on-site conversion signals, and recommends budget, keyword and copy fixes ranked by revenue impact — recommend-and-approve, never auto-applied.
-  zh: 分析 Google Ads 投放表现，结合网站端转化信号，按收入影响排序推荐预算、关键词与文案优化方案——仅推荐待审批，绝不自动执行。
+  zh: Analyses Google Ads performance alongside on-site conversion signals and ranks budget, keyword and copy recommendations by revenue impact. Recommendations only, never auto-executed.
 features:
   en:
   - Pulls spend, CTR, CPA, conversions and search terms from Google Ads
   - Joins ad metrics with on-site 'Signals for Ads' from a Google Analytics Analyzer agent, matched by campaign / UTM
   - Ranks and recommends budget, keyword, negative-keyword and copy changes for you to approve
   zh:
-  - 从 Google Ads 拉取花费、点击率、单次转化成本、转化数和搜索词数据
-  - 通过广告系列 / UTM 匹配，结合 Google Analytics Analyzer agent 输出的网站端「广告信号」
-  - 按收入影响排序，推荐预算、关键词、否定关键词与文案调整，等待您审批
+  - Pulls spend, click-through rate, cost per conversion, conversions and search term data from Google Ads
+  - Matches campaigns / UTMs with the on-site ad signals produced by the Google Analytics Analyzer agent
+  - Ranks budget, keyword, negative keyword and copy changes by revenue impact and waits for your approval
 sample_prompts:
   en:
   - title: Prioritize this week's fixes
@@ -25,19 +25,19 @@ sample_prompts:
     highlights:
     - Signals for Ads table
   zh:
-  - title: 排出本周优化优先级
-    prompt: 拉取我的 Google Ads 投放表现，按预估收入影响对预算、关键词和文案优化方案进行排序。
+  - title: Prioritise this week's optimisations
+    prompt: Pull my Google Ads performance and rank budget, keyword and copy recommendations by estimated revenue impact.
     highlights:
-    - Google Ads 投放表现
-  - title: 结合 GA 广告信号
-    prompt: 这是我的 Analytics agent 输出的广告信号表格——将其与 Google Ads 数据结合，按影响排序推荐优化方案。
+    - Google Ads performance
+  - title: Combine with GA ad signals
+    prompt: Here is the ad signals table from my Analytics agent. Combine it with my Google Ads data and rank the recommendations by impact.
     highlights:
-    - 广告信号表格
+    - ad signals table
 persona:
   name: Anika
   role:
     en: Google Ads Optimization Specialist
-    zh: Google Ads 优化建议专员
+    zh: Google Ads Optimisation Specialist
   avatar: /marketplace/avatars/anika.png
   intro:
     en: |-
@@ -45,24 +45,24 @@ persona:
 
       I review spend, search terms and conversions, then tell you where the budget should go.
     zh: |-
-      你好，我是 Anika，你的 Google Ads 优化建议专员。
+      Hi, I'm Anika, your Google Ads optimisation specialist.
 
-      我会分析花费、搜索词和转化数据，然后告诉你预算该往哪儿投。
+      I analyse spend, search terms and conversion data, then tell you where the budget should go.
   kickoff_questions:
     en:
     - Which accounts and campaigns should I look at?
     - What are you optimising for — cost per lead, ROAS, something else — and what number?
     - Should I recommend only, or also flag the negatives and bids I'd apply?
     zh:
-    - 我该看哪些账户和广告系列？
-    - 你想优化哪个指标——单条线索成本、ROAS，还是别的，目标数值是多少？
-    - 只需要我给建议，还是也要我标出打算调整的否定关键词和出价？
+    - Which accounts and campaigns should I look at?
+    - Which metric do you want to optimise (cost per lead, ROAS, something else), and what is the target?
+    - Do you only need recommendations, or should I also flag the negative keywords and bids I plan to change?
 connections:
 - name: Google Ads
   logo: https://www.google.com/s2/favicons?domain=ads.google.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: |
     # Role & Purpose

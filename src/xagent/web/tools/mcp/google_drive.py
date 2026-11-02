@@ -832,7 +832,7 @@ def _safe_output_filename(name: str) -> str:
     Stem and suffix are sanitized separately: sanitizing the whole string
     in one pass would let the trailing ".strip('._')" eat into the
     extension's own leading dot whenever the stem sanitizes down to nothing
-    (e.g. an all-non-ASCII or all-punctuation name) — "季度报告.pdf" must
+    (e.g. an all-non-ASCII or all-punctuation name) — "quarterly-report.pdf" must
     still come out as "....pdf" (something ending in .pdf), not "pdf".
     """
     base = Path(name).name

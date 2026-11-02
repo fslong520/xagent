@@ -9,14 +9,14 @@ tags:
   - extraction
   - ocr
   zh:
-  - 财务
-  - 发票
-  - 收据
-  - 提取
+  - Finance
+  - Invoices
+  - Receipts
+  - Extraction
   - OCR
 descriptions:
   en: Extracts data using AI vision
-  zh: 识别并提取发票/收据关键数据，结构化用于会计处理。
+  zh: Extracts key invoice and receipt data and structures it for accounting.
 author: Xagent
 version: '1.0'
 agent_config:
@@ -35,9 +35,9 @@ features:
   - Real-time intelligent insights
   - Easy integration and deployment
   zh:
-  - 自动化分析与处理
-  - 实时智能洞察
-  - 轻松集成与部署
+  - Automated analysis and processing
+  - Real-time intelligent insights
+  - Easy integration and deployment
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup

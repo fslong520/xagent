@@ -142,10 +142,10 @@ def test_vtt_to_text_strips_scaffolding():
         "\n"
         "2\n"
         "00:00:05.000 --> 00:00:09.000\n"
-        "Bob: 我们先过一下上周的行动项。\n"
+        "Bob: Let's review last week's action items.\n"
     )
     assert zoom._vtt_to_text(vtt) == (
-        "Alice: Let's start the meeting.\nBob: 我们先过一下上周的行动项。"
+        "Alice: Let's start the meeting.\nBob: Let's review last week's action items."
     )
 
 
@@ -656,12 +656,12 @@ def test_download_text_decodes_utf8_regardless_of_headers(monkeypatch):
     """requests falls back to ISO-8859-1 for text/* without a charset; the
     decode must be explicit UTF-8 so Chinese transcripts don't mojibake."""
     response = MockResponse()
-    response.content = "会议纪要：讨论了下季度目标".encode("utf-8")
+    response.content = "Meeting notes: discussed next quarter's goals".encode("utf-8")
     monkeypatch.setattr(zoom.requests, "get", Mock(return_value=response))
 
     assert (
         zoom._download_text("https://download.zoom.us/t.vtt")
-        == "会议纪要：讨论了下季度目标"
+        == "Meeting notes: discussed next quarter's goals"
     )
 
 

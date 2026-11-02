@@ -264,11 +264,11 @@ def test_chinese_sparse_search(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     # Create a temporary Chinese text file if needed
     chinese_test_file = tmp_path / "chinese_test.txt"
-    chinese_content = """人工智能是计算机科学的一个分支。
-机器学习是人工智能的核心技术之一。
-自然语言处理用于理解和生成人类语言。
-深度学习使用神经网络进行学习。
-这些技术正在改变我们的世界。"""
+    chinese_content = """\u4eba\u5de5\u667a\u80fd\u662f\u8ba1\u7b97\u673a\u79d1\u5b66\u7684\u4e00\u4e2a\u5206\u652f。
+\u673a\u5668\u5b66\u4e60\u662f\u4eba\u5de5\u667a\u80fd\u7684\u6838\u5fc3\u6280\u672f\u4e4b\u4e00。
+\u81ea\u7136\u8bed\u8a00\u5904\u7406\u7528\u4e8e\u7406\u89e3\u548c\u751f\u6210\u4eba\u7c7b\u8bed\u8a00。
+\u6df1\u5ea6\u5b66\u4e60\u4f7f\u7528\u795e\u7ecf\u7f51\u7edc\u8fdb\u884c\u5b66\u4e60。
+\u8fd9\u4e9b\u6280\u672f\u6b63\u5728\u6539\u53d8\u6211\u4eec\u7684\u4e16\u754c。"""
     chinese_test_file.write_text(chinese_content, encoding="utf-8")
 
     collection = f"collection_chinese_{uuid.uuid4().hex[:8]}"
@@ -339,10 +339,10 @@ def test_chinese_sparse_search(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     # -------- Test Chinese sparse search queries --------
     chinese_queries = [
-        "人工智能",
-        "机器学习",
-        "自然语言处理",
-        "深度学习",
+        "\u4eba\u5de5\u667a\u80fd",
+        "\u673a\u5668\u5b66\u4e60",
+        "\u81ea\u7136\u8bed\u8a00\u5904\u7406",
+        "\u6df1\u5ea6\u5b66\u4e60",
     ]
 
     for query_text in chinese_queries:
@@ -358,40 +358,40 @@ def test_chinese_sparse_search(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         )
 
         assert isinstance(search_result, SearchPipelineResult)
-        print(f"\n查询: {query_text}")
-        print(f"状态: {search_result.status}")
-        print(f"结果数量: {search_result.result_count}")
+        print(f"\nQuery: {query_text}")
+        print(f"Status: {search_result.status}")
+        print(f"Result count: {search_result.result_count}")
         # SearchPipelineResult.warnings is List[str], not List[SearchWarning]
         fts_warning_present = any("FTS" in w for w in search_result.warnings)
-        print(f"FTS 启用: {not fts_warning_present}")
+        print(f"FTS enabled: {not fts_warning_present}")
 
         if search_result.warnings:
             for warning in search_result.warnings:
-                print(f"  警告: {warning}")
+                print(f"  Warning: {warning}")
 
         # Check if FTS worked or fell back to substring search
         if search_result.result_count > 0:
-            print(f"  找到 {search_result.result_count} 个结果")
+            print(f"  Found {search_result.result_count} results")
             for i, result in enumerate(search_result.results[:3], 1):
-                print(f"    {i}. 分数: {result.score:.4f}, 文本: {result.text[:50]}...")
+                print(f"    {i}. Score: {result.score:.4f}, text: {result.text[:50]}...")
             # Verify that query text appears in results (either via FTS or substring fallback)
             assert any(query_text in result.text for result in search_result.results), (
                 f"Query '{query_text}' should appear in search results"
             )
         else:
-            print("  未找到结果（可能 FTS 不支持中文分词）")
+            print("  No results found (FTS may not support Chinese tokenization)")
 
         # Check for FTS fallback warning
         # SearchPipelineResult.warnings is List[str], not List[SearchWarning]
         has_fallback_warning = any("FTS_FALLBACK" in w for w in search_result.warnings)
         if has_fallback_warning:
-            print("  ⚠️  使用了子串匹配回退（FTS 可能不支持中文分词）")
+            print("  Substring-match fallback was used (FTS may not support Chinese tokenization)")
 
     # Verify FTS index status
     vector_store = get_vector_index_store()
     index_result = vector_store.create_index(embedding_model_id, readonly=True)
     fts_enabled = index_result.fts_enabled
-    print(f"\nFTS 索引状态: {fts_enabled}")
+    print(f"\nFTS index status: {fts_enabled}")
     print("=" * 60)
 
 

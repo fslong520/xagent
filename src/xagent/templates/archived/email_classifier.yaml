@@ -8,13 +8,13 @@ tags:
   - triage
   - routing
   zh:
-  - 邮件
-  - 分类
-  - 分流
-  - 路由分配
+  - Email
+  - Classification
+  - Triage
+  - Routing
 descriptions:
   en: Automatically tag emails based on labels
-  zh: 按规则自动分类并标记邮件，辅助分流处理。
+  zh: Classifies and labels email by rule to support triage.
 author: Xagent
 version: '1.0'
 agent_config:
@@ -33,9 +33,9 @@ features:
   - Real-time intelligent insights
   - Easy integration and deployment
   zh:
-  - 自动化分析与处理
-  - 实时智能洞察
-  - 轻松集成与部署
+  - Automated analysis and processing
+  - Real-time intelligent insights
+  - Easy integration and deployment
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup

@@ -37,7 +37,7 @@ const nextConfig = {
   compiler: {
     removeConsole: isDev ? false : { exclude: ["error", "warn"] },
   },
-  // 解决开发模式错误
+  // Fix development-mode errors
   reactStrictMode: true,
   devIndicators: {
     position: 'bottom-right',

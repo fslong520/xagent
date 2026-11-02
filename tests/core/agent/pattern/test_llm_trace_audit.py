@@ -105,7 +105,7 @@ def test_truncate_for_trace_multibyte_head_no_replacement_chars() -> None:
     from xagent.core.agent.trace import truncate_for_trace
 
     # 100 CJK chars = 300 UTF-8 bytes; slice at 50 lands mid-codepoint.
-    value = "中" * 100
+    value = "\u4e2d" * 100
     out = truncate_for_trace(value, max_bytes=50)
     assert isinstance(out, str)
     assert "�" not in out, f"replacement char leaked into head: {out!r}"
@@ -759,7 +759,7 @@ def test_render_event_data_multibyte_small_payload_unchanged() -> None:
     """Multi-byte content inside the budget is not sliced."""
     from xagent.core.agent.trace import _render_event_data_for_log
 
-    payload = {"content": "中文测试" * 20}
+    payload = {"content": "\u4e2d\u6587\u6d4b\u8bd5" * 20}
     assert _render_event_data_for_log(payload, max_bytes=50_000) == f"{payload}"
 
 
@@ -768,7 +768,7 @@ def test_render_event_data_multibyte_dict_verbatim_at_budget_boundary() -> None:
     under the budget, where a char-count-based width estimate would wrongly
     truncate it.
 
-    Each ``中`` char is 3 UTF-8 bytes. A dict holding 16,500 of them renders
+    Each U+4E2D character is 3 UTF-8 bytes. A dict holding 16,500 of them renders
     to 49,515 bytes -- inside the 50,000 byte budget with the
     ``_LOG_CONTAINER_SLACK`` reserve (256 bytes) still unspent (probed
     boundary: this shape stays verbatim through 16,575 chars / 49,740
@@ -787,7 +787,7 @@ def test_render_event_data_multibyte_dict_verbatim_at_budget_boundary() -> None:
     """
     from xagent.core.agent.trace import _render_event_data_for_log
 
-    payload = {"content": "中" * 16_500}
+    payload = {"content": "\u4e2d" * 16_500}
     assert _render_event_data_for_log(payload, max_bytes=50_000) == f"{payload}"
 
 
@@ -889,9 +889,9 @@ def _chinese_step_results_payload(n_steps: int, id_len: int) -> Dict[str, Any]:
     return {
         "checkpoint_type": "step_complete",
         "step_results": {
-            f"步骤{i}-{'验证与执行' * id_len}": {
+            f"\u6b65\u9aa4{i}-{'\u9a8c\u8bc1\u4e0e\u6267\u884c' * id_len}": {
                 "status": "done",
-                "output": "结果" * 50,
+                "output": "\u7ed3\u679c" * 50,
             }
             for i in range(n_steps)
         },
@@ -919,7 +919,7 @@ def test_render_event_data_bounds_wide_chinese_keyed_dict() -> None:
         _shrink_within_budget,
     )
 
-    payload = {f"键{i}" + "中" * 200: "v" for i in range(3_000)}
+    payload = {f"\u952e{i}" + "\u4e2d" * 200: "v" for i in range(3_000)}
 
     shrunk = _shrink_within_budget(payload, 50_000)
     shrunk_bytes = len(f"{shrunk}".encode("utf-8"))
@@ -949,8 +949,8 @@ def test_render_event_data_bounds_chinese_step_results_checkpoint() -> None:
 @pytest.mark.parametrize(
     "payload",
     [
-        tuple("中文内容测试" * 4 for _ in range(20_000)),
-        {f"中文集合元素{i}" * 4 for i in range(20_000)},
+        tuple("\u4e2d\u6587\u5185\u5bb9\u6d4b\u8bd5" * 4 for _ in range(20_000)),
+        {f"\u4e2d\u6587\u96c6\u5408\u5143\u7d20{i}" * 4 for i in range(20_000)},
     ],
     ids=["tuple", "set"],
 )

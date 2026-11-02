@@ -14,11 +14,11 @@ from src.xagent.templates.manager import TemplateManager
 
 @pytest.fixture
 def temp_templates_dir():
-    """创建临时 templates 目录"""
+    """Create a temporary templates directory"""
     temp_dir = tempfile.mkdtemp()
     templates_dir = Path(temp_dir)
 
-    # 创建有效的模板文件
+    # Create a valid template file
     template1 = templates_dir / "customer_support.yaml"
     template1.write_text(
         """
@@ -30,7 +30,7 @@ tags:
   - customer
 descriptions:
   en: Professional customer support assistant
-  zh: 专业的客服助手
+  zh: Professional support assistant (zh)
 author: Xagent
 version: "1.0"
 
@@ -55,7 +55,7 @@ tags:
   - marketing
 descriptions:
   en: Professional sales assistant
-  zh: 专业的销售助手
+  zh: Professional sales assistant (zh)
 author: Xagent
 version: "1.0"
 
@@ -69,7 +69,7 @@ agent_config:
 """
     )
 
-    # 创建无效的模板文件（缺少必需字段）
+    # Create an invalid template file (missing required fields)
     invalid_template = templates_dir / "invalid.yaml"
     invalid_template.write_text(
         """
@@ -79,21 +79,21 @@ descriptions:
 """
     )
 
-    # 创建非 YAML 文件（应被忽略）
+    # Create a non-YAML file (must be ignored)
     (templates_dir / "readme.txt").write_text("This is a readme file")
 
     yield templates_dir
 
-    # 清理
+    # Clean up
     shutil.rmtree(temp_dir)
 
 
 class TestTemplateManager:
-    """测试 TemplateManager"""
+    """Tests for TemplateManager"""
 
     @pytest.mark.asyncio
     async def test_initialize_and_list_templates(self, temp_templates_dir):
-        """测试初始化和列出模板"""
+        """Test initialization and template listing"""
         manager = TemplateManager(templates_root=temp_templates_dir)
         await manager.initialize()
 
@@ -106,7 +106,7 @@ class TestTemplateManager:
 
     @pytest.mark.asyncio
     async def test_get_template(self, temp_templates_dir):
-        """测试获取单个模板"""
+        """Test fetching a single template"""
         manager = TemplateManager(templates_root=temp_templates_dir)
         await manager.initialize()
 
@@ -119,7 +119,7 @@ class TestTemplateManager:
         assert (
             template["descriptions"]["en"] == "Professional customer support assistant"
         )
-        assert template["descriptions"]["zh"] == "专业的客服助手"
+        assert template["descriptions"]["zh"] == "Professional support assistant (zh)"
         assert template["author"] == "Xagent"
         assert template["version"] == "1.0"
         assert "support" in template["tags"]
@@ -127,7 +127,7 @@ class TestTemplateManager:
 
     @pytest.mark.asyncio
     async def test_get_template_with_agent_config(self, temp_templates_dir):
-        """测试获取模板的 agent_config"""
+        """Test fetching a template's agent_config"""
         manager = TemplateManager(templates_root=temp_templates_dir)
         await manager.initialize()
 
@@ -144,7 +144,7 @@ class TestTemplateManager:
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_template(self, temp_templates_dir):
-        """测试获取不存在的模板"""
+        """Test fetching a nonexistent template"""
         manager = TemplateManager(templates_root=temp_templates_dir)
         await manager.initialize()
 
@@ -154,15 +154,15 @@ class TestTemplateManager:
 
     @pytest.mark.asyncio
     async def test_reload_templates(self, temp_templates_dir):
-        """测试重新加载模板"""
+        """Test reloading templates"""
         manager = TemplateManager(templates_root=temp_templates_dir)
         await manager.initialize()
 
-        # 初始加载
+        # Initial load
         templates = await manager.list_templates()
         assert len(templates) == 2
 
-        # 添加新模板
+        # Add a new template
         new_template = temp_templates_dir / "data_analyst.yaml"
         new_template.write_text(
             """
@@ -173,7 +173,7 @@ tags:
   - data
 descriptions:
   en: Data analysis expert
-  zh: 数据分析专家
+  zh: Data analysis expert (zh)
 author: Xagent
 version: "1.0"
 
@@ -185,7 +185,7 @@ agent_config:
 """
         )
 
-        # 重新加载
+        # Reload
         await manager.reload()
         templates = await manager.list_templates()
 
@@ -195,22 +195,22 @@ agent_config:
 
     @pytest.mark.asyncio
     async def test_ensure_initialized(self, temp_templates_dir):
-        """测试懒加载初始化"""
+        """Test lazy initialization"""
         manager = TemplateManager(templates_root=temp_templates_dir)
 
-        # 未初始化时，has_templates 应该返回 False
+        # Before initialization, has_templates must return False
         assert not manager.has_templates()
 
-        # 调用 ensure_initialized
+        # Call ensure_initialized
         await manager.ensure_initialized()
 
-        # 初始化后，has_templates 应该返回 True
+        # After initialization, has_templates must return True
         assert manager.has_templates()
 
     @pytest.mark.asyncio
     async def test_parse_yaml_with_defaults(self, temp_templates_dir):
-        """测试 YAML 解析时的默认值设置"""
-        # 创建缺少可选字段的模板
+        """Test the default values applied during YAML parsing"""
+        # Create a template that omits the optional fields
         minimal_template = temp_templates_dir / "minimal.yaml"
         minimal_template.write_text(
             """
@@ -219,7 +219,7 @@ name: Minimal Template
 category: Other
 descriptions:
   en: A minimal template
-  zh: 最小模板
+  zh: Minimal template (zh)
 """
         )
 
@@ -244,7 +244,7 @@ descriptions:
 
     @pytest.mark.asyncio
     async def test_get_template_with_sample_prompts(self, temp_templates_dir):
-        """测试模板的 sample_prompts 能正确加载并保留本地化结构"""
+        """Test that a template's sample_prompts load and keep the localized shape"""
         template_with_prompts = temp_templates_dir / "with_prompts.yaml"
         template_with_prompts.write_text(
             """
@@ -253,7 +253,7 @@ name: Template With Prompts
 category: Support
 descriptions:
   en: A template with sample prompts
-  zh: 一个带有示例提示词的模板
+  zh: A template with sample prompts (zh)
 sample_prompts:
   en:
   - title: Do the thing
@@ -264,12 +264,12 @@ sample_prompts:
     prompt: Do another thing entirely.
     highlights: []
   zh:
-  - title: 做这件事
-    prompt: 做这件事：粘贴输入。
+  - title: Do this thing (zh)
+    prompt: 'Do this thing: paste input (zh).'
     highlights:
-    - 粘贴输入
-  - title: 做另一件事
-    prompt: 做另一件完全不同的事。
+    - paste input (zh)
+  - title: Do another thing (zh)
+    prompt: Do another thing entirely (zh).
     highlights: []
 """
         )
@@ -283,14 +283,15 @@ sample_prompts:
         assert len(template["sample_prompts"]["en"]) == 2
         assert template["sample_prompts"]["en"][0]["title"] == "Do the thing"
         assert template["sample_prompts"]["en"][0]["highlights"] == ["paste input"]
-        assert template["sample_prompts"]["zh"][0]["title"] == "做这件事"
+        assert template["sample_prompts"]["zh"][0]["title"] == "Do this thing (zh)"
 
     @pytest.mark.asyncio
     async def test_malformed_sample_prompts_entry_is_skipped_not_fatal(
         self, temp_templates_dir
     ):
-        """一个模板的 sample_prompts 条目缺少必需字段时，该模板应被跳过而不是让
-        整个模板目录加载失败（避免单个作者错误导致 GET /api/templates/ 500）。"""
+        """When a template's sample_prompts entry misses a required field, only that
+        template is skipped instead of failing the whole template directory load
+        (so one authoring mistake cannot make GET /api/templates/ return 500)."""
         bad_template = temp_templates_dir / "bad_prompts.yaml"
         bad_template.write_text(
             """
@@ -299,7 +300,7 @@ name: Bad Prompts Template
 category: Support
 descriptions:
   en: A template with a malformed sample prompt
-  zh: 一个带有格式错误提示词的模板
+  zh: A template with a malformed sample prompt (zh)
 sample_prompts:
   en:
   - title: Missing the prompt field
@@ -322,8 +323,8 @@ sample_prompts:
 
     @pytest.mark.asyncio
     async def test_flat_list_sample_prompts_is_rejected(self, temp_templates_dir):
-        """sample_prompts 必须按语言分组（{"en": [...]}），写成扁平列表会静默
-        跳过本地化解析，因此在解析阶段就应当拒绝该写法。"""
+        """sample_prompts must be grouped per locale ({"en": [...]}); a flat list
+        silently skips localization, so that shape must be rejected at parse time."""
         bad_template = temp_templates_dir / "flat_prompts.yaml"
         bad_template.write_text(
             """
@@ -332,7 +333,7 @@ name: Flat Prompts Template
 category: Support
 descriptions:
   en: A template with a flat-list sample_prompts shape
-  zh: 一个 sample_prompts 为扁平列表的模板
+  zh: A template whose sample_prompts is a flat list (zh)
 sample_prompts:
 - title: Not locale-keyed
   prompt: This should have been nested under 'en'.
@@ -348,7 +349,7 @@ sample_prompts:
 
     @pytest.mark.asyncio
     async def test_get_template_with_persona(self, temp_templates_dir):
-        """persona 应正确加载并保留本地化结构，供 marketplace 卡片使用。"""
+        """persona must load correctly and keep its localized shape for the marketplace card."""
         template_with_persona = temp_templates_dir / "with_persona.yaml"
         template_with_persona.write_text(
             """
@@ -357,23 +358,23 @@ name: Social Media Content Manager
 category: Marketing
 descriptions:
   en: A template with a persona
-  zh: 一个带有 persona 的模板
+  zh: A template with a persona (zh)
 persona:
   name: Maya
   role:
     en: Social Media Content Manager
-    zh: 社媒内容经理
+    zh: Social Media Content Manager (zh)
   avatar: /marketplace/avatars/maya.png
   intro:
     en: "Hi — I'm Maya, your Social Media Content Manager."
-    zh: 你好，我是 Maya，你的社媒内容经理。
+    zh: Hi, I'm Maya, your Social Media Content Manager (zh).
   kickoff_questions:
     en:
     - Which platforms are in scope?
     - Do you have brand guidelines?
     zh:
-    - 涉及哪些平台？
-    - 有品牌规范吗？
+    - Which platforms are in scope (zh)?
+    - Do you have brand guidelines (zh)?
 """
         )
 
@@ -386,14 +387,14 @@ persona:
         persona = template["persona"]
         assert persona["name"] == "Maya"
         assert persona["role"]["en"] == "Social Media Content Manager"
-        assert persona["role"]["zh"] == "社媒内容经理"
+        assert persona["role"]["zh"] == "Social Media Content Manager (zh)"
         assert persona["avatar"] == "/marketplace/avatars/maya.png"
         assert len(persona["kickoff_questions"]["en"]) == 2
 
     @pytest.mark.asyncio
     async def test_persona_defaults_to_none_when_absent(self, temp_templates_dir):
-        """没有 persona 字段的模板（如 workforce 类型）应保持 persona=None，
-        而不是要求每个模板都作者一份 marketplace 卡片内容。"""
+        """Templates without a persona field (e.g. the workforce type) must keep
+        persona=None instead of requiring every template to author marketplace card content."""
         manager = TemplateManager(templates_root=temp_templates_dir)
         await manager.initialize()
 
@@ -418,11 +419,11 @@ name: No En Persona Role Template
 category: Support
 descriptions:
   en: A template with a persona.role missing 'en'
-  zh: 一个 persona.role 缺少 'en' 的模板
+  zh: A template whose persona.role is missing 'en' (zh)
 persona:
   name: Nia
   role:
-    zh: 某个角色
+    zh: Some role (zh)
 """
         )
 
@@ -432,7 +433,7 @@ persona:
         template = await manager.get_template("no_en_persona_role")
         assert template is not None
         assert template["persona"]["role"]["en"] == "No En Persona Role Template"
-        assert template["persona"]["role"]["zh"] == "某个角色"
+        assert template["persona"]["role"]["zh"] == "Some role (zh)"
 
     @pytest.mark.asyncio
     async def test_persona_intro_and_kickoff_without_en_key_still_optional(
@@ -583,12 +584,12 @@ workforce_config:
 
     @pytest.mark.asyncio
     async def test_skip_invalid_templates(self, temp_templates_dir):
-        """测试跳过无效的模板文件"""
+        """Test skipping invalid template files"""
         manager = TemplateManager(templates_root=temp_templates_dir)
         await manager.initialize()
 
-        # invalid.yaml 缺少必需字段，应该被跳过
-        # readme.txt 不是 YAML 文件，应该被忽略
+        # invalid.yaml misses required fields and must be skipped
+        # readme.txt is not a YAML file and must be ignored
         templates = await manager.list_templates()
 
         assert len(templates) == 2
@@ -597,7 +598,7 @@ workforce_config:
 
     @pytest.mark.asyncio
     async def test_empty_templates_directory(self, tmp_path):
-        """测试空的模板目录"""
+        """Test an empty templates directory"""
         manager = TemplateManager(templates_root=tmp_path)
         await manager.initialize()
 
@@ -900,11 +901,11 @@ workforce_config:
 
     @pytest.mark.asyncio
     async def test_nonexistent_templates_directory(self, tmp_path):
-        """测试不存在的模板目录"""
+        """Test a nonexistent templates directory"""
         nonexistent_dir = tmp_path / "nonexistent"
         manager = TemplateManager(templates_root=nonexistent_dir)
 
-        # 应该不抛出异常，只是记录警告
+        # This must not raise; it only logs a warning
         await manager.initialize()
 
         templates = await manager.list_templates()
@@ -1344,7 +1345,7 @@ class TestValidatePersona:
         get_localized_value's fallback-to-'en' would otherwise resolve to
         "" for an English requester, silently seeding a blank opening
         message instead of failing loudly here at load time."""
-        persona = {"name": "Nia", "intro": {"zh": "你好，我是 Nia。"}}
+        persona = {"name": "Nia", "intro": {"zh": "Hi, I'm Nia (zh)."}}
         with pytest.raises(ValueError, match="persona.intro.*'en'"):
             manager._validate_persona(persona)
 
@@ -1384,7 +1385,7 @@ class TestValidatePersona:
     def test_kickoff_questions_missing_en_is_rejected(self, manager):
         persona = {
             "name": "Nia",
-            "kickoff_questions": {"zh": ["第一个问题？"]},
+            "kickoff_questions": {"zh": ["First question (zh)?"]},
         }
         with pytest.raises(ValueError, match="persona.kickoff_questions.*'en'"):
             manager._validate_persona(persona)

@@ -183,6 +183,39 @@ class TestServeSpa:
             assert "TOPSECRET" not in r.text
             assert r.status_code == 404
 
+    def test_html_documents_carry_no_cache(self, dist_dir: Path):
+        """XN-5: every HTML document must revalidate.
+
+        A browser holding an old SPA shell keeps running removed ``_next``
+        chunks until a hard refresh, so the shells, static routes' own
+        ``.html``, the root and the 404 page all answer ``no-cache``.
+        """
+        _write(dist_dir / "memory.html", "<html>memory</html>")
+        client = TestClient(_app_with_backend_routes(dist_dir))
+
+        for path in ("/", "/memory", "/tools", "/agent/real-id-123"):
+            r = client.get(path)
+            assert r.status_code == 200, path
+            assert "no-cache" in r.headers.get("cache-control", ""), path
+
+        r = client.get("/totally/unknown/page")
+        assert r.status_code == 404
+        assert "no-cache" in r.headers.get("cache-control", "")
+
+    def test_hashed_assets_and_rsc_payloads_keep_their_caching(self, dist_dir: Path):
+        """XN-5: the new header is for HTML only — ``/_next/static`` hashed
+        assets (long-lived by construction) and ``.txt`` flight payloads are
+        untouched."""
+        client = TestClient(_app_with_backend_routes(dist_dir))
+
+        r = client.get("/_next/static/chunks/main.js")
+        assert r.status_code == 200
+        assert "no-cache" not in r.headers.get("cache-control", "")
+
+        r = client.get("/tools.txt")
+        assert r.status_code == 200
+        assert "no-cache" not in r.headers.get("cache-control", "")
+
 
 class TestMountFrontend:
     def test_returns_false_when_export_absent(self, tmp_path: Path):

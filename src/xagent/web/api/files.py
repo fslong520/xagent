@@ -2149,8 +2149,8 @@ async def public_download_file(
 
     # Pass filename= and let Starlette compose the Content-Disposition header.
     # Starlette 0.36+ generates ``filename*=utf-8''<percent-encoded>`` for
-    # non-ASCII names (e.g. 报告.pptx) via urllib.parse.quote, so we must NOT
-    # set the header manually: a raw ``filename="报告.pptx"`` string would be
+    # non-ASCII names (e.g. report.pptx) via urllib.parse.quote, so we must NOT
+    # set the header manually: a raw ``filename="report.pptx"`` string would be
     # latin-1 encoded by the ASGI layer and raise UnicodeEncodeError.
     # The default content_disposition_type is already "attachment", so we
     # only need to pass filename= here.

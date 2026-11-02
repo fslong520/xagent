@@ -49,7 +49,7 @@ export function I18nProvider({
   useEffect(() => {
     try {
       const stored = typeof window !== "undefined" ? localStorage.getItem("app_locale") : null
-      if (stored === "en" || stored === "zh") {
+      if (stored === "en") {
         if (stored !== locale) {
           setLocaleState(stored as Locale)
         }

@@ -8,25 +8,25 @@ tags:
   - SOAP
   - healthcare
   zh:
-  - 医疗
-  - 文档记录
+  - Healthcare
+  - Documentation
   - SOAP
-  - 医疗保健
+  - Healthcare
 descriptions:
   en: Summarizes patient consultations into structured medical notes
-  zh: 将问诊内容整理为结构化临床文档（SOAP、病程记录等）。
+  zh: Turns consultation notes into structured clinical documentation such as SOAP notes and progress notes.
 features:
   en:
   - Summarizes patient consultations into structured notes
   - Cuts documentation time per visit by 80%
   - Outputs SOAP-format notes ready to review
   zh:
-  - 将患者问诊总结为结构化笔记
-  - 每次就诊的文档记录时间缩短 80%
-  - 输出准备好供审核的 SOAP 格式笔记
+  - Summarises patient consultations into structured notes
+  - Cuts documentation time per visit by 80%
+  - Produces SOAP-format notes ready for review
 setup_time:
   en: 10 min setup
-  zh: 10分钟配置
+  zh: 10 min setup
 featured: true
 author: Xagent
 version: '1.0'

@@ -810,7 +810,7 @@ def test_search_issues_summarizes_issue_fields(monkeypatch):
         "fields": {
             "summary": "[Connectify][6thman] Persist customer configuration",
             "status": {
-                "name": "待办",
+                "name": "To Do",
                 "id": "10004",
                 "iconUrl": "https://api.atlassian.com/.../10004",
                 "statusCategory": {"id": 2, "name": "To Do", "key": "new"},
@@ -825,7 +825,7 @@ def test_search_issues_summarizes_issue_fields(monkeypatch):
                 "name": "P2 - High",
                 "iconUrl": "https://api.atlassian.com/.../priority",
             },
-            "issuetype": {"name": "任务", "avatarId": 10318, "subtask": False},
+            "issuetype": {"name": "Task", "avatarId": 10318, "subtask": False},
             "project": {
                 "id": "10033",
                 "key": "DW",
@@ -854,14 +854,14 @@ def test_search_issues_summarizes_issue_fields(monkeypatch):
         {
             "key": "DW-782",
             "summary": "[Connectify][6thman] Persist customer configuration",
-            "status": "待办",
+            "status": "To Do",
             "status_category": "To Do",
             "assignee": {
                 "account_id": "712020:98fdf2ea-b760-410a-ac9e-43b4f4d5038a",
                 "display_name": "jiarongling",
             },
             "priority": "P2 - High",
-            "issue_type": "任务",
+            "issue_type": "Task",
             "project_key": "DW",
             "labels": ["connectify", "connectify-uplift"],
             "parent_key": "DW-746",
@@ -2206,7 +2206,7 @@ def test_get_issue_flattens_description_and_surfaces_dependencies(monkeypatch):
                     }
                 ],
             },
-            "status": {"name": "待办", "statusCategory": {"name": "To Do"}},
+            "status": {"name": "To Do", "statusCategory": {"name": "To Do"}},
             "assignee": {
                 "accountId": "712020:98fdf2ea",
                 "displayName": "jiarongling",
@@ -2215,7 +2215,7 @@ def test_get_issue_flattens_description_and_surfaces_dependencies(monkeypatch):
             "reporter": {"accountId": "u2", "displayName": "Pete Rocke"},
             "creator": {"accountId": "u2", "displayName": "Pete Rocke"},
             "priority": {"name": "P2 - High"},
-            "issuetype": {"name": "任务"},
+            "issuetype": {"name": "Task"},
             "project": {"key": "DW", "name": "Datapel WMS"},
             "parent": {"key": "DW-746"},
             "resolution": None,

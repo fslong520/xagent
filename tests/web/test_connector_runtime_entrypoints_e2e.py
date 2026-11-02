@@ -1196,7 +1196,7 @@ async def test_telegram_voice_is_transcribed_as_prompt_and_kept_as_input_file(
             async def transcribe(self, *, audio: str, format: str | None = None) -> str:
                 assert audio == "/workspace/input/voice.oga"
                 assert format == "ogg"
-                return "今晚有世界杯比赛吗？"
+                return "Is there a World Cup match tonight?"
 
             async def aclose(self) -> None:
                 self.closed = True
@@ -1263,7 +1263,7 @@ async def test_telegram_voice_is_transcribed_as_prompt_and_kept_as_input_file(
 
         assert len(agent_manager.execute_calls) == 1
         execute_call = agent_manager.execute_calls[0]
-        assert execute_call["task"].startswith("今晚有世界杯比赛吗？")
+        assert execute_call["task"].startswith("Is there a World Cup match tonight?")
         assert "voice.oga: file_id=workspace-file-id" in execute_call["task"]
         assert execute_call["context"]["file_info"] == [
             {
@@ -1287,12 +1287,18 @@ async def test_telegram_voice_is_transcribed_as_prompt_and_kept_as_input_file(
             }
         ]
         assert execute_call["context"]["files"] == expected_attachments
-        assert execute_call["context"]["display_message"] == "今晚有世界杯比赛吗？"
+        assert (
+            execute_call["context"]["display_message"]
+            == "Is there a World Cup match tonight?"
+        )
         assert asr_model.closed is True
 
         task = (
             db.query(Task)
-            .filter(Task.user_id == user.id, Task.title == "今晚有世界杯比赛吗？")
+            .filter(
+                Task.user_id == user.id,
+                Task.title == "Is there a World Cup match tonight?",
+            )
             .one_or_none()
         )
         assert task is not None
@@ -1304,7 +1310,7 @@ async def test_telegram_voice_is_transcribed_as_prompt_and_kept_as_input_file(
             )
             .one()
         )
-        assert user_message.content == "今晚有世界杯比赛吗？"
+        assert user_message.content == "Is there a World Cup match tonight?"
         assert user_message.attachments == expected_attachments
     finally:
         db.close()
@@ -4731,7 +4737,7 @@ def _overwrite_context_row_text(task_id: int, server_id: int, raw_text: str) -> 
         '{"b": 1,   "a": 2}',
         # Non-ASCII, unescaped -- `ensure_ascii=True` (json.dumps's
         # default) would have turned this into \\uXXXX escapes.
-        '{"name": "会议室预订"}',
+        '{"name": "Meeting room booking"}',
     ],
 )
 def test_values_endpoint_expected_old_value_is_the_database_rendering(

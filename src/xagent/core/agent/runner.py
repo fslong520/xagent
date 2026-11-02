@@ -860,7 +860,7 @@ class AgentRunner:
         budget = active_execution_budget.get()
         chinese = "Chinese" in effective_output_language(context)
         answer = (
-            "本次执行已达到 token 上限，已停止继续调用。任务尚未全部完成，已有结果保留在执行记录中。"
+            "This run reached the token limit and stopped further calls. The task is not fully complete; existing results remain in the execution record."
             if chinese
             else "Execution stopped at the token budget limit. The task is not fully completed; existing results remain in the execution history."
         )
@@ -889,7 +889,7 @@ class AgentRunner:
         ]
         if links:
             answer += (
-                "\n\n已有文件（不代表已完成校验）：\n"
+                "\n\nExisting files (not evidence of validation):\n"
                 if chinese
                 else "\n\nExisting files (not a claim of validation):\n"
             ) + "\n".join(links)

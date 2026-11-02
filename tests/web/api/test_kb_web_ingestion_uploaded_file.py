@@ -107,7 +107,7 @@ class TestNormalizeWebTitleForFilename:
     """Unit tests for web-title filename normalization."""
 
     def test_truncates_multibyte_titles_to_safe_filename_budget(self) -> None:
-        title = "你" * 120
+        title = "\u4f60" * 120
 
         normalized = _normalize_web_title_for_filename(title)
         filename = f"{'0' * 16}_{normalized}.md"
@@ -121,7 +121,7 @@ class TestIngestFileHelpers:
     def test_build_ingest_backup_path_bounds_long_filenames(
         self, tmp_path: Path
     ) -> None:
-        source_path = tmp_path / f"{'你' * 100}.txt"
+        source_path = tmp_path / (("\u4f60" * 100) + ".txt")
 
         backup_path = _build_ingest_backup_path(source_path)
 

@@ -1,16 +1,16 @@
-"""xagent Web 模块
+"""xagent web module.
 
-这个模块提供了xagent的Web界面，包括：
-- REST API接口
-- WebSocket实时通信
-- 前端用户界面
-- 监控和管理功能
+This module provides the xagent web interface, including:
+- REST API endpoints
+- WebSocket realtime communication
+- Frontend user interface
+- Monitoring and management
 
-使用方式:
-    # 命令行启动
+Usage:
+    # Start from the command line
     python -m xagent.web
 
-    # 程序中启动
+    # Start from code
     from xagent.web import run_server
     run_server(host="0.0.0.0", port=8000)
 """
@@ -27,13 +27,13 @@ except Exception:
 def run_server(
     host: str = "127.0.0.1", port: int = 8000, reload: bool = False, **kwargs: Any
 ) -> None:
-    """快速启动Web服务器
+    """Start the web server quickly.
 
     Args:
-        host: 服务器主机地址
-        port: 服务器端口
-        reload: 是否启用自动重载
-        **kwargs: 其他uvicorn参数
+        host: Server host address
+        port: Server port
+        reload: Whether to enable auto-reload
+        **kwargs: Extra uvicorn arguments
     """
     import uvicorn
 

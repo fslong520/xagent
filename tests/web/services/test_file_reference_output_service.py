@@ -100,13 +100,13 @@ def test_reconcile_repairs_invented_id_from_unique_filename():
             task_id=int(task.id),
             user_id=int(user.id),
             content=(
-                "下载：[generated_video_253a6da9.mp4]"
+                "Download: [generated_video_253a6da9.mp4]"
                 "(file:253a6da9-76e1-4b16-b26e-2eba2d8b0583)"
             ),
         )
 
         assert content == (
-            "下载：[generated_video_253a6da9.mp4]"
+            "Download: [generated_video_253a6da9.mp4]"
             "(file:c6553861-5bdd-4628-9b15-1310e34fe499)"
         )
     finally:
@@ -177,10 +177,10 @@ def test_reconcile_adds_title_and_keeps_label_when_extension_is_missing():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载视频（MP4）](file:real-id)",
+            content="[Download video (MP4)](file:real-id)",
         )
 
-        assert content == '[下载视频（MP4）](file:real-id "generated_video.mp4")'
+        assert content == '[Download video (MP4)](file:real-id "generated_video.mp4")'
     finally:
         db.close()
 
@@ -201,10 +201,10 @@ def test_reconcile_adds_title_for_audio_when_extension_is_missing():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载音频（MP3）](file:real-id)",
+            content="[Download audio (MP3)](file:real-id)",
         )
 
-        assert content == '[下载音频（MP3）](file:real-id "generated_podcast.mp3")'
+        assert content == '[Download audio (MP3)](file:real-id "generated_podcast.mp3")'
     finally:
         db.close()
 
@@ -229,10 +229,10 @@ def test_reconcile_adds_title_for_m4v_extension():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载视频（M4V）](file:real-id)",
+            content="[Download video (M4V)](file:real-id)",
         )
 
-        assert content == '[下载视频（M4V）](file:real-id "generated_video.m4v")'
+        assert content == '[Download video (M4V)](file:real-id "generated_video.m4v")'
     finally:
         db.close()
 
@@ -252,10 +252,10 @@ def test_reconcile_adds_title_case_insensitively():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载视频](file:real-id)",
+            content="[Download video](file:real-id)",
         )
 
-        assert content == '[下载视频](file:real-id "CLIP.MP4")'
+        assert content == '[Download video](file:real-id "CLIP.MP4")'
     finally:
         db.close()
 
@@ -278,10 +278,10 @@ def test_reconcile_self_heals_stale_title_to_current_filename():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content='[下载视频（MP4）](file:real-id "old_video_name.mp4")',
+            content='[Download video (MP4)](file:real-id "old_video_name.mp4")',
         )
 
-        assert content == '[下载视频（MP4）](file:real-id "renamed_video.mp4")'
+        assert content == '[Download video (MP4)](file:real-id "renamed_video.mp4")'
     finally:
         db.close()
 
@@ -301,10 +301,10 @@ def test_reconcile_keeps_custom_label_for_plain_download_file():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载笔记](file:real-id)",
+            content="[Download note](file:real-id)",
         )
 
-        assert content == "[下载笔记](file:real-id)"
+        assert content == "[Download note](file:real-id)"
     finally:
         db.close()
 
@@ -332,10 +332,10 @@ def test_reconcile_keeps_custom_label_for_office_document():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载报告](file:real-id)",
+            content="[Download report](file:real-id)",
         )
 
-        assert content == "[下载报告](file:real-id)"
+        assert content == "[Download report](file:real-id)"
     finally:
         db.close()
 
@@ -385,10 +385,10 @@ def test_reconcile_uses_title_for_filename_with_closing_bracket():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载视频（MP4）](file:real-id)",
+            content="[Download video (MP4)](file:real-id)",
         )
 
-        assert content == '[下载视频（MP4）](file:real-id "clip ].mp4")'
+        assert content == '[Download video (MP4)](file:real-id "clip ].mp4")'
     finally:
         db.close()
 
@@ -414,10 +414,10 @@ def test_reconcile_skips_rewrite_for_filename_with_opening_bracket():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载视频（MP4）](file:real-id)",
+            content="[Download video (MP4)](file:real-id)",
         )
 
-        assert content == "[下载视频（MP4）](file:real-id)"
+        assert content == "[Download video (MP4)](file:real-id)"
     finally:
         db.close()
 
@@ -440,7 +440,7 @@ def test_reconcile_falls_back_to_label_rewrite_for_filename_with_quote():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载视频（MP4）](file:real-id)",
+            content="[Download video (MP4)](file:real-id)",
         )
 
         assert content == '[clip".mp4](file:real-id)'
@@ -466,10 +466,10 @@ def test_reconcile_skips_rewrite_for_filename_unsafe_for_both_title_and_label():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载视频（MP4）](file:real-id)",
+            content="[Download video (MP4)](file:real-id)",
         )
 
-        assert content == "[下载视频（MP4）](file:real-id)"
+        assert content == "[Download video (MP4)](file:real-id)"
     finally:
         db.close()
 
@@ -493,10 +493,10 @@ def test_reconcile_adds_title_for_image_syntax_video_reference():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="![预览视频](file:real-id)",
+            content="![Preview video](file:real-id)",
         )
 
-        assert content == '![预览视频](file:real-id "generated_video.mp4")'
+        assert content == '![Preview video](file:real-id "generated_video.mp4")'
     finally:
         db.close()
 
@@ -519,10 +519,10 @@ def test_reconcile_keeps_alt_text_for_image_syntax_image_reference():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="![季度收入图表](file:real-id)",
+            content="![Quarterly revenue chart](file:real-id)",
         )
 
-        assert content == "![季度收入图表](file:real-id)"
+        assert content == "![Quarterly revenue chart](file:real-id)"
     finally:
         db.close()
 
@@ -569,7 +569,7 @@ def test_reconcile_title_injection_is_idempotent():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载视频（MP4）](file:real-id)",
+            content="[Download video (MP4)](file:real-id)",
         )
         twice = reconcile_assistant_file_references(
             db,
@@ -578,7 +578,7 @@ def test_reconcile_title_injection_is_idempotent():
             content=once,
         )
 
-        assert once == '[下载视频（MP4）](file:real-id "generated_video.mp4")'
+        assert once == '[Download video (MP4)](file:real-id "generated_video.mp4")'
         assert twice == once
     finally:
         db.close()
@@ -633,12 +633,12 @@ def test_reconcile_repairs_invented_id_from_title_when_label_is_prose():
             task_id=int(task.id),
             user_id=int(user.id),
             content=(
-                '[下载视频（MP4）](file:invented-id "generated_video_253a6da9.mp4")'
+                '[Download video (MP4)](file:invented-id "generated_video_253a6da9.mp4")'
             ),
         )
 
         assert content == (
-            "[下载视频（MP4）](file:c6553861-5bdd-4628-9b15-1310e34fe499 "
+            "[Download video (MP4)](file:c6553861-5bdd-4628-9b15-1310e34fe499 "
             '"generated_video_253a6da9.mp4")'
         )
     finally:
@@ -668,9 +668,9 @@ def test_reconcile_repairs_from_title_after_original_record_is_removed():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content="[下载视频（MP4）](file:original-id)",
+            content="[Download video (MP4)](file:original-id)",
         )
-        assert once == '[下载视频（MP4）](file:original-id "generated_video.mp4")'
+        assert once == '[Download video (MP4)](file:original-id "generated_video.mp4")'
 
         stale_record = (
             db.query(UploadedFile).filter(UploadedFile.file_id == "original-id").one()
@@ -692,7 +692,9 @@ def test_reconcile_repairs_from_title_after_original_record_is_removed():
             content=once,
         )
 
-        assert twice == ('[下载视频（MP4）](file:replacement-id "generated_video.mp4")')
+        assert twice == (
+            '[Download video (MP4)](file:replacement-id "generated_video.mp4")'
+        )
     finally:
         db.close()
 
@@ -710,13 +712,13 @@ def test_reconcile_unlinks_titled_reference_with_ambiguous_filename():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content='[下载报告](file:invented-id "report.mp4")',
+            content='[Download report](file:invented-id "report.mp4")',
         )
 
         # The title survives as plain text: it's this function's own
         # channel for the real filename, and dropping it here would
         # destroy the one clue naming which file was meant.
-        assert content == "下载报告 (report.mp4)"
+        assert content == "Download report (report.mp4)"
         assert "file:" not in content
     finally:
         db.close()
@@ -741,10 +743,10 @@ def test_reconcile_unlinks_titled_reference_when_stored_file_id_is_invalid():
             db,
             task_id=int(task.id),
             user_id=int(user.id),
-            content='[下载视频](file:invented-id "generated_video.mp4")',
+            content='[Download video](file:invented-id "generated_video.mp4")',
         )
 
-        assert content == "下载视频 (generated_video.mp4)"
+        assert content == "Download video (generated_video.mp4)"
     finally:
         db.close()
 
@@ -799,13 +801,13 @@ def test_reconcile_handles_multiple_valid_links_in_one_message():
             task_id=int(task.id),
             user_id=int(user.id),
             content=(
-                "[下载视频（MP4）](file:video-id) and [下载音频（MP3）](file:audio-id)"
+                "[Download video (MP4)](file:video-id) and [Download audio (MP3)](file:audio-id)"
             ),
         )
 
         assert content == (
-            '[下载视频（MP4）](file:video-id "generated_video.mp4") and '
-            '[下载音频（MP3）](file:audio-id "generated_podcast.mp3")'
+            '[Download video (MP4)](file:video-id "generated_video.mp4") and '
+            '[Download audio (MP3)](file:audio-id "generated_podcast.mp3")'
         )
     finally:
         db.close()

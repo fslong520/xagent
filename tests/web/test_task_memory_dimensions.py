@@ -1,4 +1,4 @@
-"""Task/agent memory-dimension stamping (task/agent memory 断链修复).
+"""Task/agent memory-dimension stamping (task/agent memory linkage fix).
 
 Two producers exist for the ``task``/``agent`` memory dimensions:
 

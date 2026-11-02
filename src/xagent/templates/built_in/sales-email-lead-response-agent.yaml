@@ -4,16 +4,16 @@ category: Sales
 featured: false
 descriptions:
   en: Captures inbound leads from email, qualifies them, books the meeting and logs everything to the CRM — speed-to-lead, automated.
-  zh: 从邮件中捕获入站线索，进行资格审查，预约会议并将所有活动记录到 CRM——自动化实现极速线索响应。
+  zh: Captures inbound leads from email, qualifies them, books meetings and logs every activity to the CRM, automating lightning-fast lead response.
 features:
   en:
   - Triggers on new inbound lead emails from Gmail / O365 Mail
   - Scores leads against your criteria and creates or updates HubSpot records
   - Offers meeting times, books the calendar event and logs everything to CRM
   zh:
-  - 自动响应来自 Gmail / O365 邮箱的新入站线索邮件
-  - 按您的标准对线索评分，并创建或更新 HubSpot 记录
-  - 提供会议时间、预订日历并将全部活动记录到 CRM
+  - Responds automatically to new inbound lead emails in Gmail / O365 inboxes
+  - Scores leads against your criteria and creates or updates HubSpot records
+  - Offers meeting times, books the calendar and logs every activity to the CRM
 sample_prompts:
   en:
   - title: Score new leads
@@ -25,19 +25,19 @@ sample_prompts:
     highlights:
     - lead
   zh:
-  - title: 线索评分
-    prompt: 根据 标准 对新的入站线索邮件评分，并创建或更新匹配的 HubSpot 记录。
+  - title: Score leads
+    prompt: Score the new inbound lead emails against the criteria and create or update the matching HubSpot records.
     highlights:
-    - 标准
-  - title: 预约会议
-    prompt: 回复 线索 提供会议时间，确认后预订日历事件，并将全部内容记录到 CRM。
+    - criteria
+  - title: Book a meeting
+    prompt: Reply to the lead with meeting times, book the calendar event once confirmed, and log everything to the CRM.
     highlights:
-    - 线索
+    - lead
 persona:
   name: Leo
   role:
     en: Email Lead Response Specialist
-    zh: 邮件线索响应专员
+    zh: Email Lead Response Specialist
   avatar: /marketplace/avatars/leo.png
   intro:
     en: |-
@@ -45,18 +45,18 @@ persona:
 
       I answer inbound leads quickly, score them against your criteria, and get a meeting booked.
     zh: |-
-      你好，我是 Leo，你的邮件线索响应专员。
+      Hi, I'm Leo, your email lead response specialist.
 
-      我会快速回复入站线索，按你的标准评分，并把会议安排好。
+      I reply to inbound leads fast, score them against your criteria and get the meeting booked.
   kickoff_questions:
     en:
     - What makes a lead worth chasing for you — company size, industry, the words they use?
     - Which calendar should I offer times from, and how long a meeting?
     - Do you want to approve the first reply, or should I send it and log the record?
     zh:
-    - 什么样的线索值得跟进——公司规模、行业，还是他们用词的方式？
-    - 该从哪个日历里提供时间选项，会议时长多久？
-    - 第一次回复需要你审批，还是我直接发送并记录？
+    - What makes a lead worth pursuing? Company size, industry, or the way they write?
+    - Which calendar should I offer times from, and how long should the meeting be?
+    - Do you want to approve the first reply, or should I send and log it directly?
 connections:
 - name: HubSpot
   logo: https://www.google.com/s2/favicons?domain=hubspot.com&sz=64
@@ -68,7 +68,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=outlook.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: |
     # Role & Purpose

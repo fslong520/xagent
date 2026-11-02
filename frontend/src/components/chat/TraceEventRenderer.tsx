@@ -573,35 +573,51 @@ export function processTraceEvents(
         if (!step.stepName) {
           step.stepName = t('traceEventRenderer.taskExecution');
         }
-        step.actions.push({
-          id: eventId,
-          type: 'info',
-          // an auth/outage failure must not masquerade as "nothing was ever remembered"
-          title:
-            retrievalError && !count
-              ? t('traceEventRenderer.memoryRetrievalFailed', { reason: retrievalError })
-              : t('traceEventRenderer.memoryRetrieved', { count }),
-          status: 'completed',
-          timestamp,
-          data: { statusLine: true },
-        });
+        // The explicit search_memory tool marks its own retrieve events with
+        // source="search_memory" (memory_tool.py). Its row already shows the
+        // query and the hit list, so a strip line after it adds nothing — and
+        // because strip lines read as the header of what follows, the count
+        // ended up labelling the *next* tool row: a store step displayed
+        // "Memory retrieved: 1" above it (XN-7, 2026-10-30 probe x76/x77). Only the
+        // automatic recall, which has no row of its own, keeps the line.
+        if (eventData.source !== 'search_memory') {
+          step.actions.push({
+            id: eventId,
+            type: 'info',
+            // an auth/outage failure must not masquerade as "nothing was ever remembered"
+            title:
+              retrievalError && !count
+                ? t('traceEventRenderer.memoryRetrievalFailed', { reason: retrievalError })
+                : t('traceEventRenderer.memoryRetrieved', { count }),
+            status: 'completed',
+            timestamp,
+            data: { statusLine: true },
+          });
+        }
       }
 
       if (event.event_type === 'task_end_memory_store') {
         // The write is as much a memory moment as the read: without this line
         // a stored fact appears nowhere in the timeline and the user cannot
-        // tell that anything was remembered. One status line per store.
+        // tell that anything was remembered. One status line per store, and
+        // the wording follows the write action: an update or a delete must not
+        // be reported as "Memory stored (update)".
         const stored = eventData.storage_success !== false;
         const action = String(eventData.storage_action || (stored ? 'stored' : ''));
+        const storeTitle = !stored
+          ? t('traceEventRenderer.memoryStoreFailed')
+          : action === 'update'
+            ? t('traceEventRenderer.memoryUpdated')
+            : action === 'delete'
+              ? t('traceEventRenderer.memoryDeleted')
+              : t('traceEventRenderer.memoryStored', { action });
         if (!step.stepName) {
           step.stepName = t('traceEventRenderer.taskExecution');
         }
         step.actions.push({
           id: eventId,
           type: 'info',
-          title: stored
-            ? t('traceEventRenderer.memoryStored', { action })
-            : t('traceEventRenderer.memoryStoreFailed'),
+          title: storeTitle,
           status: 'completed',
           timestamp,
           data: { statusLine: true },
@@ -816,6 +832,35 @@ export function processTraceEvents(
               artifacts,
               sandboxed: !!event.data?.sandboxed
             }
+          });
+        }
+
+        // update_memory / delete_memory emit no write trace event of their
+        // own (only store_memory does), so without this line the strip shows
+        // the bare tool row while store gets "Memory stored". Give the two write
+        // actions their own status line, keyed to an explicit success so a
+        // failed call keeps the tool row's own error output instead of
+        // claiming a write that never happened.
+        const completedTool = action?.data?.tool as string | undefined;
+        const writeSucceeded =
+          typeof result === 'object' && result !== null && (result as { success?: unknown }).success === true;
+        if (writeSucceeded && completedTool === 'update_memory') {
+          step.actions.push({
+            id: `${eventId}-memory-updated`,
+            type: 'info',
+            title: t('traceEventRenderer.memoryUpdated'),
+            status: 'completed',
+            timestamp,
+            data: { statusLine: true },
+          });
+        } else if (writeSucceeded && completedTool === 'delete_memory') {
+          step.actions.push({
+            id: `${eventId}-memory-deleted`,
+            type: 'info',
+            title: t('traceEventRenderer.memoryDeleted'),
+            status: 'completed',
+            timestamp,
+            data: { statusLine: true },
           });
         }
       }

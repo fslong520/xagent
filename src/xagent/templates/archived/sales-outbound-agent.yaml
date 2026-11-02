@@ -4,16 +4,16 @@ category: Sales
 featured: true
 descriptions:
   en: Sources prospective customers within ICP, researches, filters and builds scored lists to contact.
-  zh: 在理想客户画像中寻找潜在客户，研究、筛选并建立评分列表。
+  zh: Finds prospects within the ideal customer profile, researches and filters them, and builds a scored list.
 features:
   en:
   - Finds potential customers from platforms like LinkedIn
   - Pulls contact details automatically
   - Filters leads by company size & other criteria
   zh:
-  - 从LinkedIn等平台寻找潜在客户
-  - 自动提取联系方式
-  - 根据公司规模等标准筛选潜在客户
+  - Finds prospects on LinkedIn and similar platforms
+  - Extracts contact details automatically
+  - Filters prospects on criteria such as company size
 connections:
 - name: LinkedIn
   logo: https://www.google.com/s2/favicons?domain=linkedin.com&sz=64
@@ -25,7 +25,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=hubspot.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: '**Role & Purpose**
 

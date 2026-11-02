@@ -8,7 +8,6 @@ import type { Locale } from "@/i18n/translations"
 // with a widened Locale union, and any unmapped locale is itself a BCP 47 tag.
 const displayDateLocales: Partial<Record<Locale, string>> = {
   en: "en-US",
-  zh: "zh-CN",
 }
 
 /** Formats a non-blank, parseable display-date string, returning empty text for invalid input. */

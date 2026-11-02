@@ -265,8 +265,8 @@ def test_multibyte_task_id_filename_stays_under_the_byte_cap(tmp_path):
     """A CJK collection name is 3 bytes per character, so cap bytes not characters."""
     persistence = ProgressPersistence(storage_dir=str(tmp_path))
     # 250 characters is the wrong unit: this id is under it, over the 250-byte budget.
-    first = "ingest_知识库" + "文档" * 60
-    second = "ingest_知识库" + "文档" * 59 + "报告"
+    first = "ingest_\u77e5\u8bc6\u5e93" + "\u6587\u6863" * 60
+    second = "ingest_\u77e5\u8bc6\u5e93" + "\u6587\u6863" * 59 + "\u62a5\u544a"
     assert len(first) < 250 < len(first.encode("utf-8"))
 
     first_path = persistence._get_task_file_path(first)

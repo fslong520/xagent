@@ -251,7 +251,7 @@ class TestPromoteVersionMain:
         mock_calc = MagicMock()
         mock_calc.return_value = {
             "deleted_counts": {"parses": 2, "chunks": 10, "embeddings": 50},
-            "notes": ["需重新chunk/embed"],
+            "notes": ["\u9700\u91cd\u65b0chunk/embed"],
             "current_pointer": {
                 "semantic_id": "parse_old_v1",
                 "technical_id": "old123",
@@ -274,7 +274,7 @@ class TestPromoteVersionMain:
                 assert result["deleted_counts"]["parses"] == 2
                 assert result["deleted_counts"]["chunks"] == 10
                 assert result["deleted_counts"]["embeddings"] == 50
-                assert "需重新chunk/embed" in result["notes"]
+                assert "\u9700\u91cd\u65b0chunk/embed" in result["notes"]
 
     def test_not_confirmed_mode(self):
         """Test behavior when confirm=False (not confirmed mode).
@@ -368,7 +368,7 @@ class TestPromoteVersionMain:
             mock_calc = MagicMock()
             mock_calc.return_value = {
                 "deleted_counts": {"parses": 2, "chunks": 10, "embeddings": 50},
-                "notes": ["需重新chunk/embed"],
+                "notes": ["\u9700\u91cd\u65b0chunk/embed"],
                 "current_pointer": {
                     "semantic_id": "parse_old_v1",
                     "technical_id": "old123",

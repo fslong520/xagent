@@ -382,7 +382,7 @@ def test_mcp_tool_adapter_source_server_defaults_none():
         # id to fall back on for uniqueness, so this test pins today's
         # trade-off (two same-length CJK names collide) rather than
         # leaving it to be discovered later.
-        ("查询", "mcp_Coding_MCP___"),
+        ("\u67e5\u8be2", "mcp_Coding_MCP___"),
     ],
 )
 def test_mcp_tool_adapter_name_strips_disallowed_characters_for_openai_compatible_apis(
@@ -4381,24 +4381,24 @@ def test_non_ascii_metadata_reaches_the_emitted_schema(is_required):
     characters is three times the cap in UTF-8 bytes, which is the point:
     the cap counts what the author wrote, not how it encodes.
     """
-    long_description = "西" * (_FIELD_TEXT_MAX_CHARS + 50)
+    long_description = "\u897f" * (_FIELD_TEXT_MAX_CHARS + 50)
     carrier = _emitted_metadata(
         {
             "f": {
                 "type": "string",
                 "description": long_description,
-                "enum": ["公制", "英制"],
-                "pattern": "^[一-鿿]+$",
+                "enum": ["\u516c\u5236", "\u82f1\u5236"],
+                "pattern": "^[\u4e00-\u9fff]+$",
             }
         },
         ["f"] if is_required else [],
     )
 
     assert len(carrier["description"]) == _FIELD_TEXT_MAX_CHARS
-    assert carrier["description"] == "西" * (_FIELD_TEXT_MAX_CHARS - 1) + "…"
+    assert carrier["description"] == "\u897f" * (_FIELD_TEXT_MAX_CHARS - 1) + "…"
     assert len(carrier["description"].encode("utf-8")) > _FIELD_TEXT_MAX_CHARS
-    assert carrier["enum"] == ["公制", "英制"]
-    assert carrier["pattern"] == "^[一-鿿]+$"
+    assert carrier["enum"] == ["\u516c\u5236", "\u82f1\u5236"]
+    assert carrier["pattern"] == "^[\u4e00-\u9fff]+$"
 
 
 @pytest.mark.parametrize("is_required", [True, False])

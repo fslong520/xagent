@@ -8,25 +8,25 @@ tags:
   - service
   - helpdesk
   zh:
-  - 支持
-  - 客户
-  - 服务
-  - 帮助台
+  - Support
+  - Customer
+  - Service
+  - Helpdesk
 descriptions:
   en: Instant answers from knowledge bases
-  zh: 基于知识库快速解答客户问题并协助处理。
+  zh: Answers customer questions from the knowledge base and helps resolve tickets quickly.
 features:
   en:
   - Answers tickets instantly from your knowledge base
   - Escalates edge cases to the right human
   - Runs 24/7 across chat, email & web
   zh:
-  - 瞬间从知识库中获取答案并回复工单
-  - 将边缘情况自动升级给合适的人工客服
-  - 在聊天、邮件和网页端全天候运行
+  - Pulls answers from the knowledge base and replies to tickets instantly
+  - Escalates edge cases to the right human agent automatically
+  - Runs around the clock across chat, email and web
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 featured: true
 author: Xagent
 version: '1.0'

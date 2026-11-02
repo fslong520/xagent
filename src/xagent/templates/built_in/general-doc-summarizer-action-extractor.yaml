@@ -4,7 +4,7 @@ category: General
 featured: true
 descriptions:
   en: Upload any document and get back a clean, organized summary — plus every action item, deadline, and owner buried inside it.
-  zh: 上传任何文档，即可获得清晰、有条理的摘要——以及其中隐藏的每一项行动项、截止日期和负责人。
+  zh: Upload any document to get a clear, well-structured summary, plus every action item, deadline and owner hidden inside it.
 features:
   en:
   - Parses PDF, Word, PowerPoint, and TXT documents dropped into chat or a widget
@@ -14,12 +14,12 @@ features:
   - Extracts every action item, deadline, and owner buried in the text
   - Answers follow-up questions about the document in the same thread
   zh:
-  - 解析拖入聊天窗口或组件的 PDF、Word、PowerPoint 和 TXT 文档
-  - 内置 OCR 自动提取扫描页文字，无需额外配置
-  - 配置视觉模型后，可解读直接上传到聊天的图片文件
-  - 生成完整文档的清晰、结构化摘要
-  - 提取文本中隐藏的每一项行动项、截止日期和负责人
-  - 在同一对话线程中回答关于文档的后续问题
+  - Parses PDF, Word, PowerPoint and TXT files dropped into the chat or composer
+  - Built-in OCR extracts text from scanned pages with no extra setup
+  - Reads image files uploaded straight into the chat once a vision model is configured
+  - Produces a clear, structured summary of the whole document
+  - Extracts every action item, deadline and owner buried in the text
+  - Answers follow-up questions about the document in the same thread
 sample_prompts:
   en:
   - title: Summarise a document
@@ -31,19 +31,19 @@ sample_prompts:
     highlights:
     - document / meeting notes
   zh:
-  - title: 总结文档
-    prompt: 总结附加的 PDF / Word / PowerPoint 文档，并提炼要点和结论。
+  - title: Summarise a document
+    prompt: Summarise the attached PDF / Word / PowerPoint document and pull out the key points and conclusions.
     highlights:
     - PDF / Word / PowerPoint
-  - title: 提取行动项
-    prompt: 从 文档 / 会议纪要 中提取每一项行动项，按负责人和截止日期归类。
+  - title: Extract action items
+    prompt: Extract every action item from the document / meeting notes and group them by owner and deadline.
     highlights:
-    - 文档 / 会议纪要
+    - document / meeting notes
 persona:
   name: Iris
   role:
     en: Doc Summarizer & Action Extractor
-    zh: 文档摘要与行动项提取
+    zh: Document Summariser & Action Extractor
   avatar: /marketplace/avatars/iris.png
   intro:
     en: |-
@@ -51,22 +51,22 @@ persona:
 
       I read the documents you drop in and hand back a summary plus every action item, owner and deadline.
     zh: |-
-      你好，我是 Iris，你的文档摘要与行动项提取助手。
+      Hi, I'm Iris, your document summariser and action extractor.
 
-      把文档丢给我，我会返回一份摘要，外加其中的每一项行动项、负责人和截止日期。
+      Drop a document on me and I'll return a summary plus every action item, owner and deadline inside it.
   kickoff_questions:
     en:
     - What am I reading first — contracts, board packs, meeting decks, something else?
     - Do you want the summary first with actions underneath, or just the action table?
     - Should I flag items with no stated owner or due date, or leave those blank?
     zh:
-    - 我先看哪类文档——合同、董事会材料、会议演示，还是别的？
-    - 你希望先看摘要、下面再列行动项，还是只要行动项表格？
-    - 遇到没写明负责人或截止日期的条目，要标出来，还是留空就好？
+    - Which documents should I look at first (contracts, board materials, meeting decks, something else)?
+    - Do you want the summary first with action items below it, or just the action item table?
+    - For entries with no named owner or deadline, should I flag them or leave them blank?
 connections: []
 setup_time:
   en: 2 min setup
-  zh: 2分钟配置
+  zh: 2 min setup
 agent_config:
   instructions: |-
     ## Role & Purpose

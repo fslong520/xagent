@@ -697,7 +697,7 @@ def test_empty_client_visible_message_falls_back_to_the_generic_text(
 
 
 def test_client_visible_message_preserves_non_ascii_text() -> None:
-    message = "请求无效：缺少步骤标识"
+    message = "\u8bf7\u6c42\u65e0\u6548：\u7f3a\u5c11\u6b65\u9aa4\u6807\u8bc6"
 
     assert (
         task_execution_service.client_safe_error_message(

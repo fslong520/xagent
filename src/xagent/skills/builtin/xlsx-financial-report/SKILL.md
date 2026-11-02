@@ -68,8 +68,8 @@ The UUID comes from the executor response. Do not fabricate one.
 
 ❌ **WRONG — common failure that renders as plain text**:
 
-    已生成报表:
-    - 文件名: `xagent_metrics_dashboard.xlsx`
+    Generated report:
+    - Filename: `xagent_metrics_dashboard.xlsx`
     - file_id: `20fae785-3823-4906-b385-d0e8a7807dc8`
 
 ❌ **ALSO WRONG — chip link inside a code fence**: ` ```[name](file:UUID)``` `
@@ -85,11 +85,12 @@ line, then describe the contents.
 
 ## ⚠️ Hard rules — NO exceptions
 
-0. **MATCH THE USER'S LANGUAGE.** If the prompt is Chinese (中文), ALL
-   workbook text (title, subtitle, section banners, KPI labels, table
-   headers, deltas) must be in Chinese. Translate template phrases like
-   `SUMMARY` → `汇总`, `DETAIL` → `明细`, `As of YYYY-MM-DD` → `截至
-   YYYY-MM-DD`. Numbers and date formats stay locale-neutral.
+0. **MATCH THE USER'S LANGUAGE.** If the user prompts in a non-English
+   language, ALL workbook text (title, subtitle, section banners, KPI labels,
+   table headers, deltas) must be in that language. Translate template
+   phrases instead of copying them: `SUMMARY` → its localized form, `DETAIL` →
+   its localized form, `As of YYYY-MM-DD` → the localized "as of" date line.
+   Numbers and date formats stay locale-neutral.
 
 1. **One accent color only.** Pick one of the 5 palettes below; use only
    its **4 hex values** (`ink`, `paper`, `paper_tint`, `accent`).

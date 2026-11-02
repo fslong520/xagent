@@ -115,13 +115,13 @@ class TestSplitBySeparatorsCore:
         assert result[2].strip() == "ccc"
 
     def test_custom_separator_single_sentence_end(self) -> None:
-        text = "第一句。第二句。第三句。"
+        text = "\u7b2c\u4e00\u53e5。\u7b2c\u4e8c\u53e5。\u7b2c\u4e09\u53e5。"
         result = _split_by_separators_core(text, ["。"])
-        # Split by 。 gives: "第一句", "第二句", "第三句", ""
+        # Splitting on the CJK full stop yields three sentences plus a trailing empty string
         assert len(result) >= 3
-        assert "第一句" in result[0]
-        assert "第二句" in result[1]
-        assert "第三句" in result[2]
+        assert "\u7b2c\u4e00\u53e5" in result[0]
+        assert "\u7b2c\u4e8c\u53e5" in result[1]
+        assert "\u7b2c\u4e09\u53e5" in result[2]
 
     def test_custom_separators_double_newline_and_newline(self) -> None:
         text = "block1\n\nblock2\nblock3"
@@ -138,7 +138,7 @@ class TestSplitBySeparatorsCore:
         texts = [
             "attach documents and Qualifications in bulk using our CSV integration.",
             "Line one\n\nLine two\nLine three with words",
-            "第一句。第二句！第三句？结束",
+            "\u7b2c\u4e00\u53e5。\u7b2c\u4e8c\u53e5！\u7b2c\u4e09\u53e5？\u7ed3\u675f",
             "a, b, c. d e f",
             "mixed\n\npara, with. all 。 separators！ present？ here",
         ]
@@ -253,7 +253,7 @@ class TestApplyRecursiveStrategyCustomSeparators:
     def test_custom_separator_sentence_only(self) -> None:
         """Split only by 。; use small chunk_size so sliding window yields multiple chunks."""
         paragraphs = [
-            self._paragraph("第一句。第二句。第三句。"),
+            self._paragraph("\u7b2c\u4e00\u53e5。\u7b2c\u4e8c\u53e5。\u7b2c\u4e09\u53e5。"),
         ]
         params = {
             "separators": ["。"],
@@ -263,9 +263,9 @@ class TestApplyRecursiveStrategyCustomSeparators:
         chunks = apply_recursive_strategy(paragraphs, params)
         assert len(chunks) >= 2
         texts = [c["text"].strip() for c in chunks if c["text"].strip()]
-        assert any("第一句" in t for t in texts)
-        assert any("第二句" in t for t in texts)
-        assert any("第三句" in t for t in texts)
+        assert any("\u7b2c\u4e00\u53e5" in t for t in texts)
+        assert any("\u7b2c\u4e8c\u53e5" in t for t in texts)
+        assert any("\u7b2c\u4e09\u53e5" in t for t in texts)
 
     def test_custom_separators_double_newline_and_newline(self) -> None:
         """Custom separators [\\n\\n, \\n] split by paragraph then line; small chunk_size."""

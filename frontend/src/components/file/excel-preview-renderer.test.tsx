@@ -18,7 +18,7 @@ function workbookContent(sheets: Record<string, XLSX.WorkSheet>, bookSST = false
   return XLSX.write(workbook, { type: "base64", bookType: "xlsx", bookSST }) as string
 }
 
-function preview(content: string, locale: "en" | "zh" = "en") {
+function preview(content: string, locale: "en" = "en") {
   return (
     <I18nProvider initialLocale={locale}>
       <ExcelPreviewRenderer base64Content={content} />
@@ -109,11 +109,11 @@ describe("ExcelPreviewRenderer formula results", () => {
     const sheetPath = "xl/worksheets/sheet1.xml"
     const xml = await zip.file(sheetPath)!.async("string")
     zip.file(sheetPath, xml.replace(/<v>0<\/v>/g, "<v/>"))
-    const { container } = render(preview(await zip.generateAsync({ type: "base64" }), "zh"))
+    const { container } = render(preview(await zip.generateAsync({ type: "base64" }), "en"))
 
     expect(cell(container, "A1")).toHaveTextContent("=ROW(A1:A2)")
-    expect(cell(container, "A2")).toHaveTextContent("未计算")
-    expect(screen.getByRole("status")).toHaveTextContent("2 个公式单元格未保存计算结果")
+    expect(cell(container, "A2")).toHaveTextContent("Not calculated")
+    expect(screen.getByRole("status")).toHaveTextContent("Missing formula results on this sheet: 2.")
   })
 
   it("renders unknown and external formulas as text without executing them", () => {

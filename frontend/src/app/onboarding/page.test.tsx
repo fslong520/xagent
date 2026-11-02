@@ -19,7 +19,7 @@ const updateUserPreferencesMock = vi.hoisted(() => vi.fn())
 const hireAgentFromTemplateMock = vi.hoisted(() => vi.fn())
 const toastErrorMock = vi.hoisted(() => vi.fn())
 const markOnboardingSaveEscapedMock = vi.hoisted(() => vi.fn())
-const i18nState = vi.hoisted(() => ({ locale: "en" as "en" | "zh" }))
+const i18nState = vi.hoisted(() => ({ locale: "en" as "en" }))
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush, replace: routerReplace }),
@@ -647,32 +647,28 @@ describe("OnboardingPage", () => {
     expect(card.querySelector('[aria-hidden="true"]')).toHaveTextContent("M")
   })
 
-  // Pins a test-coverage gap found in incremental self-review: every other
-  // test in this file renders in English only, and the raw-string spacing
-  // tests in translations.test.ts never render actual JSX - neither would
-  // catch a future JSX-level literal space reintroduced specifically on
-  // the Chinese render path. Drives the full flow in zh and asserts the
-  // exact combined textContent has no space between the full-width colon
-  // and the value, matching the originally-reported "所在领域： 市场营销" bug.
-  it("renders the Done step's 'working in' line with no stray space in Chinese", async () => {
-    i18nState.locale = "zh"
+  // Pins a test-coverage gap found in incremental self-review: the raw-string
+  // spacing tests in translations.test.ts never render actual JSX, so they
+  // cannot catch a JSX-level literal space reintroduced around the composed
+  // Done-step summary line. Drives the full flow and asserts the exact
+  // combined textContent carries exactly the prefix's own single space.
+  it("renders the Done step's 'working in' line with exactly one separator space", async () => {
+    const { container } = render(<OnboardingPage />)
+    await waitFor(() => expect(screen.getByText(/Welcome to Xagent/)).toBeInTheDocument())
+    fireEvent.click(screen.getByText("Let's go"))
+    fireEvent.click(screen.getByText("Marketing"))
+    fireEvent.click(screen.getByText("Continue"))
+    await waitFor(() => expect(screen.getByText(/take off your plate/)).toBeInTheDocument())
+    fireEvent.click(screen.getByText("Post on social media"))
+    fireEvent.click(screen.getByText("Continue"))
+    await waitFor(() => expect(screen.getByText(/Meet your AI team/)).toBeInTheDocument())
+    fireEvent.click(screen.getByText("Continue"))
+    await waitFor(() => expect(screen.getByText(/How should/)).toBeInTheDocument())
+    fireEvent.click(screen.getByText("Continue"))
+    await waitFor(() => expect(screen.getByText("You're all set.")).toBeInTheDocument())
 
-    render(<OnboardingPage />)
-    await waitFor(() => expect(screen.getByText(/欢迎来到/)).toBeInTheDocument())
-    fireEvent.click(screen.getByText("开始吧"))
-    await waitFor(() => expect(screen.getByText(/你的团队/)).toBeInTheDocument())
-    fireEvent.click(screen.getByText("市场营销"))
-    fireEvent.click(screen.getByText("继续"))
-    await waitFor(() => expect(screen.getByText("发布社交媒体内容")).toBeInTheDocument())
-    fireEvent.click(screen.getByText("发布社交媒体内容"))
-    fireEvent.click(screen.getByText("继续"))
-    await waitFor(() => expect(screen.getByText("认识一下你的 AI 团队。")).toBeInTheDocument())
-    fireEvent.click(screen.getByText("继续"))
-    fireEvent.click(screen.getByText("继续"))
-    await waitFor(() => expect(screen.getByText("一切就绪。")).toBeInTheDocument())
-
-    const line = screen.getByText("市场营销").closest(".ob-sum-li")!
-    expect(line.textContent).toBe("所在领域：市场营销")
+    const line = container.querySelector(".ob-sum-li")!
+    expect(line.textContent).toBe("Working in marketing")
   })
 
   it("hires the selected agent and navigates to /task/{taskId} on launch", async () => {

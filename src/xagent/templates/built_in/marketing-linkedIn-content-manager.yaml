@@ -4,16 +4,16 @@ category: Marketing
 featured: false
 descriptions:
   en: Transforms a single brief into platform-native content and visuals for all major channels. Schedules content and queues it for your approval before publishing.
-  zh: 将单一简报转化为所有主要渠道的平台原生内容和视觉效果。安排内容并将其加入队列，等待您的批准后再发布。
+  zh: Turns a single brief into platform-native copy and visuals for every major channel, then schedules the content and queues it for your approval before publishing.
 features:
   en:
   - Writes thought leadership posts and updates tailored for LinkedIn
   - Creates matching visuals in LinkedIn-ready dimensions
   - Applies your brand voice, tone, and visual style to every post
   zh:
-  - 撰写适用于 LinkedIn 的思想领导力帖子和动态更新
-  - 创建符合 LinkedIn 尺寸规范的配套视觉内容
-  - 将你的品牌声音、语气和视觉风格应用到每一条帖子中
+  - Writes LinkedIn thought-leadership posts and feed updates
+  - Creates matching visuals sized to LinkedIn specs
+  - Applies your brand voice, tone and visual style to every post
 sample_prompts:
   en:
   - title: LinkedIn announcement
@@ -25,19 +25,19 @@ sample_prompts:
     highlights:
     - topic
   zh:
-  - title: LinkedIn 动态公告
-    prompt: 以我们的品牌语气撰写一条关于 动态 的 LinkedIn 公告，并附带符合 LinkedIn 尺寸规范的配套视觉内容。
+  - title: LinkedIn feed announcement
+    prompt: Write a LinkedIn announcement about the update in our brand tone, with a matching visual sized to LinkedIn specs.
     highlights:
-    - 动态
-  - title: 思想领导力文章
-    prompt: 围绕 主题 起草一篇思想领导力 LinkedIn 帖子，包含有力的开头、三个洞察点和一个结尾问题。
+    - update
+  - title: Thought-leadership post
+    prompt: Draft a thought-leadership LinkedIn post about the topic, with a strong opening, three insight points and a closing question.
     highlights:
-    - 主题
+    - topic
 persona:
   name: Zara
   role:
     en: LinkedIn Content Manager
-    zh: LinkedIn 内容经理
+    zh: LinkedIn Content Manager
   avatar: /marketplace/avatars/zara.png
   intro:
     en: |-
@@ -45,18 +45,18 @@ persona:
 
       I write thought-leadership posts for LinkedIn, with visuals, in your voice.
     zh: |-
-      你好，我是 Zara，你的 LinkedIn 内容经理。
+      Hi, I'm Zara, your LinkedIn content manager.
 
-      我会用你的语气为 LinkedIn 撰写思想领导力帖子，并配上视觉内容。
+      I write thought-leadership posts for LinkedIn in your tone, with visuals to match.
   kickoff_questions:
     en:
     - Whose voice am I writing in — yours, or the company page?
     - What two or three themes do you want to be known for?
     - How often should I post, and do you want to approve each one?
     zh:
-    - 我该用谁的口吻写——你个人，还是公司主页？
-    - 你希望在哪两三个主题上建立影响力？
-    - 多久发一次，每条都需要你审批吗？
+    - Whose voice should I write in, yours personally or the company page?
+    - Which two or three topics do you want to build authority on?
+    - How often should I post, and do you want to approve every post?
 connections:
 - name: LinkedIn
   logo: https://www.google.com/s2/favicons?domain=linkedin.com&sz=64
@@ -64,7 +64,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=drive.google.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: '**Role & Purpose**
 

@@ -702,7 +702,7 @@ def test_download_file_preserves_extension_for_cjk_and_long_names(
     task_dir.mkdir()
     monkeypatch.setenv("XAGENT_ONEDRIVE_OUTPUT_DIR", str(task_dir))
     cases = [
-        ("季度报告.xlsx", "file.xlsx"),
+        ("\u5b63\u5ea6\u62a5\u544a.xlsx", "file.xlsx"),
         ("a" * 300 + ".docx", "a" * 195 + ".docx"),
     ]
     for index, (remote_name, expected_name) in enumerate(cases):
@@ -790,7 +790,7 @@ def test_download_output_dir_handles_symlink_loop(monkeypatch, tmp_path):
 @pytest.mark.parametrize(
     ("name", "expected"),
     [
-        ("季度报告.xlsx", "file.xlsx"),
+        ("\u5b63\u5ea6\u62a5\u544a.xlsx", "file.xlsx"),
         ("a" * 300 + ".docx", "a" * 195 + ".docx"),
     ],
 )

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const apiRequestMock = vi.hoisted(() => vi.fn())
-const i18nMock = vi.hoisted(() => ({ locale: "en" as "en" | "zh" }))
+const i18nMock = vi.hoisted(() => ({ locale: "en" as "en" }))
 
 vi.mock("@/lib/api-wrapper", () => ({
   apiRequest: apiRequestMock,
@@ -104,7 +104,7 @@ describe("TokenUsageDisplay", () => {
     expect(formatTokenCount(37_499)).toBe("37.5k")
     expect(formatTokenCount(2_755_525)).toBe("2.76m")
     expect(formatExactTokenCount(2_755_525)).toBe("2,755,525")
-    expect(formatTokenCount(2_755_525, "zh")).toBe("275.55万")
+    expect(formatTokenCount(2_755_525, "en")).toBe("2.76m")
   })
 
   it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
@@ -116,7 +116,7 @@ describe("TokenUsageDisplay", () => {
   )
 
   it("uses the active locale when rendering token counts", async () => {
-    i18nMock.locale = "zh"
+    i18nMock.locale = "en"
     apiRequestMock.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -131,7 +131,7 @@ describe("TokenUsageDisplay", () => {
 
     render(<TokenUsageDisplay taskId={6} isRunning={false} />)
 
-    expect(await screen.findByText("275.55万")).toHaveAttribute("title", "2,755,525")
+    expect(await screen.findByText("2.76m")).toHaveAttribute("title", "2,755,525")
   })
 
   it("shows aggregate counts and exposes each model in a popover", async () => {

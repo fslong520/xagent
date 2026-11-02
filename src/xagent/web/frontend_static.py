@@ -26,6 +26,23 @@ logger = logging.getLogger(__name__)
 
 _SHELL_TOKEN = "__shell__"
 
+#: XN-5: HTML documents (the SPA shells, static routes' own ``.html``, the
+#: root and the 404 page) are never cacheable — a browser that kept an old
+#: shell runs removed ``_next`` chunks until a hard refresh. Hashed assets
+#: under ``/_next/static`` keep their own long-lived caching and are served
+#: by ``StaticFiles`` untouched.
+_HTML_CACHE_CONTROL = "no-cache, must-revalidate"
+
+
+def _html_file_response(path: Path, status_code: int = 200) -> FileResponse:
+    """A ``FileResponse`` that adds ``no-cache`` to HTML documents only.
+
+    Non-HTML resolutions (``.txt`` flight payloads, images, favicons) keep
+    their previous headers byte for byte.
+    """
+    headers = {"Cache-Control": _HTML_CACHE_CONTROL} if path.suffix == ".html" else None
+    return FileResponse(path, status_code=status_code, headers=headers)
+
 
 def _collect_backend_prefixes(app: FastAPI) -> frozenset[str]:
     """Collect the literal first path segments owned by the backend.
@@ -133,7 +150,7 @@ def mount_frontend(app: FastAPI, dist_dir: Path) -> bool:
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str) -> Response:
         if full_path == "":
-            return FileResponse(dist_dir / "index.html")
+            return _html_file_response(dist_dir / "index.html")
 
         first_segment = full_path.split("/", 1)[0]
         if first_segment in backend_prefixes:
@@ -144,10 +161,10 @@ def mount_frontend(app: FastAPI, dist_dir: Path) -> bool:
 
         resolved = _resolve(full_path)
         if resolved is not None:
-            return FileResponse(resolved)
+            return _html_file_response(resolved)
 
         if not_found.is_file():
-            return FileResponse(not_found, status_code=404)
+            return _html_file_response(not_found, status_code=404)
         return JSONResponse({"detail": "Not Found"}, status_code=404)
 
     logger.info(

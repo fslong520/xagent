@@ -239,11 +239,11 @@ async def test_execute_task_background_reuses_task_id_for_terminal_tasks(
 
     await execute_task_background(
         task_id=10,
-        user_message="重试",
+        user_message="retry",
         context={},
         agent_manager=AgentManager(),
         task_owner_user_id=int(user.id),
-        llm_user_message="重试",
+        llm_user_message="retry",
         task_setup_snapshot=_task_setup_snapshot(
             task_id=10,
             user_id=int(user.id),
@@ -257,7 +257,7 @@ async def test_execute_task_background_reuses_task_id_for_terminal_tasks(
 
     assert captured["agent_task_id"] == "10"
     assert captured["tracking_task_id"] == "10"
-    assert captured["agent_task"] == "重试"
+    assert captured["agent_task"] == "retry"
 
 
 class _NoopAgentService:

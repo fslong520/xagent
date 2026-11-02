@@ -31,9 +31,9 @@ class ProgressCallback(Protocol):
 
         # For other parsers
         def parse_fallback(parser, file_path, callback):
-            callback.on_status_update("开始解析文档")
+            callback.on_status_update("Started parsing document")
             # ... parsing logic ...
-            callback.on_status_update("文档解析完成")
+            callback.on_status_update("Document parsing complete")
         ```
     """
 

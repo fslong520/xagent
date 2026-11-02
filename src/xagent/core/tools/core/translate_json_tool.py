@@ -336,9 +336,9 @@ Translations:"""
             Translated JSON string
 
         Example:
-            Input: {"segments": [{"text": "你好"}]}
+            Input: {"segments": [{"text": "Hello"}]}
             Fields: ["segments.text"]
-            Output: {"segments": [{"text": "你好", "translated_text": "Hello"}]}
+            Output: {"segments": [{"text": "Hello", "translated_text": "Bonjour"}]}
         """
         # Parse JSON
         if isinstance(json_data, str):
@@ -522,9 +522,9 @@ def translate_json(
         Translated JSON string
 
     Example:
-        >>> json_str = '{"segments": [{"text": "你好"}]}'
-        >>> result = translate_json(json_str, ["segments.text"], target_lang="en")
-        >>> # Returns: {"segments": [{"text": "你好", "translated_text": "Hello"}]}
+        >>> json_str = '{"segments": [{"text": "Hello"}]}'
+        >>> result = translate_json(json_str, ["segments.text"], target_lang="fr")
+        >>> # Returns: {"segments": [{"text": "Hello", "translated_text": "Bonjour"}]}
 
     Language codes:
         - 'zh': Chinese (Mandarin)

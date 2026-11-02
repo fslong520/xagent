@@ -390,61 +390,6 @@ describe("TaskHomePage agents", () => {
     })
   })
 
-  it("refetches templates in the new locale when the app's locale changes, and re-enriches with the new response", async () => {
-    const HIRED = { ...VERA, template_id: "sales-research-enricher" }
-    apiRequestMock.mockImplementation((url: string) => {
-      if (url === "http://api.local/api/agents") return Promise.resolve(jsonResponse([HIRED]))
-      if (url === "http://api.local/api/templates/?lang=en") {
-        return Promise.resolve(
-          jsonResponse([
-            {
-              id: "sales-research-enricher",
-              category: "Sales",
-              persona: { avatar: "/marketplace/avatars/vera-en.png" },
-            },
-          ])
-        )
-      }
-      if (url === "http://api.local/api/templates/?lang=zh") {
-        return Promise.resolve(
-          jsonResponse([
-            {
-              id: "sales-research-enricher",
-              category: "Sales",
-              persona: { avatar: "/marketplace/avatars/vera-zh.png" },
-            },
-          ])
-        )
-      }
-      return Promise.resolve(new Response(null, { status: 404 }))
-    })
-
-    const { rerender } = render(<TaskHomePage />)
-    await waitFor(() => {
-      expect(apiRequestMock).toHaveBeenCalledWith("http://api.local/api/templates/?lang=en")
-    })
-    await waitFor(() => {
-      expect(chatStartScreenProps.current?.agents?.[0]).toEqual(
-        expect.objectContaining({ persona_avatar: "/marketplace/avatars/vera-en.png" })
-      )
-    })
-
-    // Locale changes elsewhere in the app (e.g. a language switcher) -
-    // the effect depends on `locale`, so it must refetch under the new
-    // one and re-enrich with whatever that locale's templates carry.
-    localeMock.value = "zh"
-    rerender(<TaskHomePage />)
-
-    await waitFor(() => {
-      expect(apiRequestMock).toHaveBeenCalledWith("http://api.local/api/templates/?lang=zh")
-    })
-    await waitFor(() => {
-      expect(chatStartScreenProps.current?.agents?.[0]).toEqual(
-        expect.objectContaining({ persona_avatar: "/marketplace/avatars/vera-zh.png" })
-      )
-    })
-  })
-
   it("re-syncs the selection and retroactively fills the prompt once a click-time-unenriched agent's template loads", async () => {
     const HIRED_RAW = { id: 1, name: "Vera", status: "published", suggested_prompts: [], template_id: "sales-research-enricher" }
     let resolveTemplates: (value: Response) => void = () => {}

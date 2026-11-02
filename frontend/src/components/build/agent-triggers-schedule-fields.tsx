@@ -56,7 +56,6 @@ const ORDINAL_SUFFIXES: Record<string, string> = { one: "st", two: "nd", few: "r
 
 function ordinalDay(day: number, locale?: string): string {
   const loc = locale || "en"
-  if (loc.startsWith("zh")) return `${day}日`
   const category = new Intl.PluralRules(loc, { type: "ordinal" }).select(day)
   return `${day}${ORDINAL_SUFFIXES[category] ?? "th"}`
 }

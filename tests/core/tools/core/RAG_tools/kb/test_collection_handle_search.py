@@ -189,9 +189,9 @@ def _sparse_handle_with_rows(rows):
 def test_search_sparse_searches_terms_not_the_raw_query():
     """The raw string would match every chunk that contains whitespace."""
     handle, fts_table = _sparse_handle_with_rows(pd.DataFrame())
-    handle.search_sparse("model-x", "click Save 按钮", top_k=3)
+    handle.search_sparse("model-x", "click Save \u6309\u94ae", top_k=3)
     built = fts_table.search.call_args.args[0]
-    assert [match.query for _, match in built.queries] == ["click", "Save", "按钮"]
+    assert [match.query for _, match in built.queries] == ["click", "Save", "\u6309\u94ae"]
 
 
 def test_search_sparse_skips_fts_when_query_has_no_terms(monkeypatch):

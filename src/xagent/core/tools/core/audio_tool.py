@@ -1375,11 +1375,11 @@ class AudioToolCore:
             {
                 "segments": [
                     {
-                        "text": "你好世界",
+                        "text": "Hello world",
                         "reference_audio_id": "ref_voice_1"
                     },
                     {
-                        "text": "这是一个测试",
+                        "text": "This is a test",
                         "reference_audio_id": "ref_voice_2"
                     }
                 ],
@@ -1391,8 +1391,8 @@ class AudioToolCore:
             >>> # Batch synthesis with voice cloning
             >>> data = {
             ...     "segments": [
-            ...         {"text": "你好", "reference_audio_id": "ref1"},
-            ...         {"text": "世界", "reference_audio_id": "ref2"}
+            ...         {"text": "Hello", "reference_audio_id": "ref1"},
+            ...         {"text": "World", "reference_audio_id": "ref2"}
             ...     ]
             ... }
             >>> result = await synthesize_speech_json(json_data=data)

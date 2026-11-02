@@ -3710,7 +3710,7 @@ class TestDeleteAgent:
 
 
 def test_admin_can_read_other_users_agent_detail():
-    """管理员只读查看普通用户的 agent 详情。"""
+    """An admin reads a regular user's agent detail read-only."""
     admin = _admin_headers()
     bob = _register_second_user("bob", "bobpass1")
 
@@ -3743,7 +3743,7 @@ def test_admin_can_read_other_users_agent_detail():
 
 
 def test_non_admin_cannot_read_other_users_agent_detail():
-    """普通用户读别人 agent 仍 404，不泄露存在性。"""
+    """A regular user reading another user's agent still gets 404 and existence is not leaked."""
     _admin_headers()
     bob = _register_second_user("bob", "bobpass1")
     carol = _register_second_user("carol", "carolpass1")
@@ -3758,13 +3758,13 @@ def test_non_admin_cannot_read_other_users_agent_detail():
 
 
 def test_policy_shared_non_admin_reads_agent_detail_read_only():
-    """非管理员通过 policy 只读共享，可读详情且被锁为只读（不再 404）。"""
+    """A non-admin shared read-only through policy can read the detail and is locked read-only (no longer 404)."""
     _admin_headers()
     _register_second_user("bob", "bobpass1")
     bob_id = _user_id("bob")
 
     agent_id = _create_agent_row(user_id=bob_id, name="Bob Shared")
-    # carol 不拥有该 agent，但 policy 把它列进了 carol 的可见列表。
+    # carol does not own the agent, but the policy lists it in carol's visible set.
     carol = _register_second_user("carol", "carolpass1")
     set_workforce_policy(_VisibleAgentPolicy({agent_id}))
 

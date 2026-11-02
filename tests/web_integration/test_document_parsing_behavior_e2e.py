@@ -28,7 +28,10 @@ def sample_parsing_files() -> Generator[tuple[dict[str, str], str], None, None]:
         test_files = {
             # Text files
             "simple.txt": "This is a simple text file for parsing tests.",
-            "chinese.txt": "这是一个中文文本文件，用于测试解析功能。",
+            "chinese.txt": (
+                "\u8fd9\u662f\u4e00\u4e2a\u4e2d\u6587\u6587\u672c\u6587\u4ef6"
+                "\uff0c\u7528\u4e8e\u6d4b\u8bd5\u89e3\u6790\u529f\u80fd\u3002"
+            ),
             "multiline.txt": "Line 1\nLine 2\nLine 3\nLine 4",
             # Markdown files
             "simple.md": "# Simple Markdown\n\nThis is a simple markdown file.",
@@ -790,7 +793,7 @@ class TestParsingEdgeCases:
         collection_name = "e2e_parse_encoding"
 
         # Create file with mixed content
-        mixed_content = "English text 中文文本 Numbers 12345"
+        mixed_content = "English text \u4e2d\u6587\u6587\u672c Numbers 12345"
 
         with tempfile.NamedTemporaryFile(
             suffix=".txt", delete=False, mode="w", encoding="utf-8"

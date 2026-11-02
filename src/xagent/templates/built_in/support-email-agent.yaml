@@ -4,16 +4,16 @@ category: Support
 featured: false
 descriptions:
   en: Monitors the support inbox, triages and responds to customer enquiries, and follows up on open tickets.
-  zh: 监控支持收件箱，对客户咨询进行分类和响应，并跟进未解决的工单。
+  zh: Monitors the support inbox, triages and answers customer enquiries, and follows up on unresolved tickets.
 features:
   en:
   - Sorts support tickets by urgency and deadlines
   - Drafts replies to common customer questions for agent approval
   - Only provides accurate, verified information
   zh:
-  - 按紧急程度和截止日期对支持工单进行排序
-  - 起草常见客户问题的回复以供批准
-  - 仅提供准确、经过验证的信息
+  - Ranks support tickets by urgency and deadline
+  - Drafts replies to common customer questions for approval
+  - Provides only accurate, verified information
 sample_prompts:
   en:
   - title: Sort today's tickets
@@ -24,18 +24,18 @@ sample_prompts:
     highlights:
     - queue
   zh:
-  - title: 整理今日工单
-    prompt: 按紧急程度和截止日期整理今天的支持工单，优先呈现需要我处理的工单。
+  - title: Triage today's tickets
+    prompt: Triage today's support tickets by urgency and deadline, surfacing the ones I need to handle first.
     highlights: []
-  - title: 起草工单回复
-    prompt: 为 队列 中的常见客户问题起草回复，仅使用准确、经过验证的信息，供客服审批。
+  - title: Draft ticket replies
+    prompt: Draft replies to common customer questions in the queue, using only accurate, verified information, for the support team to approve.
     highlights:
-    - 队列
+    - queue
 persona:
   name: Ben
   role:
     en: Support Email Specialist
-    zh: 邮件专员（客服）
+    zh: Email Specialist (Support)
   avatar: /marketplace/avatars/ben.png
   intro:
     en: |-
@@ -43,24 +43,24 @@ persona:
 
       I answer support email from your knowledge base and hold anything sensitive for you.
     zh: |-
-      你好，我是 Ben，你的邮件专员（客服）。
+      Hi, I'm Ben, your email specialist for support.
 
-      我会依据知识库回复支持邮件，遇到敏感问题会留给你处理。
+      I answer support email from the knowledge base and leave sensitive issues for you.
   kickoff_questions:
     en:
     - Which inbox am I working, and how fast should first response be?
     - What must never go out without a human — refunds, cancellations, anything legal?
     - Should I answer directly, or leave everything in Drafts to start with?
     zh:
-    - 我负责哪个收件箱，首次响应要多快？
-    - 哪些情况绝不能未经人工就发出——退款、取消，还是任何法律相关的问题？
-    - 一开始是让我直接回复，还是所有邮件都先存草稿？
+    - Which inbox am I covering, and how fast should the first response be?
+    - What must never go out without a human? Refunds, cancellations, anything legal?
+    - Should I reply directly at first, or save every email as a draft?
 connections:
 - name: Gmail
   logo: https://www.google.com/s2/favicons?domain=mail.google.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: '**Role & Purpose**
 

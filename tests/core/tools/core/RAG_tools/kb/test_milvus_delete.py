@@ -455,7 +455,7 @@ def test_document_ids_with_quotes_and_multibyte_text_are_deleted(
     client: Any, model: str, tmp_path: Path
 ) -> None:
     handle = _open()
-    odd = "d'q\"文档 x"
+    odd = "d'q\"\u6587\u6863 x"
     _ingest(handle, model, odd, ["a"], tmp_path)
     _ingest(handle, model, "kept", ["b"], tmp_path)
 

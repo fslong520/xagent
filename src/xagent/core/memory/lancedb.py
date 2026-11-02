@@ -17,7 +17,7 @@ from ..model.embedding.adapter import create_embedding_adapter
 from ..model.model import EmbeddingModelConfig
 from ..tools.core.RAG_tools.LanceDB.schema_manager import _safe_close_table
 from .base import MemoryStore
-from .core import MemoryNote, MemoryResponse
+from .core import MemoryNote, MemoryResponse, note_in_space
 from .retrieval_compatibility import DEFAULT_STREAM_BATCH_SIZE, stream_lexical_top_k
 from .schema_migration import (
     MemoryMismatchKind,
@@ -1075,7 +1075,12 @@ class LanceDBMemoryStore(MemoryStore):
         except Exception as e:
             logger.error(f"Failed to clear memory store: {e}")
 
-    def list_all(self, filters: Optional[dict[str, Any]] = None) -> List[MemoryNote]:
+    def list_all(
+        self,
+        filters: Optional[dict[str, Any]] = None,
+        *,
+        space: Optional[str] = None,
+    ) -> List[MemoryNote]:
         """List all memory notes with optional filtering.
 
         Delegates all filtering to search(): its ``_matches_filters`` dispatch
@@ -1083,8 +1088,13 @@ class LanceDBMemoryStore(MemoryStore):
         isolation filters, tags/keywords/date ranges, flat metadata equality),
         so list_all and search cannot diverge (#909). Results are sorted
         newest-first to match InMemoryStore.list_all.
+
+        ``space`` (XN-1) is applied on the returned notes: this table keeps no
+        shared layers, so a shared view answers with its empty set.
         """
         notes = self.search(query="", k=10000, filters=filters or None)
+        if space:
+            notes = [note for note in notes if note_in_space(note, space)]
         # Mirror InMemoryStore: newest first.
         notes.sort(key=lambda n: n.timestamp, reverse=True)
         return notes

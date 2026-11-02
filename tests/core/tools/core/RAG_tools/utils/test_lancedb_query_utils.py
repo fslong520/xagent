@@ -19,25 +19,25 @@ def _terms(query_text: str, text_column: str = "text"):
 
 
 def test_build_fts_query_splits_on_whitespace_and_cjk_punctuation():
-    assert _terms("点击 Save 按钮，然后审批") == [
-        ("点击", "text"),
+    assert _terms("\u70b9\u51fb Save \u6309\u94ae，\u7136\u540e\u5ba1\u6279") == [
+        ("\u70b9\u51fb", "text"),
         ("Save", "text"),
-        ("按钮", "text"),
-        ("然后审批", "text"),
+        ("\u6309\u94ae", "text"),
+        ("\u7136\u540e\u5ba1\u6279", "text"),
     ]
 
 
 def test_build_fts_query_splits_on_cjk_brackets_and_dashes():
     """Brackets, quotes and dashes are indexed tokens too, full-width ones folded."""
-    assert _terms("点击「保存」按钮（右上角）即可。参见《手册》——权限……") == [
-        ("点击", "text"),
-        ("保存", "text"),
-        ("按钮", "text"),
-        ("右上角", "text"),
-        ("即可", "text"),
-        ("参见", "text"),
-        ("手册", "text"),
-        ("权限", "text"),
+    assert _terms("\u70b9\u51fb「\u4fdd\u5b58」\u6309\u94ae（\u53f3\u4e0a\u89d2）\u5373\u53ef。\u53c2\u89c1《\u624b\u518c》——\u6743\u9650……") == [
+        ("\u70b9\u51fb", "text"),
+        ("\u4fdd\u5b58", "text"),
+        ("\u6309\u94ae", "text"),
+        ("\u53f3\u4e0a\u89d2", "text"),
+        ("\u5373\u53ef", "text"),
+        ("\u53c2\u89c1", "text"),
+        ("\u624b\u518c", "text"),
+        ("\u6743\u9650", "text"),
     ]
 
 

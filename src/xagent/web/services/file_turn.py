@@ -112,8 +112,9 @@ def normalize_filename(filename: str) -> str:
     # Replace spaces with underscores
     name_part = re.sub(r"\s+", "_", name_part)
 
-    # Remove special characters, keep only letters, numbers, underscores, Chinese characters
-    name_part = re.sub(r"[^\w一-鿿\-_.]", "", name_part)
+    # Remove special characters, keep only letters, numbers, underscores and
+    # Chinese characters (CJK unified ideographs)
+    name_part = re.sub("[^\\w\u4e00-\u9fff\\-_.]", "", name_part)
 
     # Remove consecutive underscores
     name_part = re.sub(r"_+", "_", name_part)

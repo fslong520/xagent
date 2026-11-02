@@ -689,3 +689,23 @@ def test_scope_exclusive_filters_scoped_notes(memory_store):
 
     # Without the directive, both notes are visible.
     assert len(memory_store.search("hello", k=10)) == 2
+
+
+def test_list_all_space_view_selects_on_provenance(memory_store):
+    """XN-1: the local store keeps no shared layers, so the space view reads
+    the note's own provenance — 'personal' is every note without one, a
+    shared view answers with its (empty) set instead of everything."""
+    memory_store.add(MemoryNote(id="p", content="mine only"))
+    memory_store.add(
+        MemoryNote(id="c", content="ours", space_kind="company"),
+    )
+
+    personal = memory_store.list_all(space="personal")
+    company = memory_store.list_all(space="company")
+    department = memory_store.list_all(space="department")
+
+    assert [n.content for n in personal] == ["mine only"]
+    assert [n.content for n in company] == ["ours"]
+    assert department == []
+    # No view at all keeps the whole surface.
+    assert len(memory_store.list_all()) == 2

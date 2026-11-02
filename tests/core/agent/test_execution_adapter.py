@@ -782,25 +782,25 @@ async def test_execution_adapter_includes_persisted_conversation_history() -> No
             service_id="history-service",
             skill_manager=NoSkillManager(),
             conversation_history=[
-                {"role": "user", "content": "用 Python 生成随机整数"},
-                {"role": "assistant", "content": "可以用 random.randint。"},
+                {"role": "user", "content": "\u7528 Python \u751f\u6210\u968f\u673a\u6574\u6570"},
+                {"role": "assistant", "content": "\u53ef\u4ee5\u7528 random.randint。"},
             ],
         )
     )
 
-    result = await adapter.execute(task="生成一个返回给我", task_id="history-exec")
+    result = await adapter.execute(task="\u751f\u6210\u4e00\u4e2a\u8fd4\u56de\u7ed9\u6211", task_id="history-exec")
 
     assert result["success"] is True
     messages = llm.calls[0]["messages"]
     assert [
         message["content"] for message in messages if message["role"] == "user"
     ] == [
-        "用 Python 生成随机整数",
-        "生成一个返回给我",
+        "\u7528 Python \u751f\u6210\u968f\u673a\u6574\u6570",
+        "\u751f\u6210\u4e00\u4e2a\u8fd4\u56de\u7ed9\u6211",
     ]
     assert any(
         message["role"] == "assistant"
-        and message["content"] == "可以用 random.randint。"
+        and message["content"] == "\u53ef\u4ee5\u7528 random.randint。"
         for message in messages
     )
 
@@ -825,13 +825,13 @@ async def test_execution_adapter_includes_persisted_execution_context_before_his
                 }
             ],
             conversation_history=[
-                {"role": "user", "content": "写到文件"},
-                {"role": "assistant", "content": "已写入文件。"},
+                {"role": "user", "content": "\u5199\u5230\u6587\u4ef6"},
+                {"role": "assistant", "content": "\u5df2\u5199\u5165\u6587\u4ef6。"},
             ],
         )
     )
 
-    result = await adapter.execute(task="继续修改文件", task_id="execution-context")
+    result = await adapter.execute(task="\u7ee7\u7eed\u4fee\u6539\u6587\u4ef6", task_id="execution-context")
 
     assert result["success"] is True
     messages = llm.calls[0]["messages"]
@@ -846,7 +846,7 @@ async def test_execution_adapter_includes_persisted_execution_context_before_his
     )
     assert [message["content"] for message in messages if message["role"] == "user"][
         -2:
-    ] == ["写到文件", "继续修改文件"]
+    ] == ["\u5199\u5230\u6587\u4ef6", "\u7ee7\u7eed\u4fee\u6539\u6587\u4ef6"]
 
 
 @pytest.mark.asyncio
@@ -863,13 +863,13 @@ async def test_agent_service_passes_conversation_history_to_execution_adapter() 
     service.allowed_skills = []
     service.set_conversation_history(
         [
-            {"role": "user", "content": "用 Python 生成随机整数"},
-            {"role": "assistant", "content": "可以用 random.randint。"},
+            {"role": "user", "content": "\u7528 Python \u751f\u6210\u968f\u673a\u6574\u6570"},
+            {"role": "assistant", "content": "\u53ef\u4ee5\u7528 random.randint。"},
         ]
     )
 
     result = await service.execute_task(
-        "生成一个返回给我", task_id="history-service-task"
+        "\u751f\u6210\u4e00\u4e2a\u8fd4\u56de\u7ed9\u6211", task_id="history-service-task"
     )
 
     assert result["success"] is True
@@ -877,8 +877,8 @@ async def test_agent_service_passes_conversation_history_to_execution_adapter() 
     assert [
         message["content"] for message in messages if message["role"] == "user"
     ] == [
-        "用 Python 生成随机整数",
-        "生成一个返回给我",
+        "\u7528 Python \u751f\u6210\u968f\u673a\u6574\u6570",
+        "\u751f\u6210\u4e00\u4e2a\u8fd4\u56de\u7ed9\u6211",
     ]
 
 
@@ -903,7 +903,7 @@ async def test_agent_service_passes_execution_context_to_execution_adapter() -> 
         ]
     )
 
-    result = await service.execute_task("继续修改文件", task_id="service-context-task")
+    result = await service.execute_task("\u7ee7\u7eed\u4fee\u6539\u6587\u4ef6", task_id="service-context-task")
 
     assert result["success"] is True
     system_messages = [

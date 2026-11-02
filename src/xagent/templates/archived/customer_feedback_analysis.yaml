@@ -8,25 +8,25 @@ tags:
   - analysis
   - insights
   zh:
-  - 反馈
-  - 情绪
-  - 分析
-  - 洞察
+  - Feedback
+  - Sentiment
+  - Analysis
+  - Insights
 descriptions:
   en: Sentiment and urgency tagging for support
-  zh: 统一分析客户反馈，标注情绪与紧急程度并输出洞察。
+  zh: Analyses customer feedback in one place, tags sentiment and urgency, and reports insights.
 features:
   en:
   - Tags and categorizes feedback by sentiment
   - Highlights urgent issues automatically
   - Generates weekly insights reports
   zh:
-  - 按情绪给反馈打标签和分类
-  - 自动高亮紧急问题
-  - 生成每周洞察报告
+  - Tags and groups feedback by sentiment
+  - Highlights urgent issues automatically
+  - Produces a weekly insights report
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 author: Xagent
 version: '1.0'
 agent_config:

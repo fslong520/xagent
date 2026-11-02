@@ -106,11 +106,10 @@ describe('ArtifactValidation', () => {
   })
 
   it('uses translated machine-status labels instead of raw English parser diagnostics', async () => {
-    localStorage.setItem('app_locale', 'zh')
     const request = vi.fn().mockResolvedValue(report('invalid', 'PDF header is missing.'))
     render(wrap(<ArtifactValidation fileId="one">file</ArtifactValidation>, request))
-    await screen.findByText('文件校验失败 · 需要修复')
+    await screen.findByText('File validation failed · repair required')
     expect(screen.queryByText('PDF header is missing.')).toBeNull()
-    expect(screen.getByRole('button', { name: '重新检查' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recheck' })).toBeInTheDocument()
   })
 })

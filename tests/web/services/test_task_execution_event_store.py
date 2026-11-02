@@ -228,8 +228,8 @@ def test_payload_keeps_complete_tool_results_and_normalizes_jsonb_hazards(
     engine, task_id
 ):
     result = {
-        "handle": {"branch": "调查完整性", "node_id": "node-1"},
-        "output": "结果" * 5000,
+        "handle": {"branch": "\u8c03\u67e5\u5b8c\u6574\u6027", "node_id": "node-1"},
+        "output": "\u7ed3\u679c" * 5000,
     }
     with Session(engine) as db:
         append(db, task_id, kind="tool_attempt_finished", payload=result)

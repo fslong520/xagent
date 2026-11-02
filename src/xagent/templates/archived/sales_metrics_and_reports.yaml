@@ -9,14 +9,14 @@ tags:
   - analytics
   - revenue
   zh:
-  - 销售
-  - 指标
-  - 报告
-  - 数据分析
-  - 收入
+  - Sales
+  - Metrics
+  - Reporting
+  - Data analysis
+  - Revenue
 descriptions:
   en: Analyze sales performance, generate revenue reports, and track key metrics.
-  zh: 分析销售业绩，生成收入报告，追踪关键指标。
+  zh: Analyses sales performance, produces revenue reports and tracks key metrics.
 author: Xagent
 version: '1.0'
 agent_config:
@@ -35,9 +35,9 @@ features:
   - Real-time intelligent insights
   - Easy integration and deployment
   zh:
-  - 自动化分析与处理
-  - 实时智能洞察
-  - 轻松集成与部署
+  - Automated analysis and processing
+  - Real-time intelligent insights
+  - Easy integration and deployment
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup

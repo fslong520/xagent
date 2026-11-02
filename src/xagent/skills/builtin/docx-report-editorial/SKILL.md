@@ -1,8 +1,8 @@
 ---
 name: docx-report-editorial
 description: |
-  A native .docx styled as an editorial report: "Word report", "Word 文档",
-  "memo", "proposal", "研究报告". Opens cleanly in Word / Google Docs /
+  A native .docx styled as an editorial report: "Word report", "memo",
+  "proposal", "research report". Opens cleanly in Word / Google Docs /
   Pages with real heading styles and a cover page.
 when_to_use: |
   A polished .docx meant to be read as a document and further edited in
@@ -87,12 +87,13 @@ not return one — the reference is already on the executor result.
 
 ## ⚠️ Hard rules — NO exceptions
 
-0. **MATCH THE USER'S LANGUAGE.** If the prompt is Chinese (中文), ALL
-   document text (cover kicker, headings, body, table headers, captions,
-   footer) must be in Chinese. Translate template phrases like
-   `EXECUTIVE SUMMARY` → `摘要`, `FINDINGS` → `调查结果`,
-   `RECOMMENDATIONS` → `建议`, `As of YYYY-MM-DD` → `截至 YYYY-MM-DD`.
-   Never leave English kickers in a Chinese report.
+0. **MATCH THE USER'S LANGUAGE.** If the user prompts in a non-English
+   language, ALL document text (cover kicker, headings, body, table headers,
+   captions, footer) must be in that language. Translate template phrases
+   instead of copying them: `EXECUTIVE SUMMARY` → the equivalent heading in
+   the user's language, `FINDINGS` → its localized form, `RECOMMENDATIONS` →
+   its localized form, `As of YYYY-MM-DD` → the localized "as of" date line.
+   Never leave English kickers in a non-English report.
 1. **One palette only.** Pick one of the 5 palettes below; use only its
    **4 hex values** (`ink`, `paper`, `paper_tint`, `ink_tint`). Define a
    `palette = {...}` dict ONCE at the top of the script and reference

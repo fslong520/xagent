@@ -165,9 +165,9 @@ JSON Format (nested segment structure):
 ```json
 {{
     "segments": [
-        {{"text": "你好世界", "reference_audio": "ref_voice_1"}},
+        {{"text": "Hello world", "reference_audio": "ref_voice_1"}},
         {{
-            "text": "这是一个测试",
+            "text": "This is a test",
             "reference_audio": "ref_voice_2",
             "voice_settings": {{"stability": 0.45, "style": 0.2}}
         }}

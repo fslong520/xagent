@@ -282,7 +282,7 @@ def test_tool_execution_agent_id_tool_becomes_agent_delegation():
                 "tool_name": "agent_42",
                 "tool_args": {"text": "hello"},
                 "tool_execution_id": "tx-2",
-                "result": {"translated": "你好"},
+                "result": {"translated": "\u4f60\u597d"},
                 "success": True,
             },
             timestamp=datetime(2026, 1, 1, 12, 0, 4, tzinfo=timezone.utc),
@@ -299,7 +299,7 @@ def test_tool_execution_agent_id_tool_becomes_agent_delegation():
     # still ``data['result']`` on the end event, but the mapping
     # function renames it to ``output`` for this public type.
     # ``result`` must NOT appear on agent_delegation steps.
-    assert s["data"]["output"] == {"translated": "你好"}
+    assert s["data"]["output"] == {"translated": "\u4f60\u597d"}
     assert "result" not in s["data"]
 
 
@@ -355,7 +355,7 @@ def test_tool_execution_legacy_call_agent_trace_still_maps_to_delegation():
                 "tool_name": "call_agent_translator",
                 "tool_args": {"text": "hello"},
                 "tool_execution_id": "tx-legacy",
-                "result": {"translated": "你好"},
+                "result": {"translated": "\u4f60\u597d"},
                 "success": True,
             },
             timestamp=datetime(2026, 1, 1, 12, 0, 4, tzinfo=timezone.utc),
@@ -923,7 +923,7 @@ _PROJECTOR_EQUIVALENCE_CASES: Dict[str, List[SimpleNamespace]] = {
                 "tool_name": "agent_42",
                 "tool_args": {"text": "hello"},
                 "tool_execution_id": "tx-2",
-                "result": {"translated": "你好"},
+                "result": {"translated": "\u4f60\u597d"},
                 "success": True,
             },
             timestamp=datetime(2026, 1, 1, 12, 0, 4, tzinfo=timezone.utc),

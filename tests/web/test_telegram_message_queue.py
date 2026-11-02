@@ -85,12 +85,14 @@ def test_compose_prompt_text_replaces_voice_with_transcript_in_message_order() -
     prompt = TelegramBotInstance._compose_prompt_text(
         [
             (voice_message, "", [voice]),
-            (text_message, "请直接回答这个问题", []),
+            (text_message, "Answer this question directly", []),
         ],
-        {"voice-file-id": "今晚有世界杯比赛吗？"},
+        {"voice-file-id": "Is there a World Cup match tonight?"},
     )
 
-    assert prompt == "今晚有世界杯比赛吗？\n请直接回答这个问题"
+    assert (
+        prompt == "Is there a World Cup match tonight?\nAnswer this question directly"
+    )
 
 
 @pytest.mark.parametrize(
@@ -168,7 +170,7 @@ async def test_transcribe_uploaded_voice_files_uses_registered_input_file() -> N
 
         async def transcribe(self, *, audio: str, format: str | None = None) -> str:
             self.calls.append({"audio": audio, "format": format})
-            return "今晚有世界杯比赛吗？"
+            return "Is there a World Cup match tonight?"
 
     asr = FakeASR()
     uploaded_info = [
@@ -188,7 +190,7 @@ async def test_transcribe_uploaded_voice_files_uses_registered_input_file() -> N
         asr,
     )
 
-    assert transcripts == {"voice-file-id": "今晚有世界杯比赛吗？"}
+    assert transcripts == {"voice-file-id": "Is there a World Cup match tonight?"}
     assert asr.calls == [
         {"audio": "/workspace/input/voice-file-id.oga", "format": "ogg"}
     ]
@@ -203,7 +205,7 @@ async def test_transcribe_uploaded_voice_files_extracts_result_text() -> None:
         async def transcribe(
             self, *, audio: str, format: str | None = None
         ) -> SimpleNamespace:
-            return SimpleNamespace(text="今晚有世界杯比赛吗？")
+            return SimpleNamespace(text="Is there a World Cup match tonight?")
 
     transcripts = await bot._transcribe_uploaded_voice_files(
         ["voice-file-id"],
@@ -218,7 +220,7 @@ async def test_transcribe_uploaded_voice_files_extracts_result_text() -> None:
         ResultASR(),
     )
 
-    assert transcripts == {"voice-file-id": "今晚有世界杯比赛吗？"}
+    assert transcripts == {"voice-file-id": "Is there a World Cup match tonight?"}
 
 
 @pytest.mark.asyncio
@@ -1987,9 +1989,9 @@ async def test_finalize_requested_stop_settles_with_no_execution_result() -> Non
         ("/stop@xagent_bot", True),
         ("/pause now", True),
         ("STOP", True),
-        ("暂停", True),
-        ("停止", True),
-        ("请暂停一下", False),
+        ("\u6682\u505c", True),
+        ("\u505c\u6b62", True),
+        ("\u8bf7\u6682\u505c\u4e00\u4e0b", False),
         ("/new", False),
     ],
 )

@@ -267,7 +267,7 @@ def test_update_request_rejects_bad_visibility():
 
     with pytest.raises(ValidationError):
         AgentUpdateRequest(visibility="public")
-    # 合法值仍通过
+    # Valid values still pass
     assert AgentUpdateRequest(visibility="admins").visibility == "admins"
     assert AgentUpdateRequest(visibility="team").visibility == "team"
 

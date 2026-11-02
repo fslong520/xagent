@@ -315,17 +315,17 @@ async def test_router_routes_on_active_goal_not_scaffold(monkeypatch):
     llm.context_window = 128_000
     llm._select_model = fake_select  # type: ignore[assignment]
 
-    with goal_scope("你好"):
+    with goal_scope("\u4f60\u597d"):
         await llm.prepare_for_call(
             [
                 {
                     "role": "user",
-                    "content": "## User Task\n你好\n\n## Available Skills\n...",
+                    "content": "## User Task\n\u4f60\u597d\n\n## Available Skills\n...",
                 }
             ]
         )
 
-    assert seen["prompt"] == "你好"
+    assert seen["prompt"] == "\u4f60\u597d"
 
 
 async def test_router_uses_fallback_when_routing_fails(monkeypatch):

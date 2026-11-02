@@ -303,7 +303,7 @@ def test_published_agent_tool_name_romanizes_non_ascii_names() -> None:
 
         published_agent = Agent(
             user_id=owner.id,
-            name="中文整理助手",
+            name="\u4e2d\u6587\u6574\u7406\u52a9\u624b",
             status=AgentStatus.PUBLISHED,
         )
         db.add(published_agent)

@@ -1,6 +1,7 @@
 """
-共享测试组件 - 提供通用的mock类和测试工具
-避免在多个测试文件中重复定义相同的组件
+Shared test components - reusable mock classes and test helpers.
+
+Keeps the same components from being redefined across multiple test modules.
 """
 
 import tempfile
@@ -32,7 +33,7 @@ from xagent.core.workspace import TaskWorkspace
 
 
 class SharedMockLLM(BaseLLM):
-    """共享的Mock LLM类"""
+    """Shared mock LLM class"""
 
     def __init__(self, responses: Optional[List[str]] = None):
         self.call_count = 0
@@ -88,7 +89,7 @@ class SharedMockLLM(BaseLLM):
 
 
 class SharedMockWeatherTool(Tool):
-    """共享的Mock天气工具"""
+    """Shared mock weather tool"""
 
     @property
     def metadata(self) -> ToolMetadata:
@@ -127,7 +128,7 @@ class SharedMockWeatherTool(Tool):
 
 
 class SharedMockAnalysisTool(Tool):
-    """共享的Mock分析工具"""
+    """Shared mock analysis tool"""
 
     @property
     def metadata(self) -> ToolMetadata:
@@ -162,7 +163,7 @@ class SharedMockAnalysisTool(Tool):
 
 
 class SharedDummyMemoryStore(MemoryStore):
-    """共享的虚拟内存存储"""
+    """Shared dummy memory store"""
 
     def add(self, note):
         return MemoryResponse(success=True)
@@ -195,7 +196,7 @@ class SharedDummyMemoryStore(MemoryStore):
 
 
 class CaptureTraceHandler(TraceHandler):
-    """捕获追踪事件的处理器"""
+    """Handler that captures trace events"""
 
     def __init__(self):
         self.events: List[TraceEvent] = []
@@ -204,20 +205,20 @@ class CaptureTraceHandler(TraceHandler):
         self.events.append(event)
 
     def clear(self):
-        """清除所有捕获的事件"""
+        """Clear every captured event"""
         self.events.clear()
 
     def get_events_by_type(self, event_type: TraceEventType) -> List[TraceEvent]:
-        """根据事件类型获取事件"""
+        """Get events by event type"""
         return [event for event in self.events if event.event_type == event_type]
 
     def get_events_with_task_id(self, task_id: str) -> List[TraceEvent]:
-        """根据task_id获取事件"""
+        """Get events by task_id"""
         return [event for event in self.events if event.task_id == task_id]
 
 
 class MockDatabaseSession:
-    """模拟数据库会话"""
+    """Mock database session"""
 
     def __init__(self):
         self.add = MagicMock()
@@ -234,34 +235,34 @@ class MockDatabaseSession:
         self.add_call_count += 1
 
     def close(self):
-        """模拟数据库会话关闭"""
+        """Simulate closing the database session"""
         pass
 
 
 class EventOwnershipValidator:
-    """事件归属验证器"""
+    """Event ownership validator"""
 
     def __init__(self):
         self.events: List[TraceEvent] = []
         self.ownership_issues: List[str] = []
 
     def add_event(self, event: TraceEvent):
-        """添加事件到验证器"""
+        """Add an event to the validator"""
         self.events.append(event)
 
     def validate_event_ownership(self) -> bool:
-        """验证所有事件都正确归属于plan或step"""
+        """Validate that every event belongs to a plan or a step"""
         self.ownership_issues.clear()
 
         for event in self.events:
-            # 基础验证：所有事件都必须有task_id
+            # Base check: every event must carry a task_id
             if not event.task_id:
                 self.ownership_issues.append(
                     f"Event {event.id} ({event.event_type.value}) missing task_id"
                 )
                 continue
 
-            # 根据事件类型进行特定验证
+            # Type-specific validation
             if self._is_plan_level_event(event):
                 self._validate_plan_event_ownership(event)
 
@@ -274,7 +275,7 @@ class EventOwnershipValidator:
         return len(self.ownership_issues) == 0
 
     def _is_plan_level_event(self, event: TraceEvent) -> bool:
-        """判断是否为plan级别事件"""
+        """Whether this is a plan-level event"""
         plan_events = [
             TASK_START_DAG,
             TASK_END_DAG,
@@ -284,7 +285,7 @@ class EventOwnershipValidator:
         return event.event_type in plan_events
 
     def _is_step_level_event(self, event: TraceEvent) -> bool:
-        """判断是否为step级别事件"""
+        """Whether this is a step-level event"""
         step_events = [
             STEP_START_DAG,
             STEP_END_DAG,
@@ -294,7 +295,7 @@ class EventOwnershipValidator:
         return event.event_type in step_events
 
     def _is_llm_or_tool_event(self, event: TraceEvent) -> bool:
-        """判断是否为LLM或工具事件"""
+        """Whether this is an LLM or tool event"""
         llm_tool_events = [
             ACTION_START_LLM,
             ACTION_END_LLM,
@@ -304,7 +305,7 @@ class EventOwnershipValidator:
         return event.event_type in llm_tool_events
 
     def _validate_plan_event_ownership(self, event: TraceEvent) -> bool:
-        """验证plan事件归属"""
+        """Validate plan event ownership"""
         if not event.task_id:
             self.ownership_issues.append(
                 f"Plan event {event.id} ({event.event_type.value}) missing task_id"
@@ -313,14 +314,14 @@ class EventOwnershipValidator:
         return True
 
     def _validate_step_event_ownership(self, event: TraceEvent) -> bool:
-        """验证step事件归属"""
+        """Validate step event ownership"""
         if not event.task_id:
             self.ownership_issues.append(
                 f"Step event {event.id} ({event.event_type.value}) missing task_id"
             )
             return False
 
-        # Step事件应该有step信息
+        # Step events should carry step information
         if not event.step_id:
             self.ownership_issues.append(
                 f"Step event {event.id} ({event.event_type.value}) missing step_id"
@@ -330,21 +331,21 @@ class EventOwnershipValidator:
         return True
 
     def _validate_llm_tool_event_ownership(self, event: TraceEvent) -> bool:
-        """验证LLM或工具事件归属"""
+        """Validate LLM or tool event ownership"""
         if not event.task_id:
             self.ownership_issues.append(
                 f"LLM/Tool event {event.id} ({event.event_type.value}) missing task_id"
             )
             return False
 
-        # LLM/工具事件必须有parent_id
+        # LLM/tool events must have a parent_id
         if not event.parent_id:
             self.ownership_issues.append(
                 f"LLM/Tool event {event.id} ({event.event_type.value}) missing parent_id"
             )
             return False
 
-        # 验证parent_id确实指向一个step事件
+        # Verify that parent_id really points at a step event
         parent_event = self._find_event_by_id(event.parent_id)
         if not parent_event or not self._is_step_level_event(parent_event):
             self.ownership_issues.append(
@@ -355,15 +356,15 @@ class EventOwnershipValidator:
         return True
 
     def _find_event_by_id(self, event_id: str) -> Optional[TraceEvent]:
-        """根据ID查找事件"""
+        """Find an event by ID"""
         for event in self.events:
             if event.id == event_id:
                 return event
         return None
 
     def get_ownership_report(self) -> Dict[str, Any]:
-        """获取归属验证报告"""
-        # 执行验证
+        """Get the ownership validation report"""
+        # Run the validation
         self.validate_event_ownership()
 
         total_events = len(self.events)
@@ -383,16 +384,16 @@ class EventOwnershipValidator:
 
 
 def create_test_tracer() -> Tracer:
-    """创建测试用的追踪器"""
+    """Create a tracer for tests"""
     tracer = Tracer()
-    # 移除默认的console handler，避免测试时产生过多日志
+    # Drop the default console handler so tests do not emit excessive logs
     tracer.handlers.clear()
     return tracer
 
 
 def create_mock_db_session():
     """
-    创建模拟数据库会话和正确的patch配置.
+    Create a mock database session and the matching patch configuration.
 
     Returns:
         tuple: (mock_db_session, mock_get_db_generator)
@@ -409,7 +410,7 @@ def create_mock_db_session():
 
 
 def create_test_components():
-    """创建测试所需的所有组件"""
+    """Create every component the tests need"""
     llm = SharedMockLLM()
     memory = SharedDummyMemoryStore()
     tools = [SharedMockWeatherTool(), SharedMockAnalysisTool()]

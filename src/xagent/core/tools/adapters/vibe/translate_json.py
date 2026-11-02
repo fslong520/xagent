@@ -65,8 +65,8 @@ Dictionary with translation result containing:
 
 Examples:
 1. Direct JSON translation:
-   translate_json(json_data='{"text": "你好"}', target_fields=["text"], target_lang="en")
-   Returns: {"text": "你好", "translated_text": "Hello"}
+   translate_json(json_data='{"text": "Hello"}', target_fields=["text"], target_lang="fr")
+   Returns: {"text": "Hello", "translated_text": "Bonjour"}
 
 2. Translation from file (recommended):
    translate_json(file_id='40f4ec64-0367-44e7-9161-b8fdb3f4eabb', target_fields=["text"], target_lang="en")
@@ -74,11 +74,11 @@ Examples:
 
 3. Nested structure from file:
    translate_json(file_id='abc123', target_fields=["segments.text"], target_lang="en")
-   Returns: {"segments": [{"text": "测试", "translated_text": "Test"}]}
+   Returns: {"segments": [{"text": "Test", "translated_text": "Test"}]}
 
 4. Multiple fields:
    translate_json(file_id='file123', target_fields=["title", "content"], target_lang="en")
-   Returns: {"title": "标题", "title_translated_text": "Title", ...}
+   Returns: {"title": "Title", "title_translated_text": "Title", ...}
 
 Note: Translation is done in batches for efficiency. All texts are sent to LLM together.
 Translation results are automatically saved to workspace when available.

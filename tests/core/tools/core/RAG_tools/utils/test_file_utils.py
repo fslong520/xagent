@@ -100,7 +100,7 @@ class TestFileReadWorkflow:
     def test_read_file_with_encoding(self, tmp_path):
         """Test reading file with specific encoding."""
         test_file = tmp_path / "test.txt"
-        test_content = "测试内容"
+        test_content = "\u6d4b\u8bd5\u5185\u5bb9"
         test_file.write_text(test_content, encoding="utf-8")
 
         result = read_file(str(test_file), encoding="utf-8")

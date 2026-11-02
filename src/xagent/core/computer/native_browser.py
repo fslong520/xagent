@@ -134,11 +134,11 @@ _SENSITIVE_LABEL_MARKERS = (
     "security code",
     "verification code",
     "one-time code",
-    "密码",
-    "口令",
-    "验证码",
-    "安全码",
-    "动态码",
+    "\u5bc6\u7801",
+    "\u53e3\u4ee4",
+    "\u9a8c\u8bc1\u7801",
+    "\u5b89\u5168\u7801",
+    "\u52a8\u6001\u7801",
 )
 _SENSITIVE_LABEL_TOKEN_RE = re.compile(
     r"(?:^|[^a-z0-9])(?:otp|2fa|mfa|cvv|cvc|pin|ssn)(?:$|[^a-z0-9])"

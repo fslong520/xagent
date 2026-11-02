@@ -2,8 +2,8 @@
 name: pptx-editorial
 description: |
   A native .pptx deck with magazine-grade editorial styling: "pitch deck",
-  "投资人路演 PPT", "美观 PPT", board review, product launch. Named palettes,
-  fixed typography, 10 numbered layouts.
+  "investor deck", "beautiful slides", board review, product launch. Named
+  palettes, fixed typography, 10 numbered layouts.
 when_to_use: |
   A polished .pptx or Google Slides deck that must preserve visual design.
   Prefer over presentation-generator when visual quality matters; use
@@ -32,18 +32,20 @@ title/body placeholder tools to create a new designed deck.
 ## ⚠️ Hard rules — NO exceptions
 
 0. **MATCH THE USER'S LANGUAGE.** This is rule zero, the most violated rule.
-   If the user prompt is in Chinese (中文), EVERY string in the deck — kickers,
-   slide titles, body text, captions, kicker labels, folio prefixes, sample
-   names, captions — must be in Chinese. **NEVER** copy English template
+   If the user prompts in a non-English language, EVERY string in the deck —
+   kickers, slide titles, body text, captions, kicker labels, folio prefixes,
+   sample names — must be in that language. **NEVER** copy English template
    phrases like `THE PROBLEM`, `FEATURE STORY`, `RESEARCH BRIEF`,
-   `THE BOTTOM LINE`, `BUILT BY BUILDERS` into a Chinese deck. Translate
-   them: e.g. `THE PROBLEM` → `问题所在`, `THE SOLUTION` → `解决方案`,
-   `MARKET OPPORTUNITY` → `市场机会`, `THE TEAM` → `团队`, `USE OF FUNDS` →
-   `资金用途`, `THE BOTTOM LINE` → `一句话总结`, `RESEARCH BRIEF` →
-   `研究简报`, `CASE STUDY` → `案例研究`. Person names in a Chinese deck
-   should be Chinese names (e.g. 张伟 · 陈琳), not transliterated English
-   names. Folio reads `01 / 12` in either language (digits are universal).
-   Same applies to other languages: match the prompt.
+   `THE BOTTOM LINE`, `BUILT BY BUILDERS` into a non-English deck. Translate
+   them: e.g. `THE PROBLEM` → the user's-language equivalent of "Problem",
+   `THE SOLUTION` → the equivalent of "Solution", `MARKET OPPORTUNITY` → the
+   equivalent of "Market Opportunity", `THE TEAM` → the equivalent of "Team",
+   `USE OF FUNDS` → the equivalent of "Use of Funds", `THE BOTTOM LINE` →
+   the equivalent of "Bottom Line", `RESEARCH BRIEF` → the equivalent of
+   "Research Brief", `CASE STUDY` → the equivalent of "Case Study". Person
+   names in a non-English deck must be native names written in that
+   language's script, not transliterated English names. Folio reads
+   `01 / 12` in either language (digits are universal).
 1. **One palette only.** Pick one of the 5 palettes below, use only its 4 hex
    values. Never invent new hex.
 2. **Two fonts only.** Display = `Georgia` (serif, present on all OSes).
@@ -53,10 +55,11 @@ title/body placeholder tools to create a new designed deck.
    fallback fonts (PingFang on macOS, Microsoft YaHei on Windows) — that's
    fine, do not switch to custom Chinese fonts.
 2a. **🚫 NEVER apply `charSpacing` to CJK / non-Latin text.** The trick of
-    "tracked-out caps" only works for Latin letters (`A B C D`). On Chinese,
-    Japanese, Korean characters — which are already full-square glyphs —
-    `charSpacing: 10` (0.10em) renders as `部　署　周　期` with huge gaps
-    between every character. This looks broken on EVERY rendering platform.
+    "tracked-out caps" only works for Latin letters — ASCII `DEPLOY` renders
+    as `D E P L O Y` and still reads fine. On Chinese, Japanese, Korean
+    characters — which are already full-square glyphs — `charSpacing: 10`
+    (0.10em) inserts huge gaps between every character. This looks broken on
+    EVERY rendering platform.
     Rule: if the text contains ANY CJK character, set `charSpacing: 0`
     (or omit the property entirely). Only apply `charSpacing: 8-15` when
     the entire string is uppercase Latin (e.g. `RESEARCH BRIEF`, `PART 02`).
@@ -74,10 +77,11 @@ title/body placeholder tools to create a new designed deck.
 4. **Real content only.** No lorem ipsum, no `[Title here]` placeholders,
    no fabricated statistics. If a slot has no user data, drop the slot.
    - **Team slides especially**: if the user did not provide team names,
-     titles, or bios, DO NOT invent them. Don't make up `陈明远 · 前阿里
-     云智能平台总监 · 清华大学计算机硕士` — that's fabrication and looks
-     fake to anyone in the industry. Either ask the user for team info
-     OR drop the team slide entirely and note "团队信息待补充".
+     titles, or bios, DO NOT invent them. Don't make up `Jane Doe · Former
+     Cloud Platform Director at a Fortune 500 · MSc, Top University` — that's
+     fabrication and looks fake to anyone in the industry. Either ask the
+     user for team info OR drop the team slide entirely and note
+     "Team information to be provided".
    - Same for fake financial metrics (MRR / ARR / growth rate), fake
      customer names, fake competitive comparisons. If you don't have it,
      don't ship it.
@@ -273,7 +277,8 @@ through `packages`, even on repeated runs in the same task.
       For **Chinese / CJK** text: `charSpacing: 0` ALWAYS (no exceptions).
       Anything > 0 on CJK looks broken with huge gaps between every character.
 - [ ] **Kicker is a SEPARATE section label** (e.g. `RESEARCH BRIEF` for EN
-      decks, `研究简报` for ZH decks), NOT a fragment of the slide title.
+      decks, the localized equivalent for non-English decks), NOT a fragment
+      of the slide title.
       Title is one complete phrase by itself.
 - [ ] Meta rows use middle dot `·` between items (not `-` or `—`)
 - [ ] Slide count 6–25 driven by user content
@@ -281,7 +286,8 @@ through `packages`, even on repeated runs in the same task.
 - [ ] Folio "NN / TT" on every slide except L10
 - [ ] All numbers / quotes from user content (or clearly attributed sources)
 - [ ] **No fabricated team / customer / financial data**. If user didn't
-      give team names, drop the team slide (or use "团队信息待补充").
+      give team names, drop the team slide (or use "Team information to be
+      provided").
 - [ ] **Chinese hero titles use `w: 12`** (not `w: 6`). Chinese chars are
       ~0.55" each at 40pt — narrow textboxes overflow / wrap broken.
 - [ ] **No overlapping shapes** (banner blocks vs. title blocks). Allow at
@@ -311,8 +317,8 @@ Run via `execute_javascript_code` (with `packages: "pptxgenjs"`), then:
 
    ❌ **WRONG — common failure mode that renders as plain text**:
    ```
-   已获取文件信息：
-   - 文件名: `editorial-deck.pptx`
+   Retrieved file info:
+   - Filename: `editorial-deck.pptx`
    - file_id: `20fae785-3823-4906-b385-d0e8a7807dc8`
    ```
    This shows the UUID as decoration and the user can't click anything.

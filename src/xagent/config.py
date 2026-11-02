@@ -294,7 +294,7 @@ TOOL_MAX_FIELD_COUNT = "XAGENT_TOOL_MAX_FIELD_COUNT"
 MAX_TRACE_PAYLOAD_BYTES = "XAGENT_MAX_TRACE_PAYLOAD_BYTES"
 INLINE_FILE_DELIVERY_MAX_BYTES = "XAGENT_INLINE_FILE_DELIVERY_MAX_BYTES"
 
-# Remote memory backend (memory SaaS adapter, docs/方案-xagent记忆SaaS.md §3.3).
+# Remote memory backend (memory SaaS adapter, design doc §3.3).
 # When selected, xagent publishes a RemoteMemoryStore instead of the local
 # LanceDB store; the service URL and bearer key are required together.
 MEMORY_BACKEND = "XAGENT_MEMORY_BACKEND"
@@ -4003,7 +4003,7 @@ def get_memory_service_key() -> str | None:
     """Return the memory SaaS bearer key, or ``None`` when unset.
 
     Read from the environment only: the key must never be written into the
-    repository or a log (方案 §3.4.2).
+    repository or a log (design doc §3.4.2).
     """
     value = os.getenv(MEMORY_SERVICE_KEY)
     if value is None:

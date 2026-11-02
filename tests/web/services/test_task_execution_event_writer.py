@@ -110,7 +110,10 @@ async def test_factory_commits_recoverable_state_before_observers(canonical):
                 {"role": "user", "content": "hello", "metadata": {"turn_id": "t1"}}
             ]
         },
-        "pattern_state": {"adopted_plan": "完整计划" * 10000, "pending_tool_calls": []},
+        "pattern_state": {
+            "adopted_plan": "\u5b8c\u6574\u8ba1\u5212" * 10000,
+            "pending_tool_calls": [],
+        },
     }
     await TraceCheckpointStore(tracer).save(payload)
     with factory() as db:
@@ -186,7 +189,7 @@ async def test_attempt_result_keeps_batch_identity_and_blocks_blind_replay(canon
     }
     await runtime.on_tool_start(tool_call=call)
     await runtime.on_tool_end(
-        tool_call=call, result={"success": True, "output": "长结果" * 10000}
+        tool_call=call, result={"success": True, "output": "\u957f\u7ed3\u679c" * 10000}
     )
     with pytest.raises(ExecutionEventPersistenceError):
         await runtime.on_tool_start(tool_call=call)
@@ -195,7 +198,9 @@ async def test_attempt_result_keeps_batch_identity_and_blocks_blind_replay(canon
         assert len(rows) == 2
         assert {r.assistant_message_id for r in rows} == {"batch1"}
         assert {r.tool_attempt_id for r in rows} == {"attempt1"}
-        assert rows[1].payload["data"]["result"]["output"] == "长结果" * 10000
+        assert (
+            rows[1].payload["data"]["result"]["output"] == "\u957f\u7ed3\u679c" * 10000
+        )
 
 
 @pytest.mark.parametrize(
@@ -478,7 +483,7 @@ def test_settlement_serializes_execution_context_without_losing_state(canonical)
 
     factory, task_id = canonical
     context = ExecutionContext(execution_id="run-context")
-    context.add_assistant_message("完整回复" * 10000)
+    context.add_assistant_message("\u5b8c\u6574\u56de\u590d" * 10000)
     with factory() as db:
         task = db.get(Task, task_id)
         task.status = TaskStatus.COMPLETED

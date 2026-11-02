@@ -445,12 +445,12 @@ class TestXinferenceTTS:
         mock_client_class.return_value = mock_client
 
         tts = XinferenceTTS()
-        result = await tts.synthesize("你好，世界！🎉", verbose=False)
+        result = await tts.synthesize("\u4f60\u597d，\u4e16\u754c！🎉", verbose=False)
 
         # Verify unicode text was passed through
         mock_model_handle.speech.assert_called_once()
         call_args, call_kwargs = mock_model_handle.speech.call_args
-        assert call_kwargs.get("input") == "你好，世界！🎉"
+        assert call_kwargs.get("input") == "\u4f60\u597d，\u4e16\u754c！🎉"
         assert result == b"fake audio data"
 
     @patch(_ASYNC_CLIENT_PATH)

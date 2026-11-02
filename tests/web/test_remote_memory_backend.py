@@ -1,4 +1,4 @@
-"""Backend selection for the memory SaaS adapter (方案 §3.3, 裁决⑨).
+"""Backend selection for the memory SaaS adapter (design note 3.3, ruling 9).
 
 Three wiring points are pinned here:
 
@@ -156,7 +156,7 @@ def test_registration_installs_the_resolver_in_the_shared_hook() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 缺陷二: store-info must describe the *upstream*, not only the local
+# Defect 2: store-info must describe the *upstream*, not only the local
 # lifecycle publication. A ready lifecycle state is overridden by the
 # adapter's health signal; a fenced lifecycle state always wins.
 # ---------------------------------------------------------------------------
@@ -207,7 +207,9 @@ def test_store_info_is_ready_when_the_last_upstream_call_succeeded(
 
     assert info["store_type"] == "RemoteMemoryStore"
     assert info["state"] == "ready"
-    assert "上游最近一次调用成功" in info["detail"]
+    assert (
+        "Latest upstream call succeeded" in info["detail"]
+    )
 
 
 def test_store_info_degrades_after_an_upstream_5xx_answer(monkeypatch: Any) -> None:
@@ -243,7 +245,7 @@ def test_store_info_is_unavailable_when_the_upstream_never_answered(
             last_event_at=time.time(),
             last_event_kind="transport_error",
             last_failure_at=time.time(),
-            last_failure_reason="连接失败（ConnectionError）",
+            last_failure_reason="connection failed (ConnectionError)",
             last_path="/v1/memory/list",
             consecutive_transport_failures=3,
         ),
@@ -252,7 +254,7 @@ def test_store_info_is_unavailable_when_the_upstream_never_answered(
     info = manager.get_store_info()
 
     assert info["state"] == "unavailable"
-    assert "不可达" in info["detail"]
+    assert "unreachable" in info["detail"]
 
 
 def test_store_info_keeps_the_lifecycle_truth_when_memory_is_fenced(

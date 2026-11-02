@@ -7,22 +7,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
-  Settings,
   Lock,
   User,
 } from "lucide-react"
 import { getApiUrl } from "@/lib/utils"
 import { apiRequest } from "@/lib/api-wrapper"
 import { useAuth } from "@/contexts/auth-context"
-import { useI18n, type Locale } from "@/contexts/i18n-context"
-import { Select } from "@/components/ui/select"
+import { useI18n } from "@/contexts/i18n-context"
 import { inspectAuthSession, updateAuthSessionUser } from "@/lib/auth-cache"
 import { TaskRuntimeSettingsExtension } from "@/lib/task-runtime-ui-extension"
 import { ExecutionBudgetSettings } from "@/components/settings/execution-budget"
 
 export default function SettingsPage() {
   const { user, session } = useAuth()
-  const { t, locale, setLocale } = useI18n()
+  const { t } = useI18n()
   const [email, setEmail] = useState(user?.email || "")
   const [isProfileLoading, setIsProfileLoading] = useState(true)
   const [isSavingEmail, setIsSavingEmail] = useState(false)
@@ -86,33 +84,6 @@ export default function SettingsPage() {
 
       <div className="space-y-6">
         <TaskRuntimeSettingsExtension />
-
-        {/* Language Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              {t("settings.language.title")}
-            </CardTitle>
-            <CardDescription>
-              {t("settings.language.description")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="language-select">{t("settings.language.title")}</Label>
-              <Select
-                value={locale}
-                onValueChange={(val) => setLocale(val as Locale)}
-                options={[
-                  { value: "zh", label: "简体中文" },
-                  { value: "en", label: "English" },
-                ]}
-                placeholder={t("settings.language.title")}
-              />
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Password Change Section */}
         <Card>

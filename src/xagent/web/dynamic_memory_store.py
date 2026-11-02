@@ -193,7 +193,7 @@ class DynamicMemoryStoreManager:
 
     def _admit_locked(self, *, writers_quiesced: bool) -> None:
         previous_publication = self._publication
-        # Backend selection (方案 §3.3 table row 3, 裁决⑨). This runs before the
+        # Backend selection (design doc §3.3 table row 3, decision 9). This runs before the
         # authority read because remote mode has no authority row at all: the
         # memory service owns the vector space. ``remote_admission_result``
         # returns ``None`` unless XAGENT_MEMORY_BACKEND selects remote, so the
@@ -396,7 +396,7 @@ class DynamicMemoryStoreManager:
             "supports_vector_search": status.vector_search,
             "similarity_threshold": threshold,
         }
-        # 缺陷二: on the remote backend the lifecycle state describes only the
+        # Defect #2: on the remote backend the lifecycle state describes only the
         # *local* publication -- it says nothing about whether the upstream
         # memory service answers. Fold the adapter's upstream health signal
         # into the report so an operator never reads "ready" while every

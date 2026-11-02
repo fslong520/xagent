@@ -690,7 +690,7 @@ def test_the_like_pattern_never_misses_a_match_on_random_special_character_texts
     name = milvus_collection_name(model)
     kb_id = get_or_create_kb_id(get_vector_index_store().get_raw_connection(), "kb", 1)
     rng = random.Random(7)
-    alphabet = ["a", "b", "%", "_", "\\", '"', "'", "中", " ", "5", "\\_", "\\%", "%%"]
+    alphabet = ["a", "b", "%", "_", "\\", '"', "'", "\u4e2d", " ", "5", "\\_", "\\%", "%%"]
     texts = sorted(
         {"".join(rng.choices(alphabet, k=rng.randint(1, 9))) for _ in range(250)}
     )

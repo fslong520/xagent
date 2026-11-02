@@ -55,7 +55,10 @@ class TestUniversalParsingIntegration:
         """Test text parsing with real files."""
         # Create test text file
         test_file = tmp_path / "test.txt"
-        test_content = "这是一个测试文档。\n包含多行文本内容。\n用于测试解析功能。"
+        test_content = (
+            "This is a test document.\nIt contains multiple lines of text.\n"
+            "Used to test the parsing feature."
+        )
         test_file.write_text(test_content, encoding="utf-8")
 
         # Register and parse using new API
@@ -357,7 +360,9 @@ class TestRAGWorkflowIntegration:
         # 1. Create test document
         test_file = tmp_path / "workflow_test.txt"
         test_content = (
-            "人工智能是未来的技术。\n机器学习改变了世界。\n深度学习推动创新。"
+            "Artificial intelligence is the technology of the future.\n"
+            "Machine learning changed the world.\n"
+            "Deep learning drives innovation."
         )
         test_file.write_text(test_content, encoding="utf-8")
 
@@ -428,13 +433,13 @@ class TestRAGWorkflowIntegration:
 
         # Text document
         txt_file = tmp_path / "doc1.txt"
-        txt_content = "这是第一个文档。"
+        txt_content = "This is the first document."
         txt_file.write_text(txt_content, encoding="utf-8")
         documents.append(("txt", str(txt_file)))
 
         # JSON document
         json_file = tmp_path / "doc2.json"
-        json_content = {"title": "第二个文档", "content": "JSON格式的内容"}
+        json_content = {"title": "Second document", "content": "JSON formatted content"}
         json_file.write_text(
             json.dumps(json_content, ensure_ascii=False), encoding="utf-8"
         )
@@ -500,13 +505,13 @@ class TestRAGWorkflowIntegration:
         txt_results = store.search_vectors(txt_query, top_k=1)
         assert len(txt_results) == 1
         assert txt_results[0]["metadata"]["file_type"] == "txt"
-        assert "第一个文档" in txt_results[0]["metadata"]["text"]
+        assert "first document" in txt_results[0]["metadata"]["text"]
 
         json_query = [0.0, 0.1, 0.0]
         json_results = store.search_vectors(json_query, top_k=1)
         assert len(json_results) == 1
         assert json_results[0]["metadata"]["file_type"] == "json"
-        assert "第二个文档" in json_results[0]["metadata"]["text"]
+        assert "Second document" in json_results[0]["metadata"]["text"]
 
 
 @pytest.mark.integration

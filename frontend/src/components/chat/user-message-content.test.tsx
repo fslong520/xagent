@@ -20,11 +20,11 @@ afterEach(cleanup)
 describe("UserMessageContent", () => {
   it("renders attached files inline with the user text", () => {
     const { container } = render(
-      <UserMessageContent message="这是什么时候的现场" files={[image]} />
+      <UserMessageContent message="When was this taken?" files={[image]} />
     )
 
     expect(container.firstElementChild?.textContent).toBe(
-      "这是什么时候的现场telegram-photo.jpg"
+      "When was this taken?telegram-photo.jpg"
     )
     expect(screen.queryByText("137.28 KB")).not.toBeInTheDocument()
     expect(container.querySelector("img")).not.toBeInTheDocument()
@@ -33,7 +33,7 @@ describe("UserMessageContent", () => {
 
   it("removes a matching legacy runtime file link before adding the chip", () => {
     const message =
-      "这是什么时候的现场\n\n[telegram-photo.jpg](file://355f1fee-48e4-4cb6-afd3-71654e2f5c7e)"
+      "When was this taken?\n\n[telegram-photo.jpg](file://355f1fee-48e4-4cb6-afd3-71654e2f5c7e)"
 
     render(<UserMessageContent message={message} files={[image]} />)
 

@@ -507,10 +507,10 @@ def test_requests_error_reports_the_value_the_caller_passed() -> None:
         # CJK is ~1 token per character; a flat chars/4 heuristic undercounts
         # Chinese by close to 4x. Punctuation and fullwidth forms count too —
         # they appear in essentially every Chinese sentence.
-        ("中文", 2),
-        ("中文abcd", 3),
-        ("中文，你好。", 6),
-        ("（全角）", 4),
+        ("\u4e2d\u6587", 2),
+        ("\u4e2d\u6587abcd", 3),
+        ("\u4e2d\u6587，\u4f60\u597d。", 6),
+        ("（\u5168\u89d2）", 4),
     ],
 )
 def test_estimate_media_tokens_counts_cjk(text, expected) -> None:

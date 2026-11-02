@@ -371,11 +371,11 @@ class FakeSearchTool:
         return {
             "results": [
                 {
-                    "title": "用不了NotebookLM,试试这个国产知识库工具",
+                    "title": "\u7528\u4e0d\u4e86NotebookLM,\u8bd5\u8bd5\u8fd9\u4e2a\u56fd\u4ea7\u77e5\u8bc6\u5e93\u5de5\u5177",
                     "link": "https://example.com/a",
                 },
                 {
-                    "title": "AnyGen真能取代NotebookLM?",
+                    "title": "AnyGen\u771f\u80fd\u53d6\u4ee3NotebookLM?",
                     "link": "https://example.com/b",
                 },
                 {
@@ -764,7 +764,7 @@ class StreamingInvalidToolProtocolFinalAnswerLLM:
                             "arguments": json.dumps(
                                 {
                                     "response_language": "Simplified Chinese",
-                                    "answer": "目前没有找到可直接下载的音频片段。",
+                                    "answer": "\u76ee\u524d\u6ca1\u6709\u627e\u5230\u53ef\u76f4\u63a5\u4e0b\u8f7d\u7684\u97f3\u9891\u7247\u6bb5。",
                                 },
                                 ensure_ascii=False,
                             ),
@@ -869,7 +869,7 @@ class StreamingMalformedFinalAnswerRecoveryLLM:
                         "arguments": json.dumps(
                             {
                                 "response_language": "Simplified Chinese",
-                                "answer": "音频主要讲运动如何缓解精神疲劳。",
+                                "answer": "\u97f3\u9891\u4e3b\u8981\u8bb2\u8fd0\u52a8\u5982\u4f55\u7f13\u89e3\u7cbe\u795e\u75b2\u52b3。",
                             },
                             ensure_ascii=False,
                         ),
@@ -1111,7 +1111,7 @@ class StreamingRepeatedGuardFinalAnswerLLM:
                             "name": "react_decision",
                             "arguments": (
                                 '{"action":"final_answer",'
-                                '"reason":"已有搜索结果足够回答。"}'
+                                '"reason":"\u5df2\u6709\u641c\u7d22\u7ed3\u679c\u8db3\u591f\u56de\u7b54。"}'
                             ),
                         },
                     }
@@ -1429,7 +1429,7 @@ async def test_react_pattern_does_not_persist_invalid_raw_tool_calls() -> None:
                         "type": "function",
                         "function": {
                             "arguments": (
-                                '}{"query":"德国 科特迪瓦 世界杯 比分 2026 6月"}'
+                                '}{"query":"\u5fb7\u56fd \u79d1\u7279\u8fea\u74e6 \u4e16\u754c\u676f \u6bd4\u5206 2026 6\u6708"}'
                             ),
                         },
                     },
@@ -1440,7 +1440,7 @@ async def test_react_pattern_does_not_persist_invalid_raw_tool_calls() -> None:
     )
     pattern = ReActPattern(max_iterations=3)
     context = ExecutionContext()
-    context.add_user_message("搜索啊")
+    context.add_user_message("\u641c\u7d22\u554a")
 
     result = await pattern.run(context=context, tools=[FakeSearchTool()], llm=llm)
 
@@ -1550,14 +1550,14 @@ async def test_react_repairs_malformed_forced_final_answer_arguments() -> None:
     pattern = ReActPattern(max_iterations=3, finalize_after_tool_result=True)
     tool = FakeTool()
     context = ExecutionContext(system_prompt="You are helpful.", execution_id="780")
-    context.add_user_message("这个音频讲了什么？")
+    context.add_user_message("\u8fd9\u4e2a\u97f3\u9891\u8bb2\u4e86\u4ec0\u4e48？")
     tracer = TraceEventRecorder()
     runtime = PatternRuntime(execution_id="780", tracer=tracer)
 
     result = await pattern.run(context=context, tools=[tool], llm=llm, runtime=runtime)
 
     assert result["success"] is True
-    assert result["response"] == "音频主要讲运动如何缓解精神疲劳。"
+    assert result["response"] == "\u97f3\u9891\u4e3b\u8981\u8bb2\u8fd0\u52a8\u5982\u4f55\u7f13\u89e3\u7cbe\u795e\u75b2\u52b3。"
     assert tool.calls == [{"expression": "2+2"}]
     assert len(llm.stream_calls) == 3
     assert [schema["function"]["name"] for schema in llm.stream_calls[2]["tools"]] == [
@@ -1610,7 +1610,7 @@ async def test_react_retries_invalid_forced_final_as_final_answer_tool(
     )
 
     assert result["success"] is True
-    assert result["response"] == "目前没有找到可直接下载的音频片段。"
+    assert result["response"] == "\u76ee\u524d\u6ca1\u6709\u627e\u5230\u53ef\u76f4\u63a5\u4e0b\u8f7d\u7684\u97f3\u9891\u7247\u6bb5。"
     assert tool.calls == [{"expression": "2+2"}]
     assert len(llm.stream_calls) == 3
     assert [tool["function"]["name"] for tool in llm.stream_calls[1]["tools"]] == [
@@ -2019,7 +2019,7 @@ async def test_react_closes_invalid_initial_final_answer_stream_before_retry() -
     )
 
     assert result["success"] is True
-    assert result["response"] == "目前没有找到可直接下载的音频片段。"
+    assert result["response"] == "\u76ee\u524d\u6ca1\u6709\u627e\u5230\u53ef\u76f4\u63a5\u4e0b\u8f7d\u7684\u97f3\u9891\u7247\u6bb5。"
     assert tool.calls == [{"expression": "2+2"}]
     assert [event["type"] for event in outbound.events] == [
         "final_answer_start",
@@ -3392,13 +3392,13 @@ async def test_react_pattern_uses_decision_for_repeated_tools() -> None:
                             "name": "react_decision",
                             "arguments": (
                                 '{"action":"final_answer",'
-                                '"reason":"已有结果足够回答。"}'
+                                '"reason":"\u5df2\u6709\u7ed3\u679c\u8db3\u591f\u56de\u7b54。"}'
                             ),
                         },
                     }
                 ],
             },
-            "可以基于已有搜索结果回答。",
+            "\u53ef\u4ee5\u57fa\u4e8e\u5df2\u6709\u641c\u7d22\u7ed3\u679c\u56de\u7b54。",
         ]
     )
     pattern = ReActPattern(
@@ -3407,19 +3407,19 @@ async def test_react_pattern_uses_decision_for_repeated_tools() -> None:
     )
     tool = FakeSearchTool()
     context = ExecutionContext()
-    context.add_user_message("最近 AI 新闻")
+    context.add_user_message("\u6700\u8fd1 AI \u65b0\u95fb")
 
     result = await pattern.run(context=context, tools=[tool], llm=llm)
 
     assert result["success"] is True
-    assert result["response"] == "可以基于已有搜索结果回答。"
+    assert result["response"] == "\u53ef\u4ee5\u57fa\u4e8e\u5df2\u6709\u641c\u7d22\u7ed3\u679c\u56de\u7b54。"
     assert len(llm.calls) == 4
     assert len(tool.calls) == 2
     tool_names = [schema["function"]["name"] for schema in llm.calls[2]["tools"]]
     assert tool_names == ["react_decision"]
     decision_prompt = llm.calls[2]["messages"][-1]["content"]
     assert "Latest user request text" in decision_prompt
-    assert "最近 AI 新闻" in decision_prompt
+    assert "\u6700\u8fd1 AI \u65b0\u95fb" in decision_prompt
     assert "Do not put user-facing final answer text in this decision" in (
         decision_prompt
     )
@@ -3443,7 +3443,7 @@ def test_react_repeated_decision_anchors_latest_user_text_not_cached_task() -> N
     context = ExecutionContext()
     context.add_user_message("search AI news")
     tail = "TAIL_SHOULD_NOT_BE_IN_LANGUAGE_ANCHOR"
-    context.add_user_message(f"请用简体中文回答 {'x' * 430}{tail}")
+    context.add_user_message(f"\u8bf7\u7528\u7b80\u4f53\u4e2d\u6587\u56de\u7b54 {'x' * 430}{tail}")
 
     messages = pattern._messages_for_repeated_tool_decision(
         context,
@@ -3458,7 +3458,7 @@ def test_react_repeated_decision_anchors_latest_user_text_not_cached_task() -> N
     anchor_start = prompt.index("Latest user request text")
     anchor_end = prompt.index("Use this as the controlling request", anchor_start)
     anchor = prompt[anchor_start:anchor_end]
-    assert "请用简体中文回答" in anchor
+    assert "\u8bf7\u7528\u7b80\u4f53\u4e2d\u6587\u56de\u7b54" in anchor
     assert "search AI news" not in anchor
     assert "... [truncated]" in anchor
     assert tail not in anchor
@@ -3512,7 +3512,7 @@ async def test_react_repeated_decision_drains_current_tool_call_batch() -> None:
     )
     tool = FakeSearchTool()
     context = ExecutionContext()
-    context.add_user_message("最近 AI 新闻")
+    context.add_user_message("\u6700\u8fd1 AI \u65b0\u95fb")
 
     result = await pattern.run(context=context, tools=[tool], llm=llm)
 
@@ -3590,7 +3590,7 @@ async def test_react_pattern_uses_decision_after_cross_tool_attempts() -> None:
                     }
                 ],
             },
-            "已有跨工具结果，直接回答。",
+            "\u5df2\u6709\u8de8\u5de5\u5177\u7ed3\u679c，\u76f4\u63a5\u56de\u7b54。",
         ]
     )
     pattern = ReActPattern(
@@ -3601,7 +3601,7 @@ async def test_react_pattern_uses_decision_after_cross_tool_attempts() -> None:
     search_tool = FakeSearchTool()
     browser_tool = FakeBrowserNavigateTool()
     context = ExecutionContext()
-    context.add_user_message("判断这封邮件是不是广撒网")
+    context.add_user_message("\u5224\u65ad\u8fd9\u5c01\u90ae\u4ef6\u662f\u4e0d\u662f\u5e7f\u6492\u7f51")
 
     result = await pattern.run(
         context=context,
@@ -3610,7 +3610,7 @@ async def test_react_pattern_uses_decision_after_cross_tool_attempts() -> None:
     )
 
     assert result["success"] is True
-    assert result["response"] == "已有跨工具结果，直接回答。"
+    assert result["response"] == "\u5df2\u6709\u8de8\u5de5\u5177\u7ed3\u679c，\u76f4\u63a5\u56de\u7b54。"
     assert len(llm.calls) == 5
     assert len(search_tool.calls) == 1
     assert len(browser_tool.calls) == 1
@@ -3690,7 +3690,7 @@ async def test_react_pattern_uses_decision_after_tool_group_successes() -> None:
     search_tool = FakeGroupedTool("search_source", "research")
     fetch_tool = FakeGroupedTool("fetch_source", "research")
     context = ExecutionContext()
-    context.add_user_message("airpods 4 是什么接口")
+    context.add_user_message("airpods 4 \u662f\u4ec0\u4e48\u63a5\u53e3")
 
     result = await pattern.run(
         context=context,
@@ -3753,13 +3753,13 @@ async def test_react_pattern_accepts_legacy_auto_reroute_kwarg() -> None:
                             "name": "react_decision",
                             "arguments": (
                                 '{"action":"final_answer",'
-                                '"reason":"已有结果足够回答。"}'
+                                '"reason":"\u5df2\u6709\u7ed3\u679c\u8db3\u591f\u56de\u7b54。"}'
                             ),
                         },
                     }
                 ],
             },
-            "可以基于已有搜索结果回答。",
+            "\u53ef\u4ee5\u57fa\u4e8e\u5df2\u6709\u641c\u7d22\u7ed3\u679c\u56de\u7b54。",
         ]
     )
     pattern = ReActPattern(
@@ -3768,7 +3768,7 @@ async def test_react_pattern_accepts_legacy_auto_reroute_kwarg() -> None:
     )
     tool = FakeSearchTool()
     context = ExecutionContext()
-    context.add_user_message("最近 AI 新闻")
+    context.add_user_message("\u6700\u8fd1 AI \u65b0\u95fb")
 
     result = await pattern.run(
         context=context,
@@ -3778,7 +3778,7 @@ async def test_react_pattern_accepts_legacy_auto_reroute_kwarg() -> None:
     )
 
     assert result["success"] is True
-    assert result["response"] == "可以基于已有搜索结果回答。"
+    assert result["response"] == "\u53ef\u4ee5\u57fa\u4e8e\u5df2\u6709\u641c\u7d22\u7ed3\u679c\u56de\u7b54。"
     assert len(llm.calls) == 4
     assert len(tool.calls) == 2
     next_tool_names = [
@@ -3864,7 +3864,7 @@ async def test_react_pattern_repeated_guard_can_switch_to_non_repeated_tool() ->
                             "name": "final_answer",
                             "arguments": (
                                 '{"response_language":"Simplified Chinese",'
-                                '"answer":"搜索后已写入文件。"}'
+                                '"answer":"\u641c\u7d22\u540e\u5df2\u5199\u5165\u6587\u4ef6。"}'
                             ),
                         },
                     }
@@ -3879,7 +3879,7 @@ async def test_react_pattern_repeated_guard_can_switch_to_non_repeated_tool() ->
     search_tool = FakeSearchTool()
     write_tool = FakeWriteFileTool()
     context = ExecutionContext()
-    context.add_user_message("最近 AI 新闻")
+    context.add_user_message("\u6700\u8fd1 AI \u65b0\u95fb")
 
     result = await pattern.run(
         context=context,
@@ -3888,7 +3888,7 @@ async def test_react_pattern_repeated_guard_can_switch_to_non_repeated_tool() ->
     )
 
     assert result["success"] is True
-    assert result["response"] == "搜索后已写入文件。"
+    assert result["response"] == "\u641c\u7d22\u540e\u5df2\u5199\u5165\u6587\u4ef6。"
     assert len(search_tool.calls) == 2
     assert len(write_tool.calls) == 1
     assert len(llm.calls) == 5
@@ -3980,7 +3980,7 @@ async def test_react_pattern_repeated_guard_can_fire_twice_in_single_run() -> No
                     }
                 ],
             },
-            "第三次搜索后信息足够。",
+            "\u7b2c\u4e09\u6b21\u641c\u7d22\u540e\u4fe1\u606f\u8db3\u591f。",
         ]
     )
     pattern = ReActPattern(
@@ -3989,12 +3989,12 @@ async def test_react_pattern_repeated_guard_can_fire_twice_in_single_run() -> No
     )
     tool = FakeSearchTool()
     context = ExecutionContext()
-    context.add_user_message("最近 AI 新闻")
+    context.add_user_message("\u6700\u8fd1 AI \u65b0\u95fb")
 
     result = await pattern.run(context=context, tools=[tool], llm=llm)
 
     assert result["success"] is True
-    assert result["response"] == "第三次搜索后信息足够。"
+    assert result["response"] == "\u7b2c\u4e09\u6b21\u641c\u7d22\u540e\u4fe1\u606f\u8db3\u591f。"
     assert len(tool.calls) == 3
     assert len(llm.calls) == 6
     assert [schema["function"]["name"] for schema in llm.calls[2]["tools"]] == [
@@ -4079,7 +4079,7 @@ async def test_react_pattern_defers_repeated_final_decision_to_normal_loop() -> 
                             "name": "final_answer",
                             "arguments": (
                                 '{"response_language":"Simplified Chinese",'
-                                '"answer":"已完成处理。"}'
+                                '"answer":"\u5df2\u5b8c\u6210\u5904\u7406。"}'
                             ),
                         },
                     }
@@ -4094,7 +4094,7 @@ async def test_react_pattern_defers_repeated_final_decision_to_normal_loop() -> 
     search_tool = FakeSearchTool()
     write_tool = FakeWriteFileTool()
     context = ExecutionContext()
-    context.add_user_message("去除右下角 notebooklm 水印")
+    context.add_user_message("\u53bb\u9664\u53f3\u4e0b\u89d2 notebooklm \u6c34\u5370")
     runtime = PatternRuntime()
 
     result = await pattern.run(
@@ -4105,14 +4105,14 @@ async def test_react_pattern_defers_repeated_final_decision_to_normal_loop() -> 
     )
 
     assert result["success"] is True
-    assert result["response"] == "已完成处理。"
+    assert result["response"] == "\u5df2\u5b8c\u6210\u5904\u7406。"
     assert len(search_tool.calls) == 2
     assert len(write_tool.calls) == 1
     assistant_messages = [
         message.content for message in context.messages if message.role == "assistant"
     ]
-    assert "已找到源文件路径。正在处理去除水印，请稍候..." not in assistant_messages
-    assert assistant_messages[-1] == "已完成处理。"
+    assert "\u5df2\u627e\u5230\u6e90\u6587\u4ef6\u8def\u5f84。\u6b63\u5728\u5904\u7406\u53bb\u9664\u6c34\u5370，\u8bf7\u7a0d\u5019..." not in assistant_messages
+    assert assistant_messages[-1] == "\u5df2\u5b8c\u6210\u5904\u7406。"
     continue_checkpoints = [
         checkpoint
         for checkpoint in runtime.checkpoints

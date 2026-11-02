@@ -168,11 +168,11 @@ async def test_generate_sound_effect_accepts_cjk_and_adds_non_speech_constraint(
     model = FakeSoundEffectModel()
     tool = SoundEffectToolCore(models={"sound": model})
 
-    result = await tool.generate_sound_effect(text="台风过境的音效")
+    result = await tool.generate_sound_effect(text="\u53f0\u98ce\u8fc7\u5883\u7684\u97f3\u6548")
 
     assert result["success"] is True
     assert model.calls[0]["text"] == (
-        "台风过境的音效. Non-verbal sound effect only; no intelligible speech, "
+        "\u53f0\u98ce\u8fc7\u5883\u7684\u97f3\u6548. Non-verbal sound effect only; no intelligible speech, "
         "narration, or spoken words."
     )
 

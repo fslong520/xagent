@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-最终验证：专门测试用户报告的问题
+Final verification: a targeted test for the issues reported by users.
 """
 
 import asyncio
@@ -15,29 +15,29 @@ import websockets
 @pytest.mark.integration
 @pytest.mark.slow
 async def test_user_issues():
-    """专门测试用户报告的问题"""
+    """Targeted test for the issues reported by users"""
     uri = "ws://localhost:8000/ws/chat/1001"
 
     try:
-        print(f"连接到WebSocket: {uri}")
+        print(f"Connecting to WebSocket: {uri}")
         async with websockets.connect(uri) as websocket:
-            # 发送测试消息
+            # Send a test message
             test_message = {
                 "type": "chat",
-                "message": "分析销售数据并生成报告",
+                "message": "Analyze the sales data and generate a report",
                 "context": {},
             }
 
-            print(f"发送测试消息: {test_message['message']}")
+            print(f"Sending test message: {test_message['message']}")
             await websocket.send(json.dumps(test_message))
 
-            # 接收响应
+            # Receive responses
             steps_received = False
             steps_count = 0
             trace_events_received = False
 
             start_time = datetime.now()
-            timeout = 30  # 30秒超时
+            timeout = 30  # 30 second timeout
 
             while (datetime.now() - start_time).seconds < timeout:
                 try:
@@ -45,32 +45,32 @@ async def test_user_issues():
                     data = json.loads(message)
 
                     if data.get("type") == "dag_status_update":
-                        # 检查是否包含步骤数据
+                        # Check whether step data is present
                         if data.get("steps") and isinstance(data["steps"], list):
                             plan_steps = data["steps"]
                             if plan_steps:
                                 steps_received = True
                                 steps_count = len(plan_steps)
-                                print(f"✅ 收到步骤数据: {steps_count} 个步骤")
+                                print(f"✅ Received step data: {steps_count} steps")
 
-                                # 显示步骤信息
+                                # Show the step information
                                 for i, step in enumerate(plan_steps):
                                     print(
-                                        f"  步骤 {i + 1}: {step.get('name', 'unknown')} (ID: {step.get('id', 'unknown')})"
+                                        f"  Step {i + 1}: {step.get('name', 'unknown')} (ID: {step.get('id', 'unknown')})"
                                     )
 
-                        # 检查是否包含步骤详情
+                        # Check whether step details are present
                         if data.get("step_details"):
                             details_count = len(data["step_details"])
-                            print(f"✅ 收到步骤详情: {details_count} 个步骤的详情")
+                            print(f"✅ Received step details for {details_count} steps")
 
-                        # 检查是否包含执行日志 (现在是 trace events)
+                        # Check whether execution logs are present (now trace events)
                         if data.get("logs"):
                             trace_events_received = True
                             logs_count = len(data["logs"])
-                            print(f"✅ 收到执行日志: {logs_count} 条")
+                            print(f"✅ Received execution logs: {logs_count}")
 
-                            # 检查日志是否包含步骤信息
+                            # Check whether the logs carry step information
                             step_related_logs = [
                                 log
                                 for log in data["logs"]
@@ -78,7 +78,7 @@ async def test_user_issues():
                             ]
                             if step_related_logs:
                                 print(
-                                    f"✅ 收到步骤相关日志: {len(step_related_logs)} 条"
+                                    f"✅ Received step-related logs: {len(step_related_logs)}"
                                 )
                                 for log in step_related_logs:
                                     print(
@@ -86,47 +86,47 @@ async def test_user_issues():
                                     )
 
                     elif data.get("type") == "task_completed":
-                        print("任务完成")
+                        print("Task completed")
                         break
 
                 except asyncio.TimeoutError:
                     continue
                 except Exception as e:
-                    print(f"处理消息时出错: {e}")
+                    print(f"Error while handling a message: {e}")
                     continue
 
-            # 验证结果
+            # Verify the results
             print("\n" + "=" * 50)
-            print("用户问题验证结果:")
+            print("User issue verification results:")
 
             issue1_fixed = steps_received and steps_count > 0
-            # 修改判断逻辑：只要有步骤相关的日志就认为问题2已修复
-            issue2_fixed = trace_events_received  # 现在 trace events 包含步骤信息，所以这足够判断关联是否正常
+            # Adjusted logic: any step-related log means issue 2 is fixed
+            issue2_fixed = trace_events_received  # trace events now carry step info, which is enough to confirm correlation
 
             print(
-                f"问题1 - 右上角步骤计数显示: {'✅ 已修复' if issue1_fixed else '❌ 仍存在问题'}"
+                f"Issue 1 - top-right step counter: {'✅ fixed' if issue1_fixed else '❌ still broken'}"
             )
             if issue1_fixed:
-                print(f"  现在应该显示: 1/{steps_count}, 2/{steps_count} 等而不是 0/0")
+                print(f"  It should now show 1/{steps_count}, 2/{steps_count}, not 0/0")
             else:
-                print("  仍然显示: 0/0")
+                print("  It still shows: 0/0")
 
             print(
-                f"问题2 - 步骤日志关联: {'✅ 已修复' if issue2_fixed else '❌ 仍存在问题'}"
+                f"Issue 2 - step log correlation: {'✅ fixed' if issue2_fixed else '❌ still broken'}"
             )
             if issue2_fixed:
-                print("  步骤详情和日志已正确关联")
+                print("  Step details and logs are now correlated correctly")
             else:
-                print("  步骤和日志仍然没有关联起来")
+                print("  Steps and logs are still not correlated")
 
             print(
-                f"\n总体修复状态: {'✅ 成功' if issue1_fixed and issue2_fixed else '❌ 部分问题仍存在'}"
+                f"\nOverall fix status: {'✅ success' if issue1_fixed and issue2_fixed else '❌ some issues remain'}"
             )
 
             return issue1_fixed and issue2_fixed
 
     except Exception as e:
-        print(f"测试失败: {e}")
+        print(f"Test failed: {e}")
         return False
 
 

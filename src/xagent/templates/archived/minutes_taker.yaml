@@ -8,13 +8,13 @@ tags:
   - summary
   - action-items
   zh:
-  - 会议
-  - 笔记
-  - 摘要
-  - 行动项
+  - Meetings
+  - Notes
+  - Summaries
+  - Action items
 descriptions:
   en: Record and summarize meeting notes
-  zh: 记录会议要点并生成结构化纪要与行动项。
+  zh: Captures meeting highlights and produces structured minutes and action items.
 author: Xagent
 version: '1.0'
 agent_config:
@@ -33,9 +33,9 @@ features:
   - Real-time intelligent insights
   - Easy integration and deployment
   zh:
-  - 自动化分析与处理
-  - 实时智能洞察
-  - 轻松集成与部署
+  - Automated analysis and processing
+  - Real-time intelligent insights
+  - Easy integration and deployment
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup

@@ -38,7 +38,7 @@ vi.mock("@/lib/utils", async () => {
 
 vi.mock("@/contexts/i18n-context", () => ({
   useI18n: () => ({
-    locale: "zh",
+    locale: "en",
     setLocale: vi.fn(),
     t: (key: string, vars?: Record<string, string | number>) => {
       // TraceEventRenderer labels the tool button via t(key, { tool }); mirror
@@ -277,7 +277,7 @@ describe("ConversationLogsPage", () => {
     await waitFor(() => {
       expect(relativeTimeFormatMock).toHaveBeenCalled()
     })
-    expect(relativeTimeFormatMock.mock.calls.every(([locale]) => locale === "zh")).toBe(
+    expect(relativeTimeFormatMock.mock.calls.every(([locale]) => locale === "en")).toBe(
       true
     )
   })

@@ -1,5 +1,5 @@
 """
-Template utilities - 创建 template_manager 的工具函数
+Template utilities - helper functions for creating the template_manager.
 """
 
 import logging
@@ -14,21 +14,22 @@ if TYPE_CHECKING:
 
 def create_template_manager(templates_root: Optional[Path] = None) -> "TemplateManager":
     """
-    创建 template_manager（不初始化）
+    Create a template_manager (not initialized).
 
     Args:
-        templates_root: 可选的 templates 目录路径，默认使用内置路径
+        templates_root: optional path to the templates directory; defaults to
+            the built-in path.
 
     Returns:
-        TemplateManager 实例（未初始化）
+        TemplateManager instance (not initialized).
     """
     from .manager import TemplateManager
 
-    # 默认的 templates 目录
+    # Default templates directory.
     if templates_root is None:
         templates_root = Path(__file__).parent / "built_in"
 
-    # 创建 template_manager（不初始化）
+    # Create the template_manager (not initialized).
     template_manager = TemplateManager(templates_root=templates_root)
 
     return template_manager

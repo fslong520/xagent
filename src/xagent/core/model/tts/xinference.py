@@ -96,7 +96,7 @@ class XinferenceTTS(BaseTTS, BaseXinferenceModel):
         Example:
             >>> # Basic usage
             >>> tts = XinferenceTTS(model="chat-tts")
-            >>> audio = tts.synthesize("你好，世界！")
+            >>> audio = tts.synthesize("Hello, world!")
             >>>
             >>> # With voice control
             >>> audio = tts.synthesize("Hello, world!", voice="female")

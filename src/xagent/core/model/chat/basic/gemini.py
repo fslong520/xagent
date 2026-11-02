@@ -717,7 +717,7 @@ class GeminiLLM(BaseLLM):
         usage_received = False
 
         try:
-            self._ensure_client()  # ← 这是关键！
+            self._ensure_client()  # Critical: client must exist before streaming.
             assert self._client is not None
 
             system_instruction, gemini_messages = (
