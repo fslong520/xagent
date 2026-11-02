@@ -7,13 +7,13 @@ import {
 } from "./kb-ingest-feedback"
 
 const COPY = {
-  genericTitle: "上传失败",
-  nameUnavailableTitle: "该知识库名称不可用",
-  nameUnavailableDescription: "请换一个知识库名称后重试。",
-  embeddingTitle: "知识库导入失败：未配置可用的嵌入模型",
-  embeddingDescription: "请先配置默认嵌入模型，或选择一个可用的嵌入模型后重试。",
-  rollbackTitle: "知识库导入失败，清理未完全完成",
-  rollbackDescription: "系统已尝试回滚本次导入，请查看处理结果中的详细错误。",
+  genericTitle: "Upload failed",
+  nameUnavailableTitle: "That knowledge base name is unavailable",
+  nameUnavailableDescription: "Choose a different knowledge base name and try again.",
+  embeddingTitle: "Knowledge base import failed: no embedding model configured",
+  embeddingDescription: "Configure a default embedding model, or select an available model and try again.",
+  rollbackTitle: "Knowledge base import failed and cleanup did not finish",
+  rollbackDescription: "The system tried to roll back this import; check the detailed error in the result.",
 }
 
 describe("getKnowledgeBaseErrorToastContent", () => {

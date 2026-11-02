@@ -619,7 +619,7 @@ async def test_local_browser_rejects_sensitive_document_text_targets() -> None:
             "element_index": 2,
             "element_token": "snapshot-1:2",
             "role": "AXTextField",
-            "label": "一次性验证码 (OTP)",
+            "label": "\u4e00\u6b21\u6027\u9a8c\u8bc1\u7801 (OTP)",
             "depth": 2,
             "parent_index": 1,
             "frame": {"x": 300, "y": 350, "w": 400, "h": 40},

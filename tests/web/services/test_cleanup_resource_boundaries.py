@@ -111,7 +111,7 @@ def test_cleanup_retains_a_handle_for_a_symlink_beneath_the_managed_root(
 
 @pytest.mark.parametrize(
     "name",
-    ["a" * 246 + ".txt", "界" * 80 + ".txt"],
+    ["a" * 246 + ".txt", "\u754c" * 80 + ".txt"],
     ids=["ascii-250-bytes", "cjk-244-bytes"],
 )
 def test_cleanup_quarantines_maximum_length_basenames(
@@ -157,7 +157,7 @@ def test_cleanup_quarantines_maximum_length_basenames(
 
 @pytest.mark.parametrize(
     "name",
-    ["r" * 246 + ".txt", "还" * 80 + ".txt"],
+    ["r" * 246 + ".txt", "\u8fd8" * 80 + ".txt"],
     ids=["ascii-250-bytes", "cjk-244-bytes"],
 )
 def test_ensure_local_restores_maximum_length_basenames(cleanup_lifecycle, name):
@@ -174,7 +174,7 @@ def test_ensure_local_restores_maximum_length_basenames(cleanup_lifecycle, name)
 
 @pytest.mark.parametrize(
     "name",
-    ["m" * 246 + ".txt", "料" * 80 + ".txt"],
+    ["m" * 246 + ".txt", "\u6599" * 80 + ".txt"],
     ids=["ascii-250-bytes", "cjk-244-bytes"],
 )
 def test_storage_materializes_maximum_length_basenames(cleanup_lifecycle, name):

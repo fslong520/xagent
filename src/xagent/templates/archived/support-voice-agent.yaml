@@ -4,22 +4,22 @@ category: Support
 featured: false
 descriptions:
   en: Makes outbound follow-ups to resolve customer issues conversationally. Escalates complex cases to human agents.
-  zh: 进行出站跟进以通过对话解决客户问题。将复杂案件升级给人工代理。
+  zh: Runs outbound follow-up calls to resolve customer issues through conversation, escalating complex cases to human agents.
 features:
   en:
   - Calls customers from a list automatically
   - Identifies who the customer is and their issue
   - Resolves common problems through natural conversation
   zh:
-  - 自动从列表中呼叫客户
-  - 识别客户身份及其问题
-  - 通过自然对话解决常见问题
+  - Calls customers from a list automatically
+  - Identifies the customer and their issue
+  - Resolves common issues through natural conversation
 connections:
 - name: HubSpot
   logo: https://www.google.com/s2/favicons?domain=hubspot.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: '**Role & Purpose**
 

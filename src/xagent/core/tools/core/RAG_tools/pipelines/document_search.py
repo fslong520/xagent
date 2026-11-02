@@ -269,7 +269,7 @@ def _map_reranked_pairs_to_results(
     """Map (text, rerank_score) pairs back to SearchResult, overwriting score.
 
     The SearchResult.score field has a [0, 1] constraint and is the value
-    the UI/API exposes as ``评分``. We want this to reflect the rerank
+    the UI/API exposes as ``score``. We want this to reflect the rerank
     model's relevance score after reranking, not the original embedding /
     RRF score. Returns SearchResult copies with ``score`` replaced by the
     rerank relevance score (clamped to [0, 1]).
@@ -407,7 +407,7 @@ def _try_dashscope_rerank(
     try:
         # Use compress_with_scores so we can overwrite SearchResult.score with
         # the rerank model's relevance score (otherwise downstream sees the
-        # original embedding/RRF score and "评分" looks identical with vs
+        # original embedding/RRF score and "score" looks identical with vs
         # without rerank).
         reranked_pairs = rerank_model.compress_with_scores(documents, query_text)
         ordered_results = _map_reranked_pairs_to_results(reranked_pairs, results)

@@ -4,16 +4,16 @@ category: Marketing
 featured: false
 descriptions:
   en: Generates on-brand sales and marketing collateral including decks, one-pagers, posters, and presentation materials.
-  zh: 生成符合品牌的销售和营销抵押品，包括演示文稿、单页、海报和展示材料。
+  zh: Produces on-brand sales and marketing collateral, including decks, one-pagers, posters and display materials.
 features:
   en:
   - Builds sales decks, brochures & one-pagers
   - Ensures all outputs match your brand guidelines
   - Generates visuals and slides ready to present
   zh:
-  - 构建销售演示文稿、宣传册和单页
-  - 确保所有输出符合您的品牌指南
-  - 生成准备好演示的视觉效果和幻灯片
+  - Builds sales decks, brochures and one-pagers
+  - Keeps every output aligned with your brand guidelines
+  - Generates presentation-ready visuals and slides
 sample_prompts:
   en:
   - title: Build a sales deck
@@ -26,20 +26,20 @@ sample_prompts:
     highlights:
     - paste content or brief
   zh:
-  - title: 制作销售演示文稿
-    prompt: 为 受众 制作一份关于 主题或产品 的销售演示文稿，保持品牌一致性。
+  - title: Build a sales deck
+    prompt: Build a sales deck about the topic or product for the audience, keeping it on-brand.
     highlights:
-    - 主题或产品
-    - 受众
-  - title: 生成单页文档
-    prompt: 将以下内容转化为单页文档：粘贴内容或简报。需符合我们的品牌规范。
+    - topic or product
+    - audience
+  - title: Generate a one-pager
+    prompt: Turn the following into a one-pager. Use the pasted content or brief. It must follow our brand guidelines.
     highlights:
-    - 粘贴内容或简报
+    - pasted content or brief
 persona:
   name: Freya
   role:
     en: Marketing Collateral Specialist
-    zh: 营销物料专员
+    zh: Marketing Collateral Specialist
   avatar: /marketplace/avatars/freya.png
   intro:
     en: |-
@@ -47,24 +47,24 @@ persona:
 
       I turn your material into on-brand decks, brochures and one-pagers, ready to present.
     zh: |-
-      你好，我是 Freya，你的营销物料专员。
+      Hi, I'm Freya, your marketing collateral specialist.
 
-      我会把你的素材整理成符合品牌规范、可以直接演示的演示文稿、宣传册和单页。
+      I turn your material into on-brand decks, brochures and one-pagers that are ready to present.
   kickoff_questions:
     en:
     - What is the first piece — a pitch deck, a one-pager, a case study?
     - Who is the audience, and what should they do after reading it?
     - Do you have a template and brand kit I should work inside?
     zh:
-    - 第一份材料是什么——路演文稿、单页，还是案例研究？
-    - 受众是谁，看完之后你希望他们做什么？
-    - 有没有现成的模板和品牌规范包，我需要在里面创作吗？
+    - What is the first piece (a pitch deck, a one-pager, or a case study)?
+    - Who is the audience, and what should they do after reading it?
+    - Are there existing templates and a brand kit I should work within?
 connections:
 - name: Google Drive
   logo: https://www.google.com/s2/favicons?domain=drive.google.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: '**Role & Purpose**
 

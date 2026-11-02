@@ -311,7 +311,7 @@ async def test_real_patterns_stop_before_executing_over_budget_tool(mode):
     assert len(llm.calls) == 2
     assert len(tool.calls) == 1
     assert result["context"].execution_budget["used_tokens"] == 60
-    assert "本次执行" in result["output"]
+    assert "This run" in result["output"]
 
 
 @pytest.mark.asyncio
@@ -548,8 +548,8 @@ async def test_nested_soft_warning_is_delivered_by_owner_in_its_language(languag
     assert "60" in messages[0]["message"]
     expected = {
         "English": "approaching",
-        "Simplified Chinese": "本次执行",
-        "Traditional Chinese": "本次執行",
+        "Simplified Chinese": "This run",
+        "Traditional Chinese": "This run",
     }
     assert expected[language] in messages[0]["message"]
     assert "Prioritize" not in messages[0]["message"]

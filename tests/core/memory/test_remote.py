@@ -1,4 +1,4 @@
-"""Contract tests for the remote memory adapter (方案 §3.1/§3.5).
+"""Contract tests for the remote memory adapter (design doc §3.1/§3.5).
 
 The HTTP layer is faked, so these tests never touch the network (pytest-socket
 is active in this repository). They pin:
@@ -709,7 +709,7 @@ def test_401_raises_authentication_error() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 缺陷一: a 401 must be classified from observable evidence, never blamed on
+# Defect 1: a 401 must be classified from observable evidence, never blamed on
 # the credential by default; transport failures must say "upstream
 # unreachable", not "credential"; other failures carry status/code/message.
 # ---------------------------------------------------------------------------
@@ -728,7 +728,7 @@ def test_401_with_credential_wording_blames_the_key_without_probing() -> None:
         store.search("hello")
 
     text = str(error.value)
-    assert "拒绝了服务凭据" in text
+    assert "\u62d2\u7edd\u4e86\u670d\u52a1\u51ed\u636e" in text
     assert "invalid api key" in text
     assert "HTTP 401" in text
     # an explicit credential error needs no diagnostic probe
@@ -746,7 +746,7 @@ def test_401_with_unknown_external_id_reports_identity_not_provisioned() -> None
         store.search("hello")
 
     text = str(error.value)
-    assert "身份未开通" in text
+    assert "\u8eab\u4efd\u672a\u5f00\u901a" in text
     assert "external_id=2" in text
     assert "memsrv org" in text
     # the bare-key probe separates the two 401 causes
@@ -767,8 +767,8 @@ def test_401_blames_the_key_when_the_bare_key_is_also_rejected() -> None:
         store.search("hello")
 
     text = str(error.value)
-    assert "拒绝了服务凭据" in text
-    assert "探测同样 401" in text
+    assert "\u62d2\u7edd\u4e86\u670d\u52a1\u51ed\u636e" in text
+    assert "\u63a2\u6d4b\u540c\u6837 401" in text
 
 
 def test_401_names_both_hypotheses_when_the_probe_cannot_decide() -> None:
@@ -782,8 +782,8 @@ def test_401_names_both_hypotheses_when_the_probe_cannot_decide() -> None:
         store.search("hello")
 
     text = str(error.value)
-    assert "未能完成" in text
-    assert "key 无效" in text
+    assert "\u672a\u80fd\u5b8c\u6210" in text
+    assert "key \u65e0\u6548" in text
     assert "external_id=2" in text
 
 
@@ -794,7 +794,7 @@ def test_401_without_an_identity_header_reports_the_key_itself() -> None:
         store.search("hello")
 
     text = str(error.value)
-    assert "未携带 external_id" in text
+    assert "\u672a\u643a\u5e26 external_id" in text
     assert len(store.session.calls) == 1
 
 
@@ -811,8 +811,8 @@ def test_401_classification_reuses_the_cached_key_verdict() -> None:
     with pytest.raises(RemoteMemoryStoreAuthenticationError) as second:
         store.list_all()
 
-    assert "身份未开通" in str(first.value)
-    assert "身份未开通" in str(second.value)
+    assert "\u8eab\u4efd\u672a\u5f00\u901a" in str(first.value)
+    assert "\u8eab\u4efd\u672a\u5f00\u901a" in str(second.value)
     # three calls total: 401, one probe, 401 -- the verdict is cached
     assert len(store.session.calls) == 3
 
@@ -859,7 +859,7 @@ def test_non_401_failure_carries_status_code_and_upstream_message() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 缺陷二: the upstream health signal every answered/failed call records, and
+# Defect 2: the upstream health signal every answered/failed call records, and
 # the ready/degraded/unavailable derivation store-info publishes from it.
 # ---------------------------------------------------------------------------
 
@@ -903,7 +903,7 @@ def test_transport_failures_record_the_upstream_health_signal() -> None:
     health = remote_module.remote_upstream_health()
     assert health["last_event_kind"] == "transport_error"
     assert health["consecutive_transport_failures"] == 1
-    assert "连接失败" in health["last_failure_reason"]
+    assert "\u8fde\u63a5\u5931\u8d25" in health["last_failure_reason"]
 
 
 def test_upstream_report_is_ready_after_an_answered_call() -> None:
@@ -945,7 +945,7 @@ def test_upstream_report_degrades_on_a_transport_failure_after_success() -> None
         last_event_at=1761710000.0,
         last_event_kind="transport_error",
         last_failure_at=1761710000.0,
-        last_failure_reason="读超时 2.0s",
+        last_failure_reason="\u8bfb\u8d85\u65f6 2.0s",
         last_path="/v1/memory/search",
         last_success_at=1761709000.0,
         consecutive_transport_failures=2,
@@ -955,7 +955,7 @@ def test_upstream_report_degrades_on_a_transport_failure_after_success() -> None
         state, detail = remote_module.remote_upstream_report()
 
     assert state == "degraded"
-    assert "不可达" in detail
+    assert "\u4e0d\u53ef\u8fbe" in detail
     assert "/v1/memory/search" in detail
 
 
@@ -964,7 +964,7 @@ def test_upstream_report_is_unavailable_without_any_successful_call() -> None:
         last_event_at=1761710000.0,
         last_event_kind="transport_error",
         last_failure_at=1761710000.0,
-        last_failure_reason="连接失败（ConnectionError）",
+        last_failure_reason="\u8fde\u63a5\u5931\u8d25（ConnectionError）",
         last_path="/v1/memory/list",
         consecutive_transport_failures=1,
     )
@@ -973,7 +973,7 @@ def test_upstream_report_is_unavailable_without_any_successful_call() -> None:
         state, detail = remote_module.remote_upstream_report()
 
     assert state == "unavailable"
-    assert "不可达" in detail
+    assert "\u4e0d\u53ef\u8fbe" in detail
 
 
 def test_upstream_report_falls_back_to_the_cached_readiness_probe() -> None:
@@ -1175,6 +1175,75 @@ def test_delivery_marker_takes_precedence_over_share() -> None:
     body = store.session.calls[-1]["json"]
     assert store.session.calls[-1]["url"].endswith("/v1/memory/deliver")
     assert body["content"] == "[share:dept] not shared"
+
+
+# ---------------------------------------------------------------------------
+# XN-1: the receipt carries the space the write went to
+# ---------------------------------------------------------------------------
+
+
+def test_add_share_receipt_backfills_the_space_when_the_service_omits_it() -> None:
+    """The service answers without space_kind/space_id (probed 2026-10-30);
+    the adapter falls back to the request's own marker so the store receipt
+    can still echo the space."""
+    store = RecordingStore(_response(200, {"id": "s1"}), _response(200, {"id": "s2"}))
+
+    company = store.add(_note(content="[share:company] all-hands notice"))
+    assert company.space_kind == "company"
+    assert company.space_id is None
+
+    department = store.add(_note(content="[share:dept:7] platform note"))
+    assert department.space_kind == "department"
+    assert department.space_id == 7
+
+
+def test_add_share_receipt_prefers_the_service_answer() -> None:
+    """When the service does echo the space, its value wins over the marker."""
+    store = RecordingStore(
+        _response(200, {"id": "s1", "space_kind": "department", "space_id": 9})
+    )
+
+    response = store.add(_note(content="[share:dept] platform note"))
+
+    assert response.space_kind == "department"
+    assert response.space_id == 9
+
+
+def test_add_without_a_share_marker_reports_no_space() -> None:
+    store = RecordingStore(_response(200, {"id": "n1"}))
+
+    response = store.add(_note(content="a plain personal note"))
+
+    assert response.space_kind is None
+    assert response.space_id is None
+
+
+# ---------------------------------------------------------------------------
+# XN-1: list_all carries the space view to the service
+# ---------------------------------------------------------------------------
+
+
+def test_list_all_attaches_the_space_view_to_the_filters_body() -> None:
+    """The service reads the view from ``filters.space`` on POST
+    /v1/memory/list (probed 2026-10-30, ms03c-space-views.txt); attached only
+    when set, alongside any caller filters."""
+    store = RecordingStore(_response(200, []), _response(200, []))
+
+    store.list_all(None, space="company")
+    assert store.session.calls[-1]["json"] == {"filters": {"space": "company"}}
+
+    store.list_all({"category": "general"}, space="department")
+    assert store.session.calls[-1]["json"] == {
+        "filters": {"category": "general", "space": "department"}
+    }
+
+
+def test_list_all_without_a_space_view_sends_no_space_key() -> None:
+    store = RecordingStore(_response(200, []))
+
+    store.list_all({"category": "general"})
+
+    assert store.session.calls[-1]["json"] == {"filters": {"category": "general"}}
 
 
 def test_delivery_never_forwards_a_caller_supplied_user_id() -> None:

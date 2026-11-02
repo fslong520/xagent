@@ -16,7 +16,7 @@ from xagent.web.utils.json_payload_sanitizer import sanitize_json_payload
     [
         "",
         "ordinary ASCII output" * 1000,
-        "中文、emoji 😀🚀\n" * 1000,
+        "\u4e2d\u6587、emoji 😀🚀\n" * 1000,
         "".join(chr(code) for code in range(256)),
         "a\x00\x01b\t\n\rc\x0b\x0c\x1fd",
         "surrogates \ud800 \udfff and literal \\u0000",
@@ -42,7 +42,7 @@ def test_nested_values_and_payload_size_are_preserved(monkeypatch):
 
     payload = {
         "values": [
-            "文本\x00",
+            "\u6587\u672c\x00",
             b"bytes\x01\t",
             b"\xff",
             when,
@@ -53,11 +53,17 @@ def test_nested_values_and_payload_size_are_preserved(monkeypatch):
     }
     result = DatabaseTraceHandler(task_id=1)._serialize_data_for_json(payload)
     assert result == {
-        "values": ["文本", "bytes\t", "<bytes: 1>", when.timestamp(), when.timestamp()],
+        "values": [
+            "\u6587\u672c",
+            "bytes\t",
+            "<bytes: 1>",
+            when.timestamp(),
+            when.timestamp(),
+        ],
         "tuple": [{"text": "model text"}, {"text": "record text"}, None, True, 3.5],
         "key\x00": "keys remain untouched at this layer",
     }
-    assert payload["values"][0] == "文本\x00"
+    assert payload["values"][0] == "\u6587\u672c\x00"
     observe.assert_called_once_with(
         "xagent.trace.payload.size", len(json.dumps(result)), unit="By"
     )

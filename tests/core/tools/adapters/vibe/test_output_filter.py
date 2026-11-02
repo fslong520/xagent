@@ -123,7 +123,7 @@ def test_default_limit():
 def test_unicode_string():
     """Test that unicode strings are handled correctly."""
     filter = _create_filter(max_chars=20)
-    result = filter.filter("你好世界" * 10, "test_tool")
+    result = filter.filter("\u4f60\u597d\u4e16\u754c" * 10, "test_tool")
     # Each Chinese character is counted as 1 character
     assert len(result) <= 20 + len(DEFAULT_TRUNCATION_MESSAGE)
 

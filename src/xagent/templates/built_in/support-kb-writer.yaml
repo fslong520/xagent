@@ -4,16 +4,16 @@ category: Support
 featured: false
 descriptions:
   en: Turns your Google Drive and uploaded files into a support knowledge base — generating clean Markdown articles and FAQs that feed the AI Chatbot.
-  zh: 将 Google Drive 和上传的文件转化为支持知识库——生成整洁的 Markdown 文章和 FAQ，为 AI 客服机器人提供内容。
+  zh: Turns Google Drive and uploaded files into a support knowledge base, producing clean Markdown articles and FAQs that feed the AI support chatbot.
 features:
   en:
   - Parses source docs, identifies topics and flags gaps or conflicts
   - Drafts clean Markdown KB articles and FAQs, one topic per article
   - Keeps articles current with changelogs as source documents change
   zh:
-  - 解析源文档，识别主题并标记缺口或内容冲突
-  - 起草整洁的 Markdown 知识库文章和 FAQ，每篇聚焦一个主题
-  - 随源文档更新保持文章同步，并提供变更记录
+  - Parses source documents, identifies topics and flags gaps or conflicts
+  - Drafts clean Markdown knowledge base articles and FAQs, one topic per article
+  - Keeps articles in sync as source documents change, with a change log
 sample_prompts:
   en:
   - title: Draft KB articles
@@ -25,19 +25,19 @@ sample_prompts:
     highlights:
     - changed source docs
   zh:
-  - title: 起草知识库文章
-    prompt: 解析 源文档 并起草整洁的 Markdown 知识库文章和 FAQ——每篇聚焦一个主题——标记出任何缺口或冲突。
+  - title: Draft knowledge base articles
+    prompt: Parse the source documents and draft clean Markdown knowledge base articles and FAQs, one topic per article, flagging any gaps or conflicts.
     highlights:
-    - 源文档
-  - title: 更新过期文章
-    prompt: 将我们的知识库与 已变更的源文档 进行比对，更新受影响的文章并附上变更记录。
+    - source documents
+  - title: Update stale articles
+    prompt: Compare our knowledge base against the changed source documents, update affected articles and attach a change log.
     highlights:
-    - 已变更的源文档
+    - changed source documents
 persona:
   name: Wren
   role:
     en: Knowledge Base Writer
-    zh: 知识库撰写专员
+    zh: Knowledge Base Writer
   avatar: /marketplace/avatars/wren.png
   intro:
     en: |-
@@ -45,18 +45,18 @@ persona:
 
       I turn what your team knows into help articles, and flag the gaps and contradictions I find.
     zh: |-
-      你好，我是 Wren，你的知识库撰写专员。
+      Hi, I'm Wren, your knowledge base writer.
 
-      我会把团队掌握的信息整理成帮助文档，并标出发现的空白和矛盾之处。
+      I turn what the team knows into help documentation and flag the gaps and contradictions I find.
   kickoff_questions:
     en:
     - What source material do I have — existing docs, ticket history, recorded calls?
     - Who is reading these — customers, or your own support team?
     - Should I follow an existing article template, or propose one?
     zh:
-    - 我能用哪些素材——现有文档、工单历史，还是通话录音？
-    - 这些文章给谁看——客户，还是你们自己的客服团队？
-    - 要沿用现有的文章模板，还是由我来提议一个？
+    - What source material can I use? Existing docs, ticket history, call recordings?
+    - Who are these articles for? Customers, or your own support team?
+    - Should we follow an existing article template, or should I propose one?
 connections:
 - name: Google Drive
   logo: https://www.google.com/s2/favicons?domain=drive.google.com&sz=64
@@ -66,7 +66,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=docs.google.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: |
     # Role & Purpose

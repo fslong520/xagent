@@ -1272,7 +1272,7 @@ def _mock_tool(name: str, category: str, source_server: str | None = None):
 
 
 def test_select_allowed_tool_names_none_input_returns_none() -> None:
-    """``tool_categories=None`` is the "未配置" sentinel and must map
+    """``tool_categories=None`` is the "not configured" sentinel and must map
     to ``None`` (factory's "no name-level restriction" short-circuit).
     """
     from xagent.core.tools.adapters.vibe.selection_spec import ToolSelectionSpec
@@ -2023,7 +2023,7 @@ def test_compute_allowed_names_by_categories_mcp_subcategory_match():
     assert result == frozenset({"mcp_gmail_send", "mcp_gmail_read"})
 
 
-# ----- Mechanical SSOT pins(防未来同类回归)-----------------------------
+# ----- Mechanical SSOT pins (guards against future regressions) -----
 #
 # Defense-in-depth source-level grep tests. ABC + abstractmethod already
 # polices mode-dispatch completeness; these tests catch the kind of
@@ -2126,7 +2126,7 @@ def test_register_tool_must_declare_categories_or_be_allowlisted():
     )
 
 
-# ----- Follow-up review regressions(防回归)-----------------------------
+# ----- Follow-up review regressions (regression guard) -----
 
 
 def test_factory_falls_back_to_get_allowed_tools_when_spec_none():

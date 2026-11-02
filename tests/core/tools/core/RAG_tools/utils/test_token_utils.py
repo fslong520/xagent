@@ -36,7 +36,7 @@ class TestNumTokensFromString:
 
     def test_chinese_text_counted(self) -> None:
         """Chinese characters are counted (cl100k_base)."""
-        n = num_tokens_from_string("你好世界")
+        n = num_tokens_from_string("\u4f60\u597d\u4e16\u754c")
         assert n > 0
 
 

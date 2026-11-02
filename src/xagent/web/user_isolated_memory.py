@@ -12,6 +12,7 @@ from xagent.core.execution_scope import (
 )
 from xagent.core.memory.base import MemoryStore
 from xagent.core.memory.core import MemoryNote, MemoryResponse
+from xagent.core.memory.remote import NOT_FOUND_OR_DENIED_ERROR
 from xagent.core.memory.scope_columns import SCOPE_EXCLUSIVE_FILTER_KEY
 from xagent.core.user_context import current_user_id
 
@@ -36,7 +37,7 @@ class UserIsolatedMemoryStore(MemoryStore):
     dimensions as ``search``/``list_all`` (see ``_scope_permits``), so a
     caller cannot read, modify, or delete another scope's note by id even
     when both notes share a ``user_id``. A mismatch returns the combined
-    "not found or access denied" response, indistinguishable from a genuine
+    "not found or not accessible" response, indistinguishable from a genuine
     miss.
 
     Scope is a cooperative namespace, not a security boundary: ``user_id``
@@ -141,7 +142,9 @@ class UserIsolatedMemoryStore(MemoryStore):
         indistinguishable from a genuine miss."""
         return MemoryResponse(
             success=False,
-            error="Memory note not found or access denied",
+            # XN-4: the shared constant keeps this byte-identical to the remote
+            # adapter's denial message, so the two paths cannot drift apart.
+            error=NOT_FOUND_OR_DENIED_ERROR,
             memory_id=note_id,
         )
 
@@ -351,12 +354,18 @@ class UserIsolatedMemoryStore(MemoryStore):
             # Clear all notes
             self._base_store.clear()
 
-    def list_all(self, filters: Optional[dict[str, Any]] = None) -> List[MemoryNote]:
+    def list_all(
+        self,
+        filters: Optional[dict[str, Any]] = None,
+        *,
+        space: Optional[str] = None,
+    ) -> List[MemoryNote]:
         """
         List all memory notes with user isolation.
 
         Args:
             filters: Additional filters
+            space: Shared-space view (XN-1), forwarded to the base store
 
         Returns:
             List of memory notes
@@ -366,6 +375,10 @@ class UserIsolatedMemoryStore(MemoryStore):
         # the store, not post-filtered here.
         filtered_filters = self._add_user_filter(filters)
 
+        # Forwarded only when set: a delegate written before XN-1 has no such
+        # keyword, and an unset view must not change any call it receives.
+        if space:
+            return self._base_store.list_all(filtered_filters, space=space)
         return self._base_store.list_all(filtered_filters)
 
     def get_stats(self) -> dict[str, Any]:

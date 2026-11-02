@@ -111,16 +111,16 @@ describe("joinWithAnd", () => {
 
   // Pins a PR review finding: the ", " separator was hardcoded Western
   // punctuation, same class of bug as the "and" word before it was
-  // localized - Chinese conventionally uses "、" between list items.
+  // localized - some locales conventionally use a different item separator.
   it("uses a caller-supplied separator instead of a hardcoded comma", () => {
-    expect(joinWithAnd(["LinkedIn", "Facebook Pages", "Instagram"], "和", "、")).toBe(
-      "LinkedIn、Facebook Pages 和 Instagram"
+    expect(joinWithAnd(["LinkedIn", "Facebook Pages", "Instagram"], "plus", " / ")).toBe(
+      "LinkedIn / Facebook Pages plus Instagram"
     )
   })
 
   // Pins a PR review finding: the connector word must be localizable, not a
   // hardcoded English "and" leaking into otherwise-translated copy.
   it("uses a caller-supplied localized connector word instead of hardcoding English", () => {
-    expect(joinWithAnd(["Gmail", "Outlook"], "和")).toBe("Gmail 和 Outlook")
+    expect(joinWithAnd(["Gmail", "Outlook"], "plus")).toBe("Gmail plus Outlook")
   })
 })

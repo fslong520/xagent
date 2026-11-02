@@ -312,7 +312,7 @@ async def test_approval_stops_both_transports_before_dispatch(
 async def test_canonical_snapshot_is_deep_and_drives_allowed_dispatch(
     registrations: list[Any],
 ) -> None:
-    original = {"text": "内容 A", "image": {"path": "/tmp/a.png"}}
+    original = {"text": "\u5185\u5bb9 A", "image": {"path": "/tmp/a.png"}}
     seen: list[GatedCall] = []
 
     async def gate(call: GatedCall) -> GateDecision:
@@ -327,7 +327,7 @@ async def test_canonical_snapshot_is_deep_and_drives_allowed_dispatch(
     with bind_tool_call_execution_context(_context()):
         await tool.run_json_async(original)
 
-    canonical = '{"image":{"path":"/tmp/a.png"},"text":"内容 A"}'
+    canonical = '{"image":{"path":"/tmp/a.png"},"text":"\u5185\u5bb9 A"}'
     assert seen[0].canonical_arguments_json == canonical
     assert (
         seen[0].arguments_sha256

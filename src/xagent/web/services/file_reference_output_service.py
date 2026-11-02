@@ -369,7 +369,7 @@ def _is_inline_preview_media(filename: str) -> bool:
     These types are only detected by filename extension, since
     ``[label](file:id)`` targets are opaque UUIDs. The model is free to
     rewrite the label into descriptive prose that drops the extension (e.g.
-    "下载视频（MP4）"), which would otherwise silently degrade the player to a
+    "download video (MP4)"), which would otherwise silently degrade the player to a
     plain download link — callers carry the real filename in the link
     *title* in that case (falling back to overwriting the label only when
     the filename can't safely become a title) so the extension survives

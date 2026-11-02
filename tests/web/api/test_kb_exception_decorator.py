@@ -94,7 +94,9 @@ async def test_handle_kb_exceptions_maps_unknown_errors_to_500() -> None:
 
     assert exc_info.value.status_code == 500
     assert isinstance(exc_info.value.detail, str)
-    assert exc_info.value.detail.startswith("服务器内部错误:")
+    assert exc_info.value.detail.startswith(
+        "Internal server error:"
+    )
 
 
 # --- delete_collection_api metadata delegation Tests ---

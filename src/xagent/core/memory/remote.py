@@ -1,11 +1,11 @@
 """Remote ``MemoryStore`` backed by the memory SaaS HTTP API.
 
 This adapter lets xagent serve persistent memory from the standalone memory
-service (``docs/方案-xagent记忆SaaS.md`` §3, §4.5) instead of the local
+service (the memory SaaS design doc, §3 and §4.5) instead of the local
 LanceDB store. It is published in the place ``UserIsolatedMemoryStore``
 occupies today, wrapped by ``RevocableMemoryStore`` -- see §3.2.
 
-Division of responsibility (方案 §3.2/§3.4):
+Division of responsibility (design doc §3.2/§3.4):
 
 * **Ownership and ACL live server-side.** ``add`` never stamps
   ``metadata.user_id``; the service derives the owner from the identity
@@ -85,10 +85,10 @@ logger = logging.getLogger(__name__)
 # before the request reaches the service.
 SCOPE_DIMENSIONS_FILTER_KEY = "__scope_dimensions__"
 
-#: Read path timeout (方案 §3.3): the interactive path must fail fast rather
-#: than block the caller's event loop on a slow service.
+#: Read path timeout (design doc §3.3): the interactive path must fail fast
+#: rather than block the caller's event loop on a slow service.
 READ_TIMEOUT_SECONDS = 2.0
-#: Write path timeout (方案 §3.3). Longer than the read budget because a write
+#: Write path timeout (design doc §3.3). Longer than the read budget because a write
 #: that times out may already have been applied; §3.5.8 also forbids retrying
 #: writes, so a slow success must be given room before it is reported failed.
 WRITE_TIMEOUT_SECONDS = 5.0
@@ -102,7 +102,9 @@ MEMORY_SERVICE_USER_AGENT = "xagent-memsrv-client/1.0"
 #: Byte-for-byte the local wrapper's denial message
 #: (``web/user_isolated_memory.py``), so callers cannot tell the two paths
 #: apart and the service's "exists but not visible" answer does not leak.
-NOT_FOUND_OR_DENIED_ERROR = "Memory note not found or access denied"
+#: XN-4: the sentence is the tool layer's "not found or not accessible"
+#: (``memory_tool.py``), so a ghost id reads the same everywhere.
+NOT_FOUND_OR_DENIED_ERROR = "not found or not accessible"
 
 #: Default reported by ``get_stats`` when the service omits the store type.
 DEFAULT_STORE_TYPE = "remote"
@@ -114,9 +116,10 @@ DEFAULT_STORE_TYPE = "remote"
 #: was used as a placeholder and filtered nothing.
 #:
 #: Measured on 2026-10-29 against the ext2 stock: relevant notes scored
-#: 0.7585 ("年度报销额度", distance 0.2415) and 0.7510 ("供应商对账口径",
-#: 0.2490); unrelated notes sat at 0.42-0.52 similarity (0.48-0.58 distance);
-#: the nonsense query "zzz不存在的词" topped out at 0.4576 (0.5424). 0.40
+#: 0.7585 (an annual-reimbursement-limit question, distance 0.2415) and
+#: 0.7510 (a supplier-reconciliation-basis question, 0.2490); unrelated notes
+#: sat at 0.42-0.52 similarity (0.48-0.58 distance); the nonsense query
+#: (a meaningless phrase) topped out at 0.4576 (0.5424). 0.40
 #: separates the relevant from the irrelevant; anything near 0.70 lets most of
 #: the store back in.
 DEFAULT_SEARCH_SIMILARITY_THRESHOLD = 0.40
@@ -132,7 +135,7 @@ DEFAULT_SEARCH_SIMILARITY_THRESHOLD = 0.40
 DELIVERY_MARKER_PATTERN = re.compile(r"^\[to:([^\]]+)\]\s*")
 DELIVERY_PATH = "/v1/memory/deliver"
 
-#: Judged write path (方案 §10.4). Unlike ``add`` (a plain create), this
+#: Judged write path (design doc §10.4). Unlike ``add`` (a plain create), this
 #: endpoint runs the four-branch judgement: a high-similarity candidate is
 #: merged, a medium one becomes the new note's parent, and anything else is a
 #: plain create. The caller reads the chosen branch from the response.
@@ -175,7 +178,7 @@ KEY_VALIDITY_CACHE_SECONDS = 60.0
 _key_validity_cache: dict[str, tuple[float, Optional[bool]]] = {}
 _key_validity_cache_lock = threading.Lock()
 
-#: Upstream health signal of this process (缺陷二/store-info). Every answered
+#: Upstream health signal of this process (defect #2/store-info). Every answered
 #: HTTP response -- even a 4xx/5xx -- proves the upstream answered; only a
 #: transport failure records "unreachable". ``get_store_info`` folds this into
 #: its state instead of reporting the local lifecycle state as if it described
@@ -238,7 +241,7 @@ def remote_upstream_health() -> dict[str, Any]:
 
 def _format_event_time(epoch: Optional[float]) -> str:
     if epoch is None:
-        return "从未"
+        return "never"
     return datetime.fromtimestamp(epoch).strftime("%H:%M:%S")
 
 
@@ -264,17 +267,17 @@ def remote_upstream_report() -> tuple[str, str]:
         available, reason = remote_memory_ready()
         now = _format_event_time(time.time())
         if available:
-            return "ready", f"本进程尚无上游调用记录；/readyz 探测可达（{now}）"
+            return "ready", f"No upstream call in this process yet; /readyz probe reachable ({now})"
         return (
             "unavailable",
-            f"本进程尚无上游调用记录；/readyz 探测不可达"
-            f"（reason={reason}，{now}）",
+            f"No upstream call in this process yet; /readyz probe unreachable "
+            f"(reason={reason}, {now})",
         )
     if event_kind == "transport_error":
         detail = (
-            f"上游最近一次调用不可达（{health['last_failure_reason']}）："
-            f"{health['last_path']}，连续失败 "
-            f"{health['consecutive_transport_failures']} 次，"
+            f"Latest upstream call unreachable ({health['last_failure_reason']}): "
+            f"{health['last_path']}, consecutive failures "
+            f"{health['consecutive_transport_failures']} times, "
             f"{_format_event_time(health['last_event_at'])}"
         )
         if health["last_success_at"] is None:
@@ -284,15 +287,15 @@ def remote_upstream_report() -> tuple[str, str]:
     when = _format_event_time(health["last_event_at"])
     if status is not None and status >= 500:
         code = health["last_error_code"]
-        code_note = f"（code={code}）" if code else ""
+        code_note = f" (code={code})" if code else ""
         return (
             "degraded",
-            f"上游最近一次调用返回 HTTP {status}{code_note}："
-            f"{health['last_path']}，{when}",
+            f"Latest upstream call returned HTTP {status}{code_note}: "
+            f"{health['last_path']}, {when}",
         )
     return (
         "ready",
-        f"上游最近一次调用成功（HTTP {status}）：{health['last_path']}，{when}",
+        f"Latest upstream call succeeded (HTTP {status}): {health['last_path']}, {when}",
     )
 
 #: The explicit-owner override of the *current* context (T14 §B1-2). It is a
@@ -846,7 +849,7 @@ class RemoteMemoryStore(MemoryStore):
             )
         except requests.exceptions.Timeout as error:
             _record_transport_failure(
-                path, f"{'写' if write else '读'}超时 {read_timeout:.1f}s"
+                path, f"{'write' if write else 'read'}timed out {read_timeout:.1f}s"
             )
             raise RemoteMemoryStoreError(
                 f"Remote memory upstream unreachable (request timed out after "
@@ -854,7 +857,7 @@ class RemoteMemoryStore(MemoryStore):
                 f"rejection): {method} {path}"
             ) from error
         except requests.exceptions.RequestException as error:
-            _record_transport_failure(path, f"连接失败（{type(error).__name__}）")
+            _record_transport_failure(path, f"connection failed ({type(error).__name__})")
             raise RemoteMemoryStoreError(
                 f"Remote memory upstream unreachable (connection failure -- not "
                 f"a credential rejection): {method} {path} — {error}"
@@ -875,7 +878,7 @@ class RemoteMemoryStore(MemoryStore):
         """Raise unless the service answered with a 2xx (§3.5.1).
 
         A 401 is *classified* instead of being blamed on the credential by
-        default (缺陷一). The upstream answers a bad key, a revoked key and an
+        default (defect #1). The upstream answers a bad key, a revoked key and an
         unknown ``X-User-External-Id`` with the very same generic
         ``{"error":{"code":"unauthorized","message":"unauthorized"}}`` body
         (Go ``internal/app/identity/service.go:28``), so the raised text is
@@ -905,8 +908,8 @@ class RemoteMemoryStore(MemoryStore):
                 self._classify_401(path, code, message),
                 status_code=status,
             )
-        code_note = f"（code={code}）" if code else ""
-        detail = f"，上游 message: {message}" if message else ""
+        code_note = f" (code={code})" if code else ""
+        detail = f", upstream message: {message}" if message else ""
         raise RemoteMemoryStoreError(
             f"Remote memory service returned HTTP {status}{code_note} on "
             f"{path}{detail}",
@@ -926,43 +929,47 @@ class RemoteMemoryStore(MemoryStore):
         * the probe could not decide → say so and name both hypotheses
           instead of asserting either one.
         """
-        code_note = f"（code={code}）" if code else ""
-        message_note = f"，上游 message: {message}" if message else ""
+        code_note = f" (code={code})" if code else ""
+        message_note = f", upstream message: {message}" if message else ""
         lowered = f"{code or ''} {message}".lower()
         if any(
             marker in lowered
             for marker in ("credential", "api key", "api_key", "token", "key")
         ):
             return (
-                f"上游拒绝了服务凭据：HTTP 401{code_note} on {path}{message_note}。"
-                f"上游明示凭据类错误，请核对 XAGENT_MEMORY_SERVICE_KEY"
-                f"（无效、已吊销或不属于该实例）。"
+                f"The upstream rejected the service credential: HTTP 401{code_note} "
+                f"on {path}{message_note}. The upstream names a credential error; "
+                f"check XAGENT_MEMORY_SERVICE_KEY (invalid, revoked, or belonging "
+                f"to another instance)."
             )
         external_id = self._headers().get("X-User-External-Id")
         if external_id is not None:
             valid, note = self._probe_key_validity()
             if valid is True:
                 return (
-                    f"身份未开通：HTTP 401{code_note} on {path}{message_note}。"
-                    f"服务 key 本身有效（{WHOAMI_PATH} 探测 200），但 "
-                    f"external_id={external_id} 在上游身份目录不存在或未激活，"
-                    f"需在 memsrv org 建号后重试。"
+                    f"Identity not provisioned: HTTP 401{code_note} on "
+                    f"{path}{message_note}. The service key is valid ({WHOAMI_PATH} "
+                    f"probe 200), but external_id={external_id} does not exist or "
+                    f"is inactive in the upstream identity directory; create it in "
+                    f"the memsrv org and retry."
                 )
             if valid is False:
                 return (
-                    f"上游拒绝了服务凭据：HTTP 401{code_note} on {path}{message_note}。"
-                    f"key 无效（{WHOAMI_PATH} 探测同样 401），请核对 "
-                    f"XAGENT_MEMORY_SERVICE_KEY。"
+                    f"The upstream rejected the service credential: HTTP 401"
+                    f"{code_note} on {path}{message_note}. The key is invalid "
+                    f"({WHOAMI_PATH} probe also 401); check XAGENT_MEMORY_SERVICE_KEY."
                 )
             return (
-                f"上游返回 HTTP 401{code_note} on {path}{message_note}，"
-                f"且诊断探测未能完成（{note}）：可能是 key 无效/被拒，"
-                f"也可能是 external_id={external_id} 未在 memsrv 开通。"
+                f"The upstream returned HTTP 401{code_note} on {path}{message_note}, "
+                f"and the diagnostic probe could not complete ({note}): the key "
+                f"may be invalid/rejected, or external_id={external_id} may not be "
+                f"provisioned in memsrv."
             )
         return (
-            f"上游返回 HTTP 401{code_note} on {path}{message_note}："
-            f"本次请求未携带 external_id，上游拒绝的是服务凭据本身"
-            f"（key 无效、已吊销或不属于该实例）。"
+            f"The upstream returned HTTP 401{code_note} on {path}{message_note}: "
+            f"this request carried no external_id, so the upstream rejected the "
+            f"service credential itself (invalid, revoked, or belonging to another "
+            f"instance)."
         )
 
     def _probe_key_validity(self) -> tuple[Optional[bool], str]:
@@ -982,7 +989,7 @@ class RemoteMemoryStore(MemoryStore):
         with _key_validity_cache_lock:
             cached = _key_validity_cache.get(fingerprint)
         if cached is not None and now - cached[0] < KEY_VALIDITY_CACHE_SECONDS:
-            return cached[1], "按缓存判定"
+            return cached[1], "judged from cache"
         try:
             response = self._session.request(
                 "GET",
@@ -994,17 +1001,17 @@ class RemoteMemoryStore(MemoryStore):
                 timeout=(self._connect_timeout, self._read_timeout),
             )
         except requests.exceptions.RequestException as error:
-            return None, f"探测请求失败（{type(error).__name__}: {error}）"
+            return None, f"probe request failed ({type(error).__name__}: {error})"
         verdict: Optional[bool]
         if 200 <= response.status_code < 300:
             verdict = True
         elif response.status_code == 401:
             verdict = False
         else:
-            return None, f"探测返回 HTTP {response.status_code}，无法判定"
+            return None, f"probe returned HTTP {response.status_code}, cannot decide"
         with _key_validity_cache_lock:
             _key_validity_cache[fingerprint] = (now, verdict)
-        return verdict, "探测已完成"
+        return verdict, "probe completed"
 
     @staticmethod
     def _note_items(path: str, payload: Any) -> List[Mapping[str, Any]]:
@@ -1174,21 +1181,52 @@ class RemoteMemoryStore(MemoryStore):
         if delivery is not None:
             return self._deliver(delivery[0], delivery[1], note)
         share = _parse_share_marker(note.content)
+        request_space_kind: Optional[str] = None
+        request_space_id: Optional[int] = None
         if share is not None:
-            space_kind, space_id, stripped = share
+            request_space_kind, request_space_id, stripped = share
             payload = self._note_payload(note, content_text=stripped)
-            payload["space_kind"] = space_kind
-            if space_id is not None:
-                payload["space_id"] = space_id
+            payload["space_kind"] = request_space_kind
+            if request_space_id is not None:
+                payload["space_id"] = request_space_id
         else:
             payload = self._note_payload(note)
         path = "/v1/memory/notes"
         response = self._request("POST", path, body=payload, write=True)
         self._raise_for_error(path, response)
+        # XN-1: carry the space back on the receipt — the service's own answer
+        # first, the request's ``[share:…]`` marker as the fallback, so a
+        # caller can report which space the note went to even while the
+        # service omits the field (probed 2026-10-30: notes POST answers
+        # without space_kind/space_id).
+        echoed: dict[str, Any] = {}
+        try:
+            raw_answer: Any = response.json()
+        except ValueError:
+            raw_answer = None
+        if isinstance(raw_answer, dict):
+            echoed = raw_answer
+        echoed_kind = echoed.get("space_kind")
+        space_kind = (
+            str(echoed_kind)
+            if isinstance(echoed_kind, str) and echoed_kind
+            else request_space_kind
+        )
+        space_id_raw = echoed.get("space_id")
+        if space_id_raw is None:
+            space_id = request_space_id
+        else:
+            try:
+                space_id = int(space_id_raw)
+            except (TypeError, ValueError):
+                logger.warning("Ignoring unparsable space_id in the service's answer")
+                space_id = request_space_id
         return MemoryResponse(
             success=True,
             memory_id=self._response_memory_id(response, note.id),
             content=None,
+            space_kind=space_kind,
+            space_id=space_id,
         )
 
     def _deliver(self, target: str, content: str, note: MemoryNote) -> MemoryResponse:
@@ -1326,7 +1364,7 @@ class RemoteMemoryStore(MemoryStore):
         as stored.
         """
         # Same scope stamping as ``add``: the dimensions stay a client-side
-        # namespace (方案 §3.2) so scoped searches keep matching the notes this
+        # namespace (design doc §3.2) so scoped searches keep matching the notes this
         # path writes; ownership remains the service's job.
         note.metadata.update(memory_dimension_metadata(get_execution_scope()))
         metadata = dict(note.metadata)
@@ -1392,10 +1430,27 @@ class RemoteMemoryStore(MemoryStore):
         items = self._note_items(path, self._json(path, response))
         return [_note_from_payload(item) for item in items]
 
-    def list_all(self, filters: Optional[dict[str, Any]] = None) -> List[MemoryNote]:
+    def list_all(
+        self,
+        filters: Optional[dict[str, Any]] = None,
+        *,
+        space: Optional[str] = None,
+    ) -> List[MemoryNote]:
         path = "/v1/memory/list"
+        payload_filters = self._filters_payload(filters)
+        if space:
+            # XN-1: the service's space view rides inside the filters body —
+            # the same ``filters.space`` key ``search`` already serializes
+            # (probed 2026-10-30, ms03c-space-views.txt: personal/department/
+            # company each answer differently on POST /v1/memory/list).
+            # Attached only when set; if the service ever rejects the key the
+            # failure propagates through ``_raise_for_error`` like any other
+            # upstream error — never swallowed here.
+            merged = dict(payload_filters) if payload_filters else {}
+            merged["space"] = space
+            payload_filters = merged
         response = self._request(
-            "POST", path, body={"filters": self._filters_payload(filters)}
+            "POST", path, body={"filters": payload_filters}
         )
         self._raise_for_error(path, response)
         items = self._note_items(path, self._json(path, response))

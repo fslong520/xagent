@@ -4,22 +4,22 @@ category: Sales
 featured: false
 descriptions:
   en: Calls prospects, qualifies leads, and books meetings autonomously.
-  zh: 自动拨打潜在客户电话，审查线索资格，并预约会议。
+  zh: Dials prospects automatically, qualifies leads and books meetings.
 features:
   en:
   - Receives prospect info before each call
   - Creates a custom call script for each prospect
   - Ensures every call feels relevant and prepared
   zh:
-  - 在每次通话前接收潜在客户信息
-  - 为每位潜在客户创建定制通话脚本
-  - 确保每次通话都显得相关且准备充分
+  - Receives prospect information before each call
+  - Creates a custom call script for each prospect
+  - Ensures every call feels relevant and well prepared
 connections:
 - name: HubSpot
   logo: https://www.google.com/s2/favicons?domain=hubspot.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: '**Role & Purpose**
 

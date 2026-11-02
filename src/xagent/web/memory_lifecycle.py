@@ -328,7 +328,7 @@ def _admit_once(
 def remote_admission_result() -> Optional[AdmissionResult]:
     """Admission result for the remote memory backend, or ``None`` if unused.
 
-    Remote mode has nothing to admit locally (方案 §3.3): the service owns the
+    Remote mode has nothing to admit locally (design doc §3.3): the service owns the
     vector space, the ACL and the embedding identity, so there is no authority
     row, no LanceDB admission lock and no identity to certify. The store is
     published READY on a complete configuration alone; connectivity failures
@@ -381,7 +381,7 @@ def admit_authority_storage(
     published, which is the only moment at which ``writers_quiesced`` is
     truthfully ``True`` for this process.
     """
-    # Remote backend (方案 §3.3, 裁决⑨): the memory service is the only store,
+    # Remote backend (design doc §3.3, decision 9): the memory service is the only store,
     # so nothing local is admitted, no admission lock is taken and no
     # embedding identity is checked -- the service owns the vector space.
     remote_result = remote_admission_result()

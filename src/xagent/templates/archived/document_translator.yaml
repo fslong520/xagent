@@ -8,13 +8,13 @@ tags:
   - document
   - localization
   zh:
-  - 翻译
-  - 语言
-  - 文档
-  - 本地化
+  - Translation
+  - Languages
+  - Documents
+  - Localisation
 descriptions:
   en: Translate documents to preferred language
-  zh: 将文档翻译为目标语言，保留语气与格式。
+  zh: Translates documents into the target language while preserving tone and formatting.
 author: Xagent
 version: '1.0'
 agent_config:
@@ -33,9 +33,9 @@ features:
   - Real-time intelligent insights
   - Easy integration and deployment
   zh:
-  - 自动化分析与处理
-  - 实时智能洞察
-  - 轻松集成与部署
+  - Automated analysis and processing
+  - Real-time intelligent insights
+  - Easy integration and deployment
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup

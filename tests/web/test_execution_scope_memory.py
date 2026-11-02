@@ -24,6 +24,7 @@ from xagent.core.execution_scope import (
 )
 from xagent.core.memory.base import MemoryStore
 from xagent.core.memory.core import MemoryNote, MemoryResponse
+from xagent.core.memory.remote import NOT_FOUND_OR_DENIED_ERROR
 from xagent.core.memory.scope_columns import (
     SCOPE_EXCLUSIVE_FILTER_KEY,
     encode_scope_dims,
@@ -270,7 +271,7 @@ class TestResolverPathAndNestedReactivation:
             assert store.search("nested") == []
 
 
-_DENIED = "Memory note not found or access denied"
+_DENIED = NOT_FOUND_OR_DENIED_ERROR
 
 
 class TestScopedByIdAccess:

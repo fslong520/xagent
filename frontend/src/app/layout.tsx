@@ -37,18 +37,10 @@ export const metadata: Metadata = {
   },
 };
 
-type Locale = "en" | "zh";
-
-// Static export cannot read cookies/headers at request time, so the shell is
-// rendered with a fixed initial locale. I18nProvider corrects it from
-// localStorage on the client immediately after hydration.
-//
-// Known trade-off: zh users see a brief flash-of-English on every fresh load,
-// since the prerendered HTML is English until the client re-renders. This is
-// inherent to static export (the server can't know the locale); a full fix
-// would need the locale baked into the HTML at request time, which the
-// single-process deployment doesn't do.
-const resolveInitialLocale = (): Locale => "en";
+// The application ships a single locale. The shell is rendered with it
+// statically, and I18nProvider keeps the same value on the client, so the
+// prerendered HTML and the hydrated tree always agree.
+const INITIAL_LOCALE = "en";
 
 const buildThemeStyle = (themeName: string): CSSProperties => {
   const theme = themes[themeName] || themes.dark;
@@ -116,7 +108,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const initialLocale = resolveInitialLocale();
+  const initialLocale = INITIAL_LOCALE;
   const themeName = getThemeFromEnv();
   const theme = themes[themeName] || themes.dark;
   const themeMode = theme.mode === "light" ? "light" : "dark";

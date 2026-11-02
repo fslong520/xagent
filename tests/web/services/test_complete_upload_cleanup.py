@@ -1111,7 +1111,7 @@ def test_missing_converter_child_does_not_settle_surviving_quarantine(
 
 @pytest.mark.parametrize(
     "basename",
-    ["source.txt", "r" * 206 + ".txt", "r" * 246 + ".txt", "还" * 80 + ".txt"],
+    ["source.txt", "r" * 206 + ".txt", "r" * 246 + ".txt", "\u8fd8" * 80 + ".txt"],
 )
 def test_process_death_inside_real_restoration_cleans_both_temporaries(
     lifecycle, monkeypatch, basename

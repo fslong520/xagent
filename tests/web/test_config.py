@@ -88,16 +88,16 @@ class TestSanitizePathComponent:
 
     def test_utf8_byte_length_limit(self):
         """Test that UTF-8 byte-length limits are enforced for Unicode names."""
-        within_limit_name = "知" * (
-            MAX_COLLECTION_NAME_BYTES // len("知".encode("utf-8"))
+        within_limit_name = "\u77e5" * (
+            MAX_COLLECTION_NAME_BYTES // len("\u77e5".encode("utf-8"))
         )
         assert (
             sanitize_path_component(within_limit_name, "collection")
             == within_limit_name
         )
 
-        over_limit_name = "知" * (
-            (MAX_COLLECTION_NAME_BYTES // len("知".encode("utf-8"))) + 1
+        over_limit_name = "\u77e5" * (
+            (MAX_COLLECTION_NAME_BYTES // len("\u77e5".encode("utf-8"))) + 1
         )
         assert len(over_limit_name) < MAX_COLLECTION_NAME_LENGTH
         with pytest.raises(
@@ -190,12 +190,12 @@ class TestSanitizePathComponent:
 
     def test_unicode_and_special_unicode(self):
         valid_unicode_names = [
-            "collection中文",
+            "collection\u4e2d\u6587",
             "collectioné",
             "collectionñ",
-            "示例知识库集合",
+            "\u793a\u4f8b\u77e5\u8bc6\u5e93\u96c6\u5408",
             "collection١٢٣",
-            "知识库_123-β",
+            "\u77e5\u8bc6\u5e93_123-β",
         ]
 
         for name in valid_unicode_names:
@@ -233,8 +233,8 @@ class TestSanitizePathComponent:
 
 class TestGetFileUrl:
     def test_get_file_url_encodes_unicode_collection_and_filename(self):
-        collection_name = "示例知识库集合"
-        filename = "报告.txt"
+        collection_name = "\u793a\u4f8b\u77e5\u8bc6\u5e93\u96c6\u5408"
+        filename = "\u62a5\u544a.txt"
 
         url = get_file_url(filename, user_id=7, collection=collection_name)
 

@@ -103,7 +103,7 @@ def test_serialize_trace_data_strips_control_chars_same_as_the_old_per_char_loop
         control_chars
         + "\t\n\r"
         + del_and_c1
-        + "中文测试"
+        + "\u4e2d\u6587\u6d4b\u8bd5"
         + "\U0001f600\U0001f680"  # astral-plane emoji
         + "plain ascii text"
     )
@@ -117,7 +117,7 @@ def test_serialize_trace_data_strips_control_chars_same_as_the_old_per_char_loop
     for c in "\t\n\r":
         assert actual.count(c) == sample.count(c)
     assert del_and_c1 in actual
-    assert "中文测试" in actual
+    assert "\u4e2d\u6587\u6d4b\u8bd5" in actual
     assert "\U0001f600\U0001f680" in actual
 
 

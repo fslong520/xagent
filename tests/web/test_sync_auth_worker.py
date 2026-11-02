@@ -200,7 +200,7 @@ def test_refresh_tokens_are_unique_at_identical_time(monkeypatch):
 @pytest.mark.parametrize("algorithm", ["HS256", "HS384", "HS512"])
 def test_refresh_token_size_is_independent_of_username(monkeypatch, algorithm):
     monkeypatch.setattr(auth, "JWT_ALGORITHM", algorithm)
-    token = auth.create_refresh_token({"sub": "用" * 50, "user_id": 2**63 - 1})
+    token = auth.create_refresh_token({"sub": "\u7528" * 50, "user_id": 2**63 - 1})
     assert len(token) <= User.__table__.c.refresh_token.type.length
     payload = auth.verify_refresh_token(token)
     assert payload["user_id"] == 2**63 - 1
@@ -208,7 +208,7 @@ def test_refresh_token_size_is_independent_of_username(monkeypatch, algorithm):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("username", ["a" * 50, "用" * 50])
+@pytest.mark.parametrize("username", ["a" * 50, "\u7528" * 50])
 async def test_long_username_login_and_legacy_refresh(worker_db, username):
     factory, _, engine = worker_db
     with Session(engine) as session:

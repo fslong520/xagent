@@ -5873,14 +5873,14 @@ async def test_llm_plan_generator_retries_plan_prose_language_mismatch() -> None
                 [
                     {
                         "id": "greet",
-                        "task": "回应用户问候",
+                        "task": "\u56de\u5e94\u7528\u6237\u95ee\u5019",
                         "description": (
-                            "识别到用户发送了简单的问候消息，直接以英文友好地"
-                            "回应用户，并询问用户是否有具体需求。"
+                            "\u8bc6\u522b\u5230\u7528\u6237\u53d1\u9001\u4e86\u7b80\u5355\u7684\u95ee\u5019\u6d88\u606f，\u76f4\u63a5\u4ee5\u82f1\u6587\u53cb\u597d\u5730"
+                            "\u56de\u5e94\u7528\u6237，\u5e76\u8be2\u95ee\u7528\u6237\u662f\u5426\u6709\u5177\u4f53\u9700\u6c42。"
                         ),
                         "dependencies": [],
-                        "termination_condition": "生成英文问候后调用 final_answer。",
-                        "completion_evidence": "已经生成友好的英文问候。",
+                        "termination_condition": "\u751f\u6210\u82f1\u6587\u95ee\u5019\u540e\u8c03\u7528 final_answer。",
+                        "completion_evidence": "\u5df2\u7ecf\u751f\u6210\u53cb\u597d\u7684\u82f1\u6587\u95ee\u5019。",
                         "tool_names": [],
                     }
                 ],
@@ -5949,8 +5949,8 @@ async def test_llm_plan_generator_validates_each_step_language_independently() -
                     },
                     {
                         "id": "wrong-language",
-                        "task": "总结分析结果并向用户清楚说明所有重要发现",
-                        "description": "使用中文生成最终报告并解释关键证据和限制。",
+                        "task": "\u603b\u7ed3\u5206\u6790\u7ed3\u679c\u5e76\u5411\u7528\u6237\u6e05\u695a\u8bf4\u660e\u6240\u6709\u91cd\u8981\u53d1\u73b0",
+                        "description": "\u4f7f\u7528\u4e2d\u6587\u751f\u6210\u6700\u7ec8\u62a5\u544a\u5e76\u89e3\u91ca\u5173\u952e\u8bc1\u636e\u548c\u9650\u5236。",
                         "dependencies": ["long-english"],
                         "tool_names": [],
                     },
@@ -5997,17 +5997,17 @@ async def test_llm_plan_generator_allows_technical_identifiers_in_chinese_step()
 ):
     generator = LLMPlanGenerator()
     context = ExecutionContext(execution_id="dag-chinese-technical-identifiers")
-    context.add_user_message("查询货运状态并用中文解释结果。")
+    context.add_user_message("\u67e5\u8be2\u8d27\u8fd0\u72b6\u6001\u5e76\u7528\u4e2d\u6587\u89e3\u91ca\u7ed3\u679c。")
     llm = PlanLLM(
         plan_tool_response(
             [
                 {
                     "id": "query",
-                    "task": "查询货运状态并向用户解释结果",
+                    "task": "\u67e5\u8be2\u8d27\u8fd0\u72b6\u6001\u5e76\u5411\u7528\u6237\u89e3\u91ca\u7ed3\u679c",
                     "description": (
-                        "调用 https://api.example.com/v1/shipments/{shipment_id}，"
-                        "读取 response_language_configuration_endpoint、"
-                        "HTTPStatusCode 和 PascalCaseIdentifier 字段后说明结果。"
+                        "\u8c03\u7528 https://api.example.com/v1/shipments/{shipment_id}，"
+                        "\u8bfb\u53d6 response_language_configuration_endpoint、"
+                        "HTTPStatusCode \u548c PascalCaseIdentifier \u5b57\u6bb5\u540e\u8bf4\u660e\u7ed3\u679c。"
                     ),
                     "dependencies": [],
                     "tool_names": [],
@@ -6035,14 +6035,14 @@ async def test_direct_dag_replan_ignores_plan_scoped_response_language() -> None
     context = ExecutionContext(execution_id="dag-language-change-replan")
     context.metadata[OUTPUT_LANGUAGE_METADATA_KEY] = "English"
     context.metadata[OUTPUT_LANGUAGE_SOURCE_METADATA_KEY] = OUTPUT_LANGUAGE_SOURCE_PLAN
-    context.add_user_message("请改用中文继续处理。")
+    context.add_user_message("\u8bf7\u6539\u7528\u4e2d\u6587\u7ee7\u7eed\u5904\u7406。")
     llm = PlanLLM(
         plan_tool_response(
             [
                 {
                     "id": "continue",
-                    "task": "根据用户的新要求继续处理并用中文回答",
-                    "description": "重新规划后续工作并确保最终输出为中文。",
+                    "task": "\u6839\u636e\u7528\u6237\u7684\u65b0\u8981\u6c42\u7ee7\u7eed\u5904\u7406\u5e76\u7528\u4e2d\u6587\u56de\u7b54",
+                    "description": "\u91cd\u65b0\u89c4\u5212\u540e\u7eed\u5de5\u4f5c\u5e76\u786e\u4fdd\u6700\u7ec8\u8f93\u51fa\u4e3a\u4e2d\u6587。",
                     "dependencies": [],
                     "tool_names": [],
                 }
@@ -6075,7 +6075,7 @@ async def test_direct_dag_replan_ignores_plan_scoped_response_language() -> None
 async def test_initial_direct_dag_retries_self_consistent_wrong_language() -> None:
     generator = LLMPlanGenerator()
     context = ExecutionContext(execution_id="dag-initial-request-language")
-    context.add_user_message("请研究市场数据，并用中文总结所有关键发现和风险。")
+    context.add_user_message("\u8bf7\u7814\u7a76\u5e02\u573a\u6570\u636e，\u5e76\u7528\u4e2d\u6587\u603b\u7ed3\u6240\u6709\u5173\u952e\u53d1\u73b0\u548c\u98ce\u9669。")
     llm = SequenceLLM(
         [
             plan_tool_response(
@@ -6097,8 +6097,8 @@ async def test_initial_direct_dag_retries_self_consistent_wrong_language() -> No
                 [
                     {
                         "id": "research",
-                        "task": "研究市场数据并总结所有关键发现",
-                        "description": "使用中文分析证据、风险、限制和后续建议。",
+                        "task": "\u7814\u7a76\u5e02\u573a\u6570\u636e\u5e76\u603b\u7ed3\u6240\u6709\u5173\u952e\u53d1\u73b0",
+                        "description": "\u4f7f\u7528\u4e2d\u6587\u5206\u6790\u8bc1\u636e、\u98ce\u9669、\u9650\u5236\u548c\u540e\u7eed\u5efa\u8bae。",
                         "dependencies": [],
                         "tool_names": [],
                     }
@@ -6118,10 +6118,10 @@ async def test_initial_direct_dag_retries_self_consistent_wrong_language() -> No
     )
 
     assert llm.calls == 2
-    assert plan.steps[0].task == "研究市场数据并总结所有关键发现"
+    assert plan.steps[0].task == "\u7814\u7a76\u5e02\u573a\u6570\u636e\u5e76\u603b\u7ed3\u6240\u6709\u5173\u952e\u53d1\u73b0"
     retry_message = llm.seen_messages[1][-1]["content"]
     assert "script of the latest user request" in retry_message
-    assert "请研究市场数据，并用中文总结所有关键发现和风险。" in retry_message
+    assert "\u8bf7\u7814\u7a76\u5e02\u573a\u6570\u636e，\u5e76\u7528\u4e2d\u6587\u603b\u7ed3\u6240\u6709\u5173\u952e\u53d1\u73b0\u548c\u98ce\u9669。" in retry_message
 
 
 @pytest.mark.asyncio
@@ -6130,14 +6130,14 @@ async def test_direct_dag_migrates_legacy_language_source_on_replan() -> None:
     context = ExecutionContext(execution_id="dag-legacy-language-source")
     context.metadata["pattern"] = "dag_plan_execute"
     context.metadata[OUTPUT_LANGUAGE_METADATA_KEY] = "English"
-    context.add_user_message("请改用中文继续完成后续工作。")
+    context.add_user_message("\u8bf7\u6539\u7528\u4e2d\u6587\u7ee7\u7eed\u5b8c\u6210\u540e\u7eed\u5de5\u4f5c。")
     llm = PlanLLM(
         plan_tool_response(
             [
                 {
                     "id": "continue",
-                    "task": "根据最新要求继续完成后续工作",
-                    "description": "使用中文完成重新规划和最终说明。",
+                    "task": "\u6839\u636e\u6700\u65b0\u8981\u6c42\u7ee7\u7eed\u5b8c\u6210\u540e\u7eed\u5de5\u4f5c",
+                    "description": "\u4f7f\u7528\u4e2d\u6587\u5b8c\u6210\u91cd\u65b0\u89c4\u5212\u548c\u6700\u7ec8\u8bf4\u660e。",
                     "dependencies": [],
                     "tool_names": [],
                 }
@@ -6172,15 +6172,15 @@ async def test_direct_dag_preserves_legacy_auto_language_authority() -> None:
     context = ExecutionContext(execution_id="dag-legacy-auto-language-source")
     context.metadata["pattern"] = "auto"
     context.metadata[OUTPUT_LANGUAGE_METADATA_KEY] = "English"
-    context.add_user_message("请继续处理这个任务。")
+    context.add_user_message("\u8bf7\u7ee7\u7eed\u5904\u7406\u8fd9\u4e2a\u4efb\u52a1。")
     llm = SequenceLLM(
         [
             plan_tool_response(
                 [
                     {
                         "id": "continue",
-                        "task": "继续处理任务并用中文回答",
-                        "description": "根据请求继续完成任务。",
+                        "task": "\u7ee7\u7eed\u5904\u7406\u4efb\u52a1\u5e76\u7528\u4e2d\u6587\u56de\u7b54",
+                        "description": "\u6839\u636e\u8bf7\u6c42\u7ee7\u7eed\u5b8c\u6210\u4efb\u52a1。",
                         "dependencies": [],
                         "tool_names": [],
                     }
@@ -6227,11 +6227,11 @@ async def test_dag_request_preview_preserves_mid_request_language_directive() ->
     context = ExecutionContext(execution_id="dag-language-directive-middle")
     directive = "Please write every plan field and the final answer in English."
     request = (
-        "请分析以下很长的背景材料。"
-        + "背景资料" * 200
+        "\u8bf7\u5206\u6790\u4ee5\u4e0b\u5f88\u957f\u7684\u80cc\u666f\u6750\u6599。"
+        + "\u80cc\u666f\u8d44\u6599" * 200
         + directive
-        + "背景资料" * 200
-        + "谢谢。"
+        + "\u80cc\u666f\u8d44\u6599" * 200
+        + "\u8c22\u8c22。"
     )
     context.add_user_message(request)
     llm = PlanLLM(
@@ -6303,13 +6303,13 @@ async def test_llm_plan_generator_allows_short_han_proper_noun_in_english_plan()
 ):
     generator = LLMPlanGenerator()
     context = ExecutionContext(execution_id="dag-llm-plan-language-proper-noun")
-    context.add_user_message("Track 中国国航 shipment CA123")
+    context.add_user_message("Track \u4e2d\u56fd\u56fd\u822a shipment CA123")
     llm = PlanLLM(
         plan_tool_response(
             [
                 {
                     "id": "track",
-                    "task": "Track 中国国航 shipment CA123",
+                    "task": "Track \u4e2d\u56fd\u56fd\u822a shipment CA123",
                     "description": "Look up the shipment and report its status.",
                     "dependencies": [],
                     "termination_condition": (
@@ -6332,7 +6332,7 @@ async def test_llm_plan_generator_allows_short_han_proper_noun_in_english_plan()
         llm=llm,
     )
 
-    assert plan.steps[0].task == "Track 中国国航 shipment CA123"
+    assert plan.steps[0].task == "Track \u4e2d\u56fd\u56fd\u822a shipment CA123"
 
 
 @pytest.mark.asyncio
@@ -7828,8 +7828,8 @@ async def test_plan_generator_accepts_implicit_cross_language_request() -> None:
         [
             {
                 "id": "rewrite",
-                "task": "重写这份公告，使其更易于阅读，并保留原有的关键信息与时间安排",
-                "description": "使用中文输出改写后的完整公告，保留时间与关键信息。",
+                "task": "\u91cd\u5199\u8fd9\u4efd\u516c\u544a，\u4f7f\u5176\u66f4\u6613\u4e8e\u9605\u8bfb，\u5e76\u4fdd\u7559\u539f\u6709\u7684\u5173\u952e\u4fe1\u606f\u4e0e\u65f6\u95f4\u5b89\u6392",
+                "description": "\u4f7f\u7528\u4e2d\u6587\u8f93\u51fa\u6539\u5199\u540e\u7684\u5b8c\u6574\u516c\u544a，\u4fdd\u7559\u65f6\u95f4\u4e0e\u5173\u952e\u4fe1\u606f。",
                 "dependencies": [],
                 "tool_names": [],
             }
@@ -7867,7 +7867,7 @@ async def test_direct_dag_skips_request_reminder_under_external_authority() -> N
         OUTPUT_LANGUAGE_METADATA_KEY: "English",
     }
     context.metadata[OUTPUT_LANGUAGE_METADATA_KEY] = "English"
-    context.add_user_message("请继续处理这个任务。")
+    context.add_user_message("\u8bf7\u7ee7\u7eed\u5904\u7406\u8fd9\u4e2a\u4efb\u52a1。")
     llm = SequenceLLM(
         [
             plan_tool_response(
@@ -7889,8 +7889,8 @@ async def test_direct_dag_skips_request_reminder_under_external_authority() -> N
                 [
                     {
                         "id": "continue",
-                        "task": "继续处理任务并用中文回答",
-                        "description": "根据请求继续完成任务。",
+                        "task": "\u7ee7\u7eed\u5904\u7406\u4efb\u52a1\u5e76\u7528\u4e2d\u6587\u56de\u7b54",
+                        "description": "\u6839\u636e\u8bf7\u6c42\u7ee7\u7eed\u5b8c\u6210\u4efb\u52a1。",
                         "dependencies": [],
                         "tool_names": [],
                     }
@@ -7966,21 +7966,21 @@ async def test_polluted_plan_language_is_not_a_hard_policy_for_dag_steps(
     chinese_steps = [
         {
             "id": "compare",
-            "task": "对比第三季度和第四季度的收入数据",
-            "description": "读取两个季度的收入并计算变化幅度与主要驱动因素。",
+            "task": "\u5bf9\u6bd4\u7b2c\u4e09\u5b63\u5ea6\u548c\u7b2c\u56db\u5b63\u5ea6\u7684\u6536\u5165\u6570\u636e",
+            "description": "\u8bfb\u53d6\u4e24\u4e2a\u5b63\u5ea6\u7684\u6536\u5165\u5e76\u8ba1\u7b97\u53d8\u5316\u5e45\u5ea6\u4e0e\u4e3b\u8981\u9a71\u52a8\u56e0\u7d20。",
             "dependencies": [],
             "tool_names": [],
-            "termination_condition": "当两个季度的收入差异已经算出并记录时结束。",
-            "completion_evidence": "工具返回了两个季度的收入数值。",
+            "termination_condition": "\u5f53\u4e24\u4e2a\u5b63\u5ea6\u7684\u6536\u5165\u5dee\u5f02\u5df2\u7ecf\u7b97\u51fa\u5e76\u8bb0\u5f55\u65f6\u7ed3\u675f。",
+            "completion_evidence": "\u5de5\u5177\u8fd4\u56de\u4e86\u4e24\u4e2a\u5b63\u5ea6\u7684\u6536\u5165\u6570\u503c。",
         },
         {
             "id": "write",
-            "task": "撰写两段式的收入总结",
-            "description": "根据对比结果撰写两段中文总结，说明趋势与风险。",
+            "task": "\u64b0\u5199\u4e24\u6bb5\u5f0f\u7684\u6536\u5165\u603b\u7ed3",
+            "description": "\u6839\u636e\u5bf9\u6bd4\u7ed3\u679c\u64b0\u5199\u4e24\u6bb5\u4e2d\u6587\u603b\u7ed3，\u8bf4\u660e\u8d8b\u52bf\u4e0e\u98ce\u9669。",
             "dependencies": ["compare"],
             "tool_names": [],
-            "termination_condition": "当两段总结写完并返回时结束。",
-            "completion_evidence": "返回了两段完整的总结文本。",
+            "termination_condition": "\u5f53\u4e24\u6bb5\u603b\u7ed3\u5199\u5b8c\u5e76\u8fd4\u56de\u65f6\u7ed3\u675f。",
+            "completion_evidence": "\u8fd4\u56de\u4e86\u4e24\u6bb5\u5b8c\u6574\u7684\u603b\u7ed3\u6587\u672c。",
         },
     ]
     chinese_plan = plan_tool_response(
@@ -7998,7 +7998,7 @@ async def test_polluted_plan_language_is_not_a_hard_policy_for_dag_steps(
     monkeypatch.setattr(dag_module, "ReActPattern", CapturingReActPattern)
     context = ExecutionContext(execution_id="dag-polluted-plan-language")
     context.metadata[MEMORY_CONTEXT_METADATA_KEY] = (
-        "上一个任务的用户偏好：请始终使用中文回答。"
+        "\u4e0a\u4e00\u4e2a\u4efb\u52a1\u7684\u7528\u6237\u504f\u597d：\u8bf7\u59cb\u7ec8\u4f7f\u7528\u4e2d\u6587\u56de\u7b54。"
     )
     context.add_user_message(request)
     llm = SequenceLLM([chinese_plan, chinese_plan])
@@ -8041,8 +8041,8 @@ async def test_legacy_router_language_is_not_external_authority_for_planning() -
         [
             {
                 "id": "summarize",
-                "task": "总结季度收入趋势并说明主要驱动因素",
-                "description": "阅读季度收入数据并用中文写出趋势总结。",
+                "task": "\u603b\u7ed3\u5b63\u5ea6\u6536\u5165\u8d8b\u52bf\u5e76\u8bf4\u660e\u4e3b\u8981\u9a71\u52a8\u56e0\u7d20",
+                "description": "\u9605\u8bfb\u5b63\u5ea6\u6536\u5165\u6570\u636e\u5e76\u7528\u4e2d\u6587\u5199\u51fa\u8d8b\u52bf\u603b\u7ed3。",
                 "dependencies": [],
                 "tool_names": [],
             }
@@ -8131,8 +8131,8 @@ def _chinese_rewrite_plan_response() -> dict[str, Any]:
         [
             {
                 "id": "rewrite",
-                "task": "重写这份公告，使其更易于阅读，并保留原有的关键信息与时间安排",
-                "description": "使用中文输出改写后的完整公告，保留时间与关键信息。",
+                "task": "\u91cd\u5199\u8fd9\u4efd\u516c\u544a，\u4f7f\u5176\u66f4\u6613\u4e8e\u9605\u8bfb，\u5e76\u4fdd\u7559\u539f\u6709\u7684\u5173\u952e\u4fe1\u606f\u4e0e\u65f6\u95f4\u5b89\u6392",
+                "description": "\u4f7f\u7528\u4e2d\u6587\u8f93\u51fa\u6539\u5199\u540e\u7684\u5b8c\u6574\u516c\u544a，\u4fdd\u7559\u65f6\u95f4\u4e0e\u5173\u952e\u4fe1\u606f。",
                 "dependencies": [],
                 "tool_names": [],
             }
@@ -8145,7 +8145,7 @@ def _chinese_rewrite_plan_response() -> dict[str, Any]:
 async def test_plan_language_anchor_ignores_the_appended_file_reference_block() -> None:
     generator = LLMPlanGenerator()
     context = ExecutionContext(execution_id="dag-file-turn-language-anchor")
-    typed = "请把这份公告重写得更易读。"
+    typed = "\u8bf7\u628a\u8fd9\u4efd\u516c\u544a\u91cd\u5199\u5f97\u66f4\u6613\u8bfb。"
     context.add_user_message(
         typed + _FILE_REFERENCE_BLOCK,
         metadata={"display_message": typed},
@@ -8272,7 +8272,7 @@ async def test_language_nudge_keeps_the_validated_plan_on_invalid_retry_plan() -
 
     assert llm.calls == 2
     assert [step.id for step in plan.steps] == ["rewrite"]
-    assert plan.steps[0].task.startswith("重写")
+    assert plan.steps[0].task.startswith("\u91cd\u5199")
 
 
 def _assessment_pattern() -> DAGPattern:

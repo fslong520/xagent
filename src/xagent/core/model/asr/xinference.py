@@ -64,7 +64,7 @@ class XinferenceASR(BaseASR, BaseXinferenceModel):
             format: Audio format (e.g., 'wav', 'mp3', 'm4a')
             verbose: If True, return detailed ASRResult with segments and metadata
             response_format: 'json' or 'verbose_json' for detailed output
-            hotword: Hotwords to improve recognition accuracy (space-separated, e.g., "香港 航空")
+            hotword: Hotwords to improve recognition accuracy (space-separated, e.g., "Hong Kong Airlines")
             **kwargs: Additional model-specific parameters
 
         Returns:
@@ -76,7 +76,7 @@ class XinferenceASR(BaseASR, BaseXinferenceModel):
 
         Example:
             >>> # Use hotwords to improve specific term recognition
-            >>> result = asr.transcribe("audio.mp3", hotword="香港 航空", verbose=True)
+            >>> result = asr.transcribe("audio.mp3", hotword="Hong Kong Airlines", verbose=True)
         """
         model_handle = await self._ensure_model_handle()
 

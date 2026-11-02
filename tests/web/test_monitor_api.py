@@ -1,5 +1,5 @@
 """
-测试监控 API 的数据库兼容性
+Database compatibility for the monitoring API.
 """
 
 import json
@@ -23,7 +23,7 @@ Base = declarative_base()
 
 
 class MockTraceEvent(Base):
-    """模拟的 TraceEvent 模型"""
+    """Mock TraceEvent model."""
 
     __tablename__ = "trace_events"
 
@@ -32,21 +32,21 @@ class MockTraceEvent(Base):
 
 
 class TestMonitorDatabaseCompatibility:
-    """测试监控 API 的数据库兼容性"""
+    """Database compatibility for the monitoring API."""
 
     def test_postgresql_json_extraction(self):
-        """测试 PostgreSQL 的 JSON 字段提取"""
-        # 创建模拟的数据库会话
+        """PostgreSQL JSON field extraction."""
+        # Create a mock database session
         mock_session = MagicMock()
         mock_engine = Mock()
         mock_engine.dialect.name = "postgresql"
         mock_session.bind = mock_engine
 
-        # 测试字段提取
+        # Exercise field extraction
         column = MockTraceEvent.data
         result = get_json_field_expression(column, "tool_name", mock_session)
 
-        # 验证 PostgreSQL 语法 - 检查是否使用了 ->> 操作符
+        # Verify the PostgreSQL syntax: the ->> operator must be used
         result_str = str(result)
         assert "->>" in result_str
         assert "trace_events.data" in result_str
@@ -80,7 +80,7 @@ class TestMonitorDatabaseCompatibility:
         assert PG_UNSAFE_ESCAPE_PATTERN in compiled.params.values()
 
     def test_mysql_json_extraction(self):
-        """测试 MySQL 的 JSON 字段提取"""
+        """MySQL JSON field extraction."""
         mock_session = MagicMock()
         mock_engine = Mock()
         mock_engine.dialect.name = "mysql"
@@ -89,11 +89,11 @@ class TestMonitorDatabaseCompatibility:
         column = MockTraceEvent.data
         result = get_json_field_expression(column, "tool_name", mock_session)
 
-        # MySQL 应该使用 JSON_EXTRACT 函数
+        # MySQL should use the JSON_EXTRACT function
         assert "json_extract" in str(result).lower()
 
     def test_sqlite_json_extraction(self):
-        """测试 SQLite 的 JSON 字段提取"""
+        """SQLite JSON field extraction."""
         mock_session = MagicMock()
         mock_engine = Mock()
         mock_engine.dialect.name = "sqlite"
@@ -102,11 +102,11 @@ class TestMonitorDatabaseCompatibility:
         column = MockTraceEvent.data
         result = get_json_field_expression(column, "tool_name", mock_session)
 
-        # SQLite 应该使用 json_extract 函数
+        # SQLite should use the json_extract function
         assert "json_extract" in str(result).lower()
 
     def test_field_path_formatting(self):
-        """测试字段路径格式化"""
+        """Field path formatting."""
         mock_session = MagicMock()
         mock_engine = Mock()
         mock_engine.dialect.name = "sqlite"
@@ -114,17 +114,17 @@ class TestMonitorDatabaseCompatibility:
 
         column = MockTraceEvent.data
 
-        # 测试带 '$.' 前缀的路径
+        # Path carrying a '$.' prefix
         result1 = get_json_field_expression(column, "$.tool_name", mock_session)
 
-        # 测试不带前缀的路径
+        # Path without a prefix
         result2 = get_json_field_expression(column, "tool_name", mock_session)
 
-        # 两种方式应该产生相同的结果
+        # Both forms should produce the same result
         assert str(result1) == str(result2)
 
     def test_none_bind_error(self):
-        """测试 bind 为 None 时抛出错误"""
+        """Raises when bind is None."""
         mock_session = MagicMock()
         mock_session.bind = None
 
@@ -234,8 +234,8 @@ class TestUnsafeEscapePattern:
 
 
 def test_admin_user_permissions():
-    """测试管理员用户权限检查"""
-    # 测试管理员用户
+    """Admin user permission check."""
+    # Admin user
     admin_user = Mock()
     admin_user.is_admin = True
 
@@ -243,7 +243,7 @@ def test_admin_user_permissions():
 
     assert is_admin_user(admin_user) is True
 
-    # 测试普通用户
+    # Regular user
     normal_user = Mock()
     normal_user.is_admin = False
 
@@ -251,28 +251,28 @@ def test_admin_user_permissions():
 
 
 class TestMonitorAPIUserIsolation:
-    """测试监控 API 的用户隔离功能"""
+    """User isolation in the monitoring API."""
 
     def test_user_query_filtering(self):
-        """测试用户查询过滤逻辑"""
+        """User query filtering logic."""
         mock_session = MagicMock()
         mock_engine = Mock()
         mock_engine.dialect.name = "sqlite"
         mock_session.bind = mock_engine
 
-        # 模拟普通用户
+        # Simulate a regular user
         normal_user = Mock()
         normal_user.id = 123
         normal_user.is_admin = False
 
-        # 模拟管理员用户
+        # Simulate an admin user
         admin_user = Mock()
         admin_user.id = 1
         admin_user.is_admin = True
 
         from xagent.web.api.monitor import is_admin_user
 
-        # 测试权限检查
+        # Exercise the permission check
         assert is_admin_user(normal_user) is False
         assert is_admin_user(admin_user) is True
 

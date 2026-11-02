@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-更全面的WebSocket消息分类测试
+A more comprehensive WebSocket message classification test.
 """
 
 import asyncio
@@ -12,40 +12,44 @@ import websockets
 
 
 async def comprehensive_test():
-    """全面的WebSocket消息分类测试"""
+    """Comprehensive WebSocket message classification test"""
     uri = "ws://localhost:8000/ws/chat/1001"
 
     try:
-        print(f"连接到WebSocket: {uri}")
+        print(f"Connecting to WebSocket: {uri}")
         async with websockets.connect(uri) as websocket:
-            # 发送不同类型的测试消息
+            # Send test messages of different kinds
             test_messages = [
                 {
                     "type": "chat",
-                    "message": "请帮我分析一下当前的销售数据并生成报告",
+                    "message": "Please analyze the current sales data and generate a report",
                     "context": {},
                 },
-                {"type": "chat", "message": "搜索最新的AI技术发展趋势", "context": {}},
+                {
+                    "type": "chat",
+                    "message": "Search for the latest AI technology trends",
+                    "context": {},
+                },
             ]
 
             for i, test_message in enumerate(test_messages):
-                print(f"\n--- 测试 {i + 1}: {test_message['message'][:30]}... ---")
+                print(f"\n--- Test {i + 1}: {test_message['message'][:30]}... ---")
                 await websocket.send(json.dumps(test_message))
 
-                # 接收响应
+                # Receive responses
                 left_panel_messages = []
                 right_panel_messages = []
                 llm_messages = []
 
                 start_time = datetime.now()
-                timeout = 20  # 20秒超时
+                timeout = 20  # 20 second timeout
 
                 while (datetime.now() - start_time).seconds < timeout:
                     try:
                         message = await asyncio.wait_for(websocket.recv(), timeout=3.0)
                         data = json.loads(message)
 
-                        # 模拟前端分类逻辑
+                        # Simulate the frontend classification logic
                         if data.get("type") == "dag_status_update":
                             has_tool_data = (
                                 data.get("tool_execution")
@@ -80,57 +84,57 @@ async def comprehensive_test():
 
                             if is_plan_event:
                                 left_panel_messages.append(data.get("message", ""))
-                                print(f"  [左侧] {data.get('message', '')}")
+                                print(f"  [left] {data.get('message', '')}")
                             else:
                                 right_panel_messages.append(data.get("message", ""))
-                                print(f"  [右侧] {data.get('message', '')}")
+                                print(f"  [right] {data.get('message', '')}")
 
-                                # 记录LLM交互
+                                # Record LLM interactions
                                 if data.get("llm_interaction"):
                                     llm_messages.append(data.get("message", ""))
                                     llm_info = data["llm_interaction"]
                                     if llm_info.get("type") == "request":
                                         print(
-                                            f"    -> LLM请求: {llm_info.get('model', 'unknown')}"
+                                            f"    -> LLM request: {llm_info.get('model', 'unknown')}"
                                         )
                                     elif llm_info.get("type") == "response":
                                         print(
-                                            f"    -> LLM响应: {llm_info.get('result_type', 'unknown')}"
+                                            f"    -> LLM response: {llm_info.get('result_type', 'unknown')}"
                                         )
 
                         elif data.get("type") == "task_completed":
                             print(
-                                f"  [完成] 任务完成: {data.get('result', '')[:50]}..."
+                                f"  [done] Task completed: {data.get('result', '')[:50]}..."
                             )
                             break
 
                     except asyncio.TimeoutError:
                         continue
                     except Exception as e:
-                        print(f"处理消息时出错: {e}")
+                        print(f"Error while handling a message: {e}")
                         continue
 
-                # 输出本次测试的统计
-                print(f"  测试 {i + 1} 结果:")
-                print(f"    左侧面板消息: {len(left_panel_messages)} 条")
-                print(f"    右侧面板消息: {len(right_panel_messages)} 条")
-                print(f"    LLM交互消息: {len(llm_messages)} 条")
+                # Print the statistics for this test
+                print(f"  Test {i + 1} results:")
+                print(f"    Left panel messages: {len(left_panel_messages)}")
+                print(f"    Right panel messages: {len(right_panel_messages)}")
+                print(f"    LLM interaction messages: {len(llm_messages)}")
 
-                # 检查是否有重复
+                # Check for duplicates
                 duplicates = set(left_panel_messages) & set(right_panel_messages)
                 if duplicates:
-                    print(f"    ❌ 发现重复消息: {duplicates}")
+                    print(f"    ❌ Duplicate messages found: {duplicates}")
                 else:
-                    print("    ✅ 无重复消息")
+                    print("    ✅ No duplicate messages")
 
-                # 等待一下再进行下一个测试
+                # Wait a moment before the next test
                 await asyncio.sleep(2)
 
             print(f"\n{'=' * 50}")
-            print("全面测试完成!")
+            print("Comprehensive test complete!")
 
     except Exception as e:
-        print(f"测试失败: {e}")
+        print(f"Test failed: {e}")
 
 
 if __name__ == "__main__":

@@ -112,7 +112,7 @@ CATEGORY_DISPLAY_NAMES = {
     "other": "Other",
 }
 
-# 创建路由器
+# Create router
 tools_router = APIRouter(prefix="/api/tools", tags=["tools"])
 
 
@@ -146,7 +146,7 @@ def _create_tool_info(
     """Create tool information based on category instead of hardcoded names"""
     tool_name = getattr(tool, "name", tool.__class__.__name__)
 
-    # 基于类别设置状态和类型信息
+    # Set status and type information based on category
     status = "available"
     status_reason = None
     enabled = True

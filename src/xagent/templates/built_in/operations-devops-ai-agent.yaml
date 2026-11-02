@@ -4,16 +4,16 @@ category: Operations
 featured: false
 descriptions:
   en: Monitors your AWS environment, triages alerts and incidents, runs read-only diagnostics over SSH where a target is configured, and posts findings plus a recommended fix to Slack for a human to action — it never makes changes itself.
-  zh: 监控 AWS 环境，对告警与事件进行分诊，在已配置目标时通过 SSH 执行只读诊断，并将排查结果和修复建议发布到 Slack 供人工处理——该 Agent 本身不会执行任何变更操作。
+  zh: Monitors AWS environments, triages alerts and incidents, runs read-only diagnostics over SSH where targets are configured, and posts findings with remediation suggestions to Slack for humans to act on. The agent itself makes no changes.
 features:
   en:
   - Wakes on an alert / webhook, a schedule, or a direct chat request
   - Investigates via CloudWatch, DynamoDB and SQS, plus read-only SSH diagnostics where a target is configured
   - Triages against a known-noise catalog and posts a root-cause hypothesis with a recommended fix to Slack
   zh:
-  - 由告警 / webhook、定时任务或聊天请求触发
-  - 通过 CloudWatch、DynamoDB、SQS 进行排查，并在已配置目标时执行只读 SSH 诊断
-  - 对照已知噪声名录进行分诊，并将根因假设与修复建议发布到 Slack
+  - Triggered by alerts / webhooks, scheduled jobs or chat requests
+  - Investigates through CloudWatch, DynamoDB and SQS, and runs read-only SSH diagnostics where targets are configured
+  - Triages against a known-noise registry and posts root-cause hypotheses with remediation suggestions to Slack
 sample_prompts:
   en:
   - title: Triage this incident now
@@ -25,19 +25,19 @@ sample_prompts:
     highlights:
     - SQS queues and DynamoDB tables
   zh:
-  - title: 立即排查这次故障
-    prompt: 拉取过去一小时的 CloudWatch 指标和日志，对受影响主机执行只读诊断，并将根因假设、修复建议和严重程度发布到 Slack。
+  - title: Investigate this incident now
+    prompt: Pull the past hour of CloudWatch metrics and logs, run read-only diagnostics on the affected hosts, and post the root-cause hypothesis, remediation suggestions and severity to Slack.
     highlights:
-    - CloudWatch 指标和日志
-  - title: 检查 SQS 和 DynamoDB 状态
-    prompt: 对照已知噪声名录检查该服务的 SQS 队列和 DynamoDB 表是否存在异常，并汇报不符合已知良性模式的情况。
+    - CloudWatch metrics and logs
+  - title: Check SQS and DynamoDB health
+    prompt: Check this service's SQS queues and DynamoDB tables for anomalies against the known-noise registry, and report anything that does not match a known benign pattern.
     highlights:
-    - SQS 队列和 DynamoDB 表
+    - SQS queues and DynamoDB tables
 persona:
   name: Milo
   role:
     en: DevOps Specialist
-    zh: DevOps 智能运维专员
+    zh: DevOps AI Operations Specialist
   avatar: /marketplace/avatars/milo.png
   intro:
     en: |-
@@ -45,18 +45,18 @@ persona:
 
       Paste logs or command output and I give you a timeline, a root cause and a fix.
     zh: |-
-      你好，我是 Milo，你的 DevOps 智能运维专员。
+      Hi, I'm Milo, your DevOps AI operations specialist.
 
-      把日志或命令输出粘贴给我，我会给出时间线、根因分析和修复建议。
+      Paste logs or command output and I'll return a timeline, root-cause analysis and remediation suggestions.
   kickoff_questions:
     en:
     - What are you debugging first?
     - What does the stack look like, and where do the logs come from?
     - Do you want a postmortem written up after each incident, or just the diagnosis?
     zh:
-    - 先排查哪个问题？
-    - 技术栈是什么样的，日志从哪里来？
-    - 每次事件后需要我写复盘报告，还是只要诊断结果？
+    - Which problem should we investigate first?
+    - What does the stack look like, and where do the logs come from?
+    - After each incident, do you want a post-mortem report or just the diagnosis?
 connections:
 - name: AWS
   logo: https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64
@@ -64,7 +64,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=slack.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: |
     # Role & Purpose

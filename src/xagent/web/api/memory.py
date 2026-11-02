@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Callable, Iterator, Optional
+from typing import Any, Callable, Iterator, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -21,6 +21,10 @@ from ..user_isolated_memory import UserContext, calculate_memory_stats
 
 logger = logging.getLogger(__name__)
 MEMORY_READ_UNAVAILABLE_DETAIL = "Memory storage is temporarily unavailable."
+# XN-4: the one wording every ghost-id 404 falls back to, matching the tool
+# layer's "not found or not accessible" so PUT/GET/DELETE answer the same
+# sentence when the store carries no upstream error of its own.
+MEMORY_NOT_FOUND_DETAIL = "not found or not accessible"
 
 
 @contextmanager
@@ -176,6 +180,14 @@ class MemoryManagementRouter:
             search: Optional[str] = Query(
                 None, description="Search query to filter memories by content"
             ),
+            space: Optional[Literal["personal", "department", "company"]] = Query(
+                None,
+                description=(
+                    "Narrow the list to one space view: 'personal' for your "
+                    "own notes, 'department' for the department's shared "
+                    "layer, 'company' for the whole organisation."
+                ),
+            ),
             similarity_threshold: Optional[float] = Query(
                 None, description="Similarity threshold for vector search (0.1-2.0)"
             ),
@@ -208,11 +220,23 @@ class MemoryManagementRouter:
                     try:
                         with memory_operation():
                             if search:
+                                if space:
+                                    # The search path serializes filters onto
+                                    # the service body, where the space view
+                                    # lives — the same ``filters.space`` key
+                                    # ``search_memory`` already sends.
+                                    filters["space"] = space
                                 memories = self.memory_store.search(
                                     query=search,
                                     k=1000,
                                     filters=filters if filters else None,
                                     similarity_threshold=similarity_threshold,
+                                )
+                            elif space:
+                                # XN-1: the list path carries the view as its
+                                # own store argument, attached only when set.
+                                memories = self.memory_store.list_all(
+                                    filters, space=space
                                 )
                             else:
                                 memories = self.memory_store.list_all(filters)
@@ -241,13 +265,20 @@ class MemoryManagementRouter:
                             "timestamp": memory.timestamp,
                             "mime_type": memory.mime_type,
                             "metadata": memory.metadata,
+                            # XN-1: shared-space provenance the panel labels a
+                            # team-visible note with (null = own memory).
+                            "space_kind": memory.space_kind,
+                            "space_id": memory.space_id,
                         }
                         memory_dicts.append(memory_dict)
 
+                    filters_used = dict(filters)
+                    if space:
+                        filters_used.setdefault("space", space)
                     return MemoryListResponse(
                         memories=memory_dicts,
                         total_count=total_count,
-                        filters_used=filters,
+                        filters_used=filters_used,
                         scope=memory_scope(user),
                     )
             except HTTPException:
@@ -273,7 +304,8 @@ class MemoryManagementRouter:
                         }
                     else:
                         raise HTTPException(
-                            status_code=404, detail=response.error or "Memory not found"
+                            status_code=404,
+                            detail=response.error or MEMORY_NOT_FOUND_DETAIL,
                         )
             except HTTPException:
                 raise
@@ -304,7 +336,15 @@ class MemoryManagementRouter:
                     # Get existing memory
                     get_response = self.memory_store.get(memory_id)
                     if not get_response.success:
-                        raise HTTPException(status_code=404, detail="Memory not found")
+                        # XN-4: keep the store's own wording when it has one
+                        # (the remote adapter's not-found constant) instead of
+                        # hard-coding "Memory not found", which made PUT answer
+                        # a different sentence than GET/DELETE for the same
+                        # ghost id.
+                        raise HTTPException(
+                            status_code=404,
+                            detail=get_response.error or MEMORY_NOT_FOUND_DETAIL,
+                        )
 
                     existing_memory = get_response.content
                     if not isinstance(existing_memory, MemoryNote):
@@ -338,8 +378,8 @@ class MemoryManagementRouter:
                     )
 
                     # X-06: the store keeps whichever tags a request carries, so a
-                    # plain content rewrite would keep the old values (京A8888
-                    # under a body that now says 京A9999). This runs whenever the
+                    # plain content rewrite would keep the old values (ABC-1234
+                    # under a body that now says ABC-5678). This runs whenever the
                     # content changed, even when the request carries a tag list:
                     # the UI prefills the old tags verbatim, which is not a
                     # decision anyone made. Only values tied to the replaced text
@@ -441,6 +481,11 @@ class MemoryManagementRouter:
                             # fetch the note without remapping the field.
                             "id": response.memory_id,
                             "memory_id": response.memory_id,
+                            # XN-1: a ``[share:…]`` write echoes the space it
+                            # landed in, so the panel can label the card without
+                            # waiting for a list refresh to round-trip upstream.
+                            "space_kind": response.space_kind,
+                            "space_id": response.space_id,
                             "message": "Memory created successfully",
                         }
                     else:
@@ -515,12 +560,16 @@ class MemoryManagementRouter:
                                 "timestamp": memory.timestamp,
                                 "mime_type": memory.mime_type,
                                 "metadata": memory.metadata,
+                                # XN-1: same provenance as the list view.
+                                "space_kind": memory.space_kind,
+                                "space_id": memory.space_id,
                             }
                         else:
                             return {"content": memory}
                     else:
                         raise HTTPException(
-                            status_code=404, detail=response.error or "Memory not found"
+                            status_code=404,
+                            detail=response.error or MEMORY_NOT_FOUND_DETAIL,
                         )
             except HTTPException:
                 raise

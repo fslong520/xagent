@@ -7,12 +7,12 @@ describe("chat-response", () => {
     const payload = {
       metadata: {
         chat_response: {
-          message: "请补充目标受众",
+          message: "Please specify the target audience",
           interactions: [
             {
               type: "text_input",
               field: "target_user",
-              label: "目标受众",
+              label: "Target audience",
             },
           ],
         },
@@ -20,12 +20,12 @@ describe("chat-response", () => {
     }
 
     expect(extractSharedChatResponse(payload)).toEqual({
-      message: "请补充目标受众",
+      message: "Please specify the target audience",
       interactions: [
         {
           type: "text_input",
           field: "target_user",
-          label: "目标受众",
+          label: "Target audience",
         },
       ],
     })
@@ -37,12 +37,12 @@ describe("chat-response", () => {
       result: "plain result that should not win",
       success: false,
       chat_response: {
-        message: "请问你想让我分析什么内容呢？",
+        message: "What would you like me to analyze?",
         interactions: [
           {
             type: "text_input",
             field: "analysis_content",
-            label: "请输入你想分析的内容",
+            label: "Enter the content to analyze",
             multiline: true,
           },
         ],
@@ -50,7 +50,7 @@ describe("chat-response", () => {
     }
 
     expect(extractBuildPreviewResponse(payload)).toEqual({
-      message: "请问你想让我分析什么内容呢？",
+      message: "What would you like me to analyze?",
       interactions: payload.chat_response.interactions,
     })
   })
@@ -61,12 +61,12 @@ describe("chat-response", () => {
       result: JSON.stringify({
         type: "chat",
         chat: {
-          message: "需要更多信息",
+          message: "More information needed",
           interactions: [
             {
               type: "confirm",
               field: "continue",
-              label: "是否继续",
+              label: "Continue?",
             },
           ],
         },
@@ -74,12 +74,12 @@ describe("chat-response", () => {
     }
 
     expect(extractBuildPreviewResponse(payload)).toEqual({
-      message: "需要更多信息",
+      message: "More information needed",
       interactions: [
         {
           type: "confirm",
           field: "continue",
-          label: "是否继续",
+          label: "Continue?",
         },
       ],
     })

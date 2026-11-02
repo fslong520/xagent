@@ -83,7 +83,7 @@ class TestDashScopeImageModel:
         assert result == valid_url
 
         # URL with Chinese characters
-        chinese_url = "https://example.com/图片.jpg"
+        chinese_url = "https://example.com/\u56fe\u7247.jpg"
         with pytest.raises(
             RuntimeError, match="Image URL cannot contain Chinese characters"
         ):

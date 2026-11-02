@@ -393,7 +393,7 @@ def test_nested_named_fence_is_delivered_without_streaming_payload(delivery):
 
 
 def test_long_unicode_filename_fits_byte_budget(delivery):
-    result = delivery.transform(link(name="报" * 100 + ".csv"))
+    result = delivery.transform(link(name="\u62a5" * 100 + ".csv"))
     assert "file:registered-0" in result
     path = Path(next(iter(delivery.workspace.files)))
     assert len(path.name.encode("utf-8")) <= 240

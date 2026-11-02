@@ -200,7 +200,7 @@ class TestWorkspaceFileOperations:
         ops = WorkspaceFileOperations(workspace)
 
         # Test data
-        test_data = {"name": "测试", "value": 123, "nested": {"key": "value"}}
+        test_data = {"name": "\u6d4b\u8bd5", "value": 123, "nested": {"key": "value"}}
 
         # Write test file directly to output directory
         import json
@@ -221,7 +221,7 @@ class TestWorkspaceFileOperations:
         ops = WorkspaceFileOperations(workspace)
 
         # Test data
-        test_data = {"name": "测试", "value": 123, "nested": {"key": "value"}}
+        test_data = {"name": "\u6d4b\u8bd5", "value": 123, "nested": {"key": "value"}}
 
         # Write using workspace operation
         result = ops.write_json_file("test.json", test_data)
@@ -439,7 +439,7 @@ class TestWorkspaceFileOperations:
 
         # Complex test data with various types
         test_data = {
-            "string": "测试字符串",
+            "string": "\u6d4b\u8bd5\u5b57\u7b26\u4e32",
             "number": 123.45,
             "boolean": True,
             "null": None,

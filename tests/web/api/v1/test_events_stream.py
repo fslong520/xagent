@@ -4819,7 +4819,7 @@ def test_capped_text_handles_a_multibyte_character_straddling_the_byte_boundary(
     against -- for an all-ASCII text (the shape every other byte-cap
     test in this module uses) that pre-slice usually still lands close
     enough to the cap to take the function's early-return branch. A
-    multi-byte character (every "中" is 3 UTF-8 bytes but a 6-byte
+    multi-byte character (each CJK ideograph is 3 UTF-8 bytes but a 6-byte
     ``\\uXXXX`` escape on the wire) blows well past the cap even after
     that pre-slice, which is what exercises the function's other
     branch: a binary search over the character-sliced prefix for the
@@ -4828,7 +4828,7 @@ def test_capped_text_handles_a_multibyte_character_straddling_the_byte_boundary(
     unsafe once the measured domain is escaped bytes instead of decoded
     ones).
     """
-    oversized = "中" * (es.MAX_FRAME_CONTENT_BYTES + 1000)
+    oversized = "\u4e2d" * (es.MAX_FRAME_CONTENT_BYTES + 1000)
     capped, truncated = es._capped_text(oversized)
     assert truncated is True
     assert len(capped.encode("utf-8")) <= es.MAX_FRAME_CONTENT_BYTES
@@ -4919,7 +4919,7 @@ async def test_capped_step_data_preserves_identifying_keys_per_step_type():
 
 @pytest.mark.parametrize(
     "huge_name",
-    ["n" * 70_000, "名" * 12_000],
+    ["n" * 70_000, "\u540d" * 12_000],
     ids=["ascii-name", "cjk-name"],
 )
 def test_capped_step_data_truncates_an_oversized_identifying_value(huge_name):
@@ -4938,7 +4938,7 @@ def test_capped_step_data_truncates_an_oversized_identifying_value(huge_name):
         bytes, the domain ``_byte_length``'s cap checks use. Before
         ``_capped_text`` measured in that same domain, handing it that
         budget for a CJK name let it keep far more *characters* than the
-        escaped budget allowed (UTF-8 costs 3 bytes per "名", the escaped
+        escaped budget allowed (UTF-8 costs 3 bytes per ideograph, the escaped
         ``\\uXXXX`` wire form costs 6), so the reassembled dict was still
         over the cap on its own re-check and the identifying ``name``
         field a client needs to know which tool ran was dropped entirely
@@ -5060,13 +5060,13 @@ async def test_message_delta_with_cjk_content_is_capped_on_the_wire_not_decoded_
     """A CJK string long enough to fit under a decoded-UTF-8-byte cap (3
     bytes/character) but not under its escaped wire form (6 bytes/
     character via ``\\uXXXX``, ``ensure_ascii=True``) would reach the
-    client whole under that measurement -- 12000 "中" characters is
+    client whole under that measurement -- 12000 CJK ideographs is
     36000 UTF-8 bytes (well under ``MAX_FRAME_CONTENT_BYTES``) but
     roughly 72000 escaped wire bytes (over it). Pins that
     ``message.delta``'s ``text`` field is capped in the same domain the
     frame is actually serialized in."""
     sink = _make_sink(task_id=57)
-    oversized = "中" * 12_000
+    oversized = "\u4e2d" * 12_000
     await sink.send_text(
         json.dumps(
             {

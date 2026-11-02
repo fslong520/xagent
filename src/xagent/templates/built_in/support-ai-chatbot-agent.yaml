@@ -4,16 +4,16 @@ category: Support
 featured: true
 descriptions:
   en: Responds to live chat enquiries instantly
-  zh: 实时响应实时聊天咨询。
+  zh: Responds to live chat enquiries in real time.
 features:
   en:
   - Answers commonly asked questions for a company/group
   - Handles many customer chats at the same time
   - Help customer troubleshoot with their issues
   zh:
-  - 回答公司/群组的常见问题
-  - 同时处理多个客户聊天
-  - 帮助客户排查问题
+  - Answers company and group FAQs
+  - Handles several customer chats at once
+  - Helps customers troubleshoot problems
 sample_prompts:
   en:
   - title: Answer common questions
@@ -25,19 +25,19 @@ sample_prompts:
     highlights:
     - product area
   zh:
-  - title: 回答常见问题
-    prompt: 使用我们的知识库回答关于 公司 / 产品 的常见问题，可同时处理多个客户对话。
+  - title: Answer FAQs
+    prompt: Use our knowledge base to answer FAQs about the company / product, handling several customer conversations at once.
     highlights:
-    - 公司 / 产品
-  - title: 故障排查助手
-    prompt: 帮助客户逐步排查 产品领域 的问题，必要时上报人工处理。
+    - company / product
+  - title: Troubleshooting helper
+    prompt: Walk a customer through troubleshooting in the product area, escalating to a human when needed.
     highlights:
-    - 产品领域
+    - product area
 persona:
   name: Sophie
   role:
     en: AI Support Chatbot
-    zh: AI 客服机器人
+    zh: AI Support Chatbot
   avatar: /marketplace/avatars/sophie.png
   intro:
     en: |-
@@ -45,24 +45,24 @@ persona:
 
       I answer customer questions from your knowledge base and walk people through problems.
     zh: |-
-      你好，我是 Sophie，你的 AI 客服机器人。
+      Hi, I'm Sophie, your AI support chatbot.
 
-      我会依据你的知识库回答客户问题，并引导他们解决问题。
+      I answer customer questions from your knowledge base and guide them to a resolution.
   kickoff_questions:
     en:
     - Which knowledge base should I answer from, and is it current?
     - Where am I talking to customers — the help widget, a chat channel, somewhere else?
     - When I can't answer something, who should I hand the conversation to?
     zh:
-    - 我该依据哪个知识库来回答，内容是最新的吗？
-    - 我在哪里和客户对话——帮助中心组件、聊天渠道，还是别的地方？
-    - 遇到回答不了的问题，该转交给谁？
+    - Which knowledge base should I answer from, and is it up to date?
+    - Where do I talk to customers? A help centre widget, a chat channel, somewhere else?
+    - When I cannot answer something, who should I hand it to?
 connections:
 - name: Google Drive
   logo: https://www.google.com/s2/favicons?domain=drive.google.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: '**Role & Purpose**
 

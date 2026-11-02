@@ -9,26 +9,26 @@ tags:
   - qa
   - employees
   zh:
-  - 内部
-  - 知识
-  - 文档记录
-  - 问答
-  - 员工
+  - Internal
+  - Knowledge
+  - Documentation
+  - Q&A
+  - Employees
 descriptions:
   en: Basic chatbot for internal documents Q&A
-  zh: 基于内部文档的基础聊天机器人，用于回答内部问题。
+  zh: A basic chatbot over internal documents that answers internal questions.
 features:
   en:
   - Answers employee questions from internal docs
   - Reduces repetitive HR & IT queries
   - Always in sync with your latest documents
   zh:
-  - 从内部文档回答员工问题
-  - 减少重复的 HR 与 IT 问询
-  - 始终与您最新的文档保持同步
+  - Answers employee questions from internal documents
+  - Reduces repetitive HR and IT requests
+  - Stays in sync with your latest documentation
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 featured: true
 author: Xagent
 version: '1.0'

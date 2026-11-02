@@ -1252,8 +1252,8 @@ const estimateFontSize = (text, baseSize, minSize = 12) => {{
   return Math.max(baseSize * 0.4, minSize);
 }};
 
-// Heuristic: kana/half-width katakana only. Pure-Han Japanese (e.g. "日本") is
-// classified as zh-CN; mixed CJK runs (e.g. "今日は中文テスト") follow the first
+// Heuristic: kana/half-width katakana only. Japanese text written purely in
+// kanji is classified as zh-CN; mixed CJK runs follow the first
 // matching script. Callers with a known source language should pass options.lang.
 const hasJapanese = (text) =>
   typeof text === 'string' &&

@@ -5,16 +5,16 @@ type: workforce
 featured: false
 descriptions:
   en: The Growth Marketing Manager orchestrates two specialist sub-agents in a closed loop that ties on-site performance to ad spend — Google Analytics Analyzer explains what's happening, Google Ads Recommendation proposes what to do — measure, recommend, wait for your approval, then measure again.
-  zh: Growth Marketing Manager 编排两个专业子智能体，形成一个将网站端表现与广告投放绑定的闭环——Google Analytics Analyzer 负责解释发生了什么，Google Ads Recommendation 负责提出应对方案——测量、推荐、等待您审批，再次测量。
+  zh: The Growth Marketing Manager orchestrates two specialist sub-agents in a loop that ties on-site performance to ad spend, where the Google Analytics Analyzer explains what happened, the Google Ads Recommendation agent proposes what to do about it, then the loop measures, recommends, waits for your approval and measures again.
 features:
   en:
   - Growth Marketing Manager orchestrates the GA Analyzer and Ads Recommendation agents as a single point of contact — you get one consolidated report, not two
   - Closed loop — GA Analyzer measures on-site performance and emits a 'Signals for Ads' table; Ads Recommendation joins those signals with ad spend and ranks fixes by revenue impact
   - Recommend-only, never applies changes — pauses after each round for your approval, then re-measures impact once you've made the changes
   zh:
-  - Growth Marketing Manager 统一编排 GA Analyzer 与 Ads Recommendation，作为唯一对接窗口——您收到的是一份合并报告，而不是两份独立报告
-  - 闭环流程——GA Analyzer 测量网站端表现并输出「广告信号」表格；Ads Recommendation 将这些信号与广告花费结合，按收入影响对优化项排序
-  - 仅推荐、从不自动执行——每一轮结束后暂停等待您审批，待您完成调整后再次测量效果
+  - The Growth Marketing Manager orchestrates the GA Analyzer and the Ads Recommendation agent behind a single front door, so you get one merged report instead of two separate ones
+  - Closed loop workflow, where the GA Analyzer measures on-site performance and outputs an ad signals table, and the Ads Recommendation agent combines those signals with ad spend to rank optimisation items by revenue impact
+  - Recommendations only, never auto-executed, with each round pausing for your approval before measuring results again once you have made the changes
 sample_prompts:
   en:
   - title: Run this week's growth loop
@@ -26,14 +26,14 @@ sample_prompts:
     highlights:
     - re-run the GA Analyzer
   zh:
-  - title: 运行本周的增长闭环
-    prompt: 运行本周的测量-推荐闭环——告诉我 GA4 有哪些变化，以及你会优先推荐哪些广告调整。
+  - title: Run this week's growth loop
+    prompt: Run this week's measure-and-recommend loop. Tell me what changed in GA4 and which ad adjustments you would prioritise.
     highlights:
-    - 测量-推荐闭环
-  - title: 调整后重新测量
-    prompt: 我已经按照你上次的建议调整了广告——重新运行 GA Analyzer 来测量效果。
+    - measure-and-recommend loop
+  - title: Re-measure after changes
+    prompt: I have already applied your last recommendations to my ads. Now re-run the GA Analyzer to measure the effect.
     highlights:
-    - 重新运行 GA Analyzer
+    - re-run the GA Analyzer
 # Display-only for this workforce template: the connection icons shown on
 # its Templates gallery card. Unlike an 'agent'-type template, these are
 # NOT merged into any agent's tool_categories - GET /{id} nulls agent_config
@@ -55,7 +55,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=ads.google.com&sz=64
 setup_time:
   en: 10 min setup
-  zh: 10分钟配置
+  zh: 10 min setup
 workforce_config:
   manager:
     name: Growth Marketing Manager

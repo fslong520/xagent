@@ -61,7 +61,7 @@ def translate_adapter(mock_llm):
 @pytest.mark.asyncio
 async def test_translate_simple_json(translate_tool):
     """Test translating simple JSON structure"""
-    json_data = {"text": "你好", "content": "世界"}
+    json_data = {"text": "\u4f60\u597d", "content": "\u4e16\u754c"}
     target_fields = ["text", "content"]
 
     result = await translate_tool.translate_json(
@@ -77,9 +77,9 @@ async def test_translate_simple_json(translate_tool):
     result_json = json.loads(result["result"])
 
     assert "text" in result_json
-    assert result_json["text"] == "你好"
+    assert result_json["text"] == "\u4f60\u597d"
     assert "content" in result_json
-    assert result_json["content"] == "世界"
+    assert result_json["content"] == "\u4e16\u754c"
     # Field-specific output fields to avoid overwriting
     assert "text_translated_text" in result_json
     assert result_json["text_translated_text"] == "Translation1"
@@ -92,8 +92,8 @@ async def test_translate_nested_json(translate_tool):
     """Test translating nested JSON structure like segments"""
     json_data = {
         "segments": [
-            {"text": "你好", "start": 0.0, "end": 1.0},
-            {"text": "世界", "start": 1.0, "end": 2.0},
+            {"text": "\u4f60\u597d", "start": 0.0, "end": 1.0},
+            {"text": "\u4e16\u754c", "start": 1.0, "end": 2.0},
         ]
     }
     target_fields = ["segments.text"]
@@ -113,7 +113,7 @@ async def test_translate_nested_json(translate_tool):
 
     assert "segments" in result_json
     assert len(result_json["segments"]) == 2
-    assert result_json["segments"][0]["text"] == "你好"
+    assert result_json["segments"][0]["text"] == "\u4f60\u597d"
     assert "translated_text" in result_json["segments"][0]
     assert result_json["segments"][0]["translated_text"] == "Translation1"
     assert result_json["segments"][1]["translated_text"] == "Translation2"
@@ -122,7 +122,7 @@ async def test_translate_nested_json(translate_tool):
 @pytest.mark.asyncio
 async def test_translate_with_different_output_field(translate_tool):
     """Test translating with custom output field name"""
-    json_data = {"title": "标题"}
+    json_data = {"title": "\u6807\u9898"}
     target_fields = ["title"]
 
     result = await translate_tool.translate_json(
@@ -137,7 +137,7 @@ async def test_translate_with_different_output_field(translate_tool):
     result_json = json.loads(result["result"])
 
     assert "title" in result_json
-    assert result_json["title"] == "标题"
+    assert result_json["title"] == "\u6807\u9898"
     assert "title_en_title" in result_json
     assert result_json["title_en_title"] == "Translation1"
 
@@ -163,7 +163,7 @@ async def test_get_field_value_nested():
 @pytest.mark.asyncio
 async def test_translate_values_batch(translate_tool, mock_llm):
     """Test batch translation of multiple texts"""
-    texts = ["你好", "世界", "测试"]
+    texts = ["\u4f60\u597d", "\u4e16\u754c", "\u6d4b\u8bd5"]
 
     translations = await translate_tool.translate_values(
         texts=texts, target_lang="en", source_lang="zh"
@@ -197,7 +197,7 @@ async def test_translate_single_json_field_accepts_multiline_translation():
     tool = TranslateJSONToolCore(llm=llm)
 
     result = await tool.translate_json(
-        json_data={"text": "山外青山楼外楼，西湖歌舞几时休。"},
+        json_data={"text": "\u5c71\u5916\u9752\u5c71\u697c\u5916\u697c，\u897f\u6e56\u6b4c\u821e\u51e0\u65f6\u4f11。"},
         target_fields=["text"],
         target_lang="en",
         source_lang="zh",
@@ -211,7 +211,7 @@ async def test_translate_single_json_field_accepts_multiline_translation():
 @pytest.mark.asyncio
 async def test_translate_json_string_input(translate_tool):
     """Test translating when input is JSON string instead of dict"""
-    json_str = '{"text": "你好"}'
+    json_str = '{"text": "\u4f60\u597d"}'
     target_fields = ["text"]
 
     result = await translate_tool.translate_json(
@@ -225,7 +225,7 @@ async def test_translate_json_string_input(translate_tool):
     result_json = json.loads(result["result"])
 
     assert "text" in result_json
-    assert result_json["text"] == "你好"
+    assert result_json["text"] == "\u4f60\u597d"
     assert "text_translated_text" in result_json
     assert result_json["text_translated_text"] == "Translation1"
 
@@ -251,7 +251,7 @@ def test_translate_json_sync_wrapper():
     """Test synchronous wrapper function"""
     from xagent.core.tools.core.translate_json_tool import translate_json
 
-    json_data = {"text": "测试"}
+    json_data = {"text": "\u6d4b\u8bd5"}
     target_fields = ["text"]
 
     # This should handle the sync/async conversion
@@ -272,7 +272,7 @@ def test_translate_json_sync_wrapper():
 async def test_adapter_run_json_async(translate_adapter):
     """Test adapter's async execution method"""
     args = {
-        "json_data": '{"text": "你好"}',
+        "json_data": '{"text": "\u4f60\u597d"}',
         "target_fields": ["text"],
         "target_lang": "en",
     }
@@ -291,7 +291,7 @@ async def test_adapter_run_json_async(translate_adapter):
 def test_adapter_run_json_sync(translate_adapter):
     """Test adapter's sync execution method"""
     args = {
-        "json_data": '{"text": "你好"}',
+        "json_data": '{"text": "\u4f60\u597d"}',
         "target_fields": ["text"],
         "target_lang": "en",
     }
@@ -309,7 +309,7 @@ def test_adapter_requires_llm():
     adapter = TranslateJsonTool(llm=None)
 
     args = {
-        "json_data": '{"text": "你好"}',
+        "json_data": '{"text": "\u4f60\u597d"}',
         "target_fields": ["text"],
         "target_lang": "en",
     }

@@ -4,16 +4,16 @@ category: Marketing
 featured: false
 descriptions:
   en: Pulls data straight from your connected GA4 account — or analyzes an export you upload or paste — explains what changed in your traffic and conversions and why, then emits a structured 'Signals for Ads' table you can hand to a Google Ads Recommendation agent.
-  zh: 直接从您接入的 GA4 账号拉取数据——也可分析您上传或粘贴的导出数据——用通俗易懂的语言解释流量与转化的变化及其原因，并输出结构化的「广告信号」表格，可交由 Google Ads Recommendation agent 使用。
+  zh: Pulls data straight from your connected GA4 account, or analyses exported data you upload or paste, explains traffic and conversion changes in plain language, and outputs a structured ad signals table for the Google Ads Recommendation agent.
 features:
   en:
   - Pulls GA4 metrics live from the preconfigured Google Analytics connector (read-only), or falls back to a CSV export or pasted table you provide
   - Compares against the prior period and flags anomalies by channel, campaign, landing page and segment
   - Emits a 'Signals for Ads' table for a companion Ads agent, and can save the write-up to Google Docs or Slides on request
   zh:
-  - 通过预配置的 Google Analytics 连接器实时拉取 GA4 指标（只读），也可回退使用您提供的 CSV 导出文件或粘贴的表格
-  - 与上一周期对比，按渠道、广告系列、落地页和细分维度标记异常
-  - 输出供 Ads agent 使用的「广告信号」表格，并可按需将报告保存到 Google Docs 或 Slides
+  - Pulls GA4 metrics live through a preconfigured Google Analytics connector (read-only), falling back to a CSV export or pasted table you provide
+  - Compares against the previous period and flags anomalies by channel, campaign, landing page and segment
+  - Outputs an ad signals table for the Ads agent and can save the report to Google Docs or Slides on request
 sample_prompts:
   en:
   - title: Analyze last month
@@ -25,19 +25,19 @@ sample_prompts:
     highlights:
     - Signals for Ads table
   zh:
-  - title: 分析上个月的数据
-    prompt: 从我的 GA4 媒体资源 拉取上个月的数据，告诉我流量和转化相比上一个月发生了什么变化，以及原因。
+  - title: Analyse last month's data
+    prompt: Pull last month's data from my GA4 property and tell me how traffic and conversions changed versus the previous month, and why.
     highlights:
-    - GA4 媒体资源
-  - title: 生成广告信号表格
-    prompt: 按渠道、广告系列和落地页拆解表现，然后输出一份可以交给我的广告 agent 使用的广告信号表格。
+    - GA4 property
+  - title: Generate an ad signals table
+    prompt: Break performance down by channel, campaign and landing page, then output an ad signals table my ads agent can use.
     highlights:
-    - 广告信号表格
+    - ad signals table
 persona:
   name: Kai
   role:
     en: Google Analytics Analyst
-    zh: Google Analytics 分析专员
+    zh: Google Analytics Analyst
   avatar: /marketplace/avatars/kai.png
   intro:
     en: |-
@@ -45,18 +45,18 @@ persona:
 
       I compare GA4 periods, flag anomalies by channel and campaign, and write up what changed.
     zh: |-
-      你好，我是 Kai，你的 Google Analytics 分析专员。
+      Hi, I'm Kai, your Google Analytics analyst.
 
-      我会对比 GA4 不同周期的数据，按渠道和广告系列标出异常，并写清楚发生了什么变化。
+      I compare GA4 data across periods, flag anomalies by channel and campaign, and explain in plain terms what changed.
   kickoff_questions:
     en:
     - Which property, and which two periods should I compare?
     - Which conversions actually matter to you?
     - Do you want this weekly, monthly, or only when you ask?
     zh:
-    - 看哪个媒体资源，需要对比哪两个周期？
-    - 哪些转化目标对你来说才是真正重要的？
-    - 需要每周、每月固定产出，还是你问了我再做？
+    - Which property should I look at, and which two periods should I compare?
+    - Which conversion goals actually matter to you?
+    - Do you need a fixed weekly or monthly report, or should I run on request?
 connections:
 - name: Google Analytics
   logo: https://www.google.com/s2/favicons?domain=analytics.google.com&sz=64
@@ -66,7 +66,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=slides.google.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: |
     # Role & Purpose

@@ -1,7 +1,7 @@
 """
-edit_file 工具集成测试
+Integration tests for the edit_file tool.
 
-测试 edit_file 工具在实际使用场景中的功能，包括HTML编辑、代码修改等。
+Covers edit_file in realistic scenarios such as HTML editing and code changes.
 """
 
 import os
@@ -11,10 +11,10 @@ from xagent.core.tools.core.file_tool import EditOperation, edit_file, find_and_
 
 
 class TestEditFileIntegration:
-    """edit_file 工具集成测试"""
+    """Integration tests for the edit_file tool."""
 
     def setup_method(self):
-        """每个测试方法执行前的设置"""
+        """Set up before each test method."""
         self.temp_file = tempfile.NamedTemporaryFile(
             mode="w", suffix=".html", delete=False
         )
@@ -57,7 +57,7 @@ class TestEditFileIntegration:
         self.temp_file.close()
 
     def teardown_method(self):
-        """每个测试方法执行后的清理"""
+        """Clean up after each test method."""
         if os.path.exists(self.temp_file.name):
             os.remove(self.temp_file.name)
         backup_file = self.temp_file.name + ".backup"
@@ -65,7 +65,7 @@ class TestEditFileIntegration:
             os.remove(backup_file)
 
     def test_html_title_editing(self):
-        """测试HTML标题编辑"""
+        """Test editing an HTML title."""
         operations = [
             EditOperation(
                 operation_type="replace",
@@ -86,7 +86,7 @@ class TestEditFileIntegration:
         assert "<title>My Website</title>" not in content
 
     def test_html_navigation_addition(self):
-        """测试HTML导航项添加"""
+        """Test adding an HTML navigation item."""
         operations = [
             EditOperation(
                 operation_type="insert",
@@ -104,12 +104,12 @@ class TestEditFileIntegration:
             content = f.read()
 
         assert '<li><a href="#services">Services</a></li>' in content
-        # 验证导航结构完整性
+        # Verify the navigation structure is intact
         nav_items = content.count("<li><a href=")
         assert nav_items == 4
 
     def test_html_content_update(self):
-        """测试HTML内容更新"""
+        """Test updating HTML content."""
         operations = [
             EditOperation(
                 operation_type="replace",
@@ -130,7 +130,7 @@ class TestEditFileIntegration:
         assert "Learn more about us." not in content
 
     def test_html_section_addition(self):
-        """测试HTML section添加"""
+        """Test adding an HTML section."""
         operations = [
             EditOperation(
                 operation_type="insert",
@@ -152,7 +152,7 @@ class TestEditFileIntegration:
         assert "Our services content" in content
 
     def test_multiple_html_edits(self):
-        """测试多个HTML编辑操作"""
+        """Test multiple HTML edit operations."""
         operations = [
             EditOperation(
                 operation_type="replace",
@@ -183,7 +183,7 @@ class TestEditFileIntegration:
         assert '<li><a href="#blog">Blog</a></li>' in content
         assert "amazing home page" in content
 
-        # 验证备份文件创建
+        # Verify the backup file was created
         backup_file = self.temp_file.name + ".backup"
         assert os.path.exists(backup_file)
 
@@ -192,7 +192,7 @@ class TestEditFileIntegration:
         assert backup_content == self.example_html
 
     def test_find_and_replace_year_update(self):
-        """测试查找替换年份更新"""
+        """Test find-and-replace for a year update."""
         result = find_and_replace(
             self.temp_file.name, r"2024", "2025", use_regex=True, backup=True
         )
@@ -207,8 +207,8 @@ class TestEditFileIntegration:
         assert "2024" not in content
 
     def test_find_and_replace_css_class_addition(self):
-        """测试查找替换添加CSS类"""
-        # 先添加一个需要修改的元素
+        """Test find-and-replace to add a CSS class."""
+        # First add an element that needs to be modified
         with open(self.temp_file.name, "w") as f:
             modified_html = self.example_html.replace(
                 "<h2>Home Section</h2>", '<h2 class="title">Home Section</h2>'
@@ -231,7 +231,7 @@ class TestEditFileIntegration:
         assert 'class="title"' not in content
 
     def test_html_meta_tag_addition(self):
-        """测试HTML meta标签添加"""
+        """Test adding an HTML meta tag."""
         operations = [
             EditOperation(
                 operation_type="insert",
@@ -252,15 +252,15 @@ class TestEditFileIntegration:
         assert 'meta name="keywords"' in content
 
     def test_html_structural_modifications(self):
-        """测试HTML结构修改"""
+        """Test modifying the HTML structure."""
         operations = [
-            # 添加容器div
+            # Open the container div
             EditOperation(
                 operation_type="replace",
                 pattern=r"<body>",
                 content="<body><div class='container'>",
             ),
-            # 闭合容器div
+            # Close the container div
             EditOperation(
                 operation_type="replace",
                 pattern=r"</body>",
@@ -281,7 +281,7 @@ class TestEditFileIntegration:
         assert content.count("</div>") >= 1
 
     def test_error_handling_invalid_pattern(self):
-        """测试无效模式的错误处理"""
+        """Test error handling for an invalid pattern."""
         operations = [
             EditOperation(
                 operation_type="insert",
@@ -296,22 +296,22 @@ class TestEditFileIntegration:
         assert "failed" in result.message.lower()
 
     def test_case_sensitive_find_replace(self):
-        """测试大小写敏感的查找替换"""
-        # 先添加一些大小写混合的内容
+        """Test case-sensitive find-and-replace."""
+        # First add content with mixed casing
         with open(self.temp_file.name, "w") as f:
             modified_html = self.example_html.replace(
                 "Welcome to My Website", "Welcome to my WEBSITE"
             )
             f.write(modified_html)
 
-        # 测试大小写敏感替换（应该不匹配）
+        # Case-sensitive replacement should not match
         result = find_and_replace(
             self.temp_file.name, "MY WEBSITE", "My Awesome Website", case_sensitive=True
         )
 
         assert result.success is False
 
-        # 测试大小写不敏感替换（应该匹配）
+        # Case-insensitive replacement should match
         result = find_and_replace(
             self.temp_file.name,
             "MY WEBSITE",
@@ -326,12 +326,12 @@ class TestEditFileIntegration:
         assert "My Awesome Website" in content
 
     def test_backup_and_recovery(self):
-        """测试备份和恢复功能"""
-        # 创建一个会失败的操作
+        """Test backup and restore behavior."""
+        # Create an operation that will fail
         operations = [
             EditOperation(
                 operation_type="replace",
-                line_number=9999,  # 无效行号，会导致失败
+                line_number=9999,  # Invalid line number, which makes the operation fail
                 content="Some content",
             )
         ]
@@ -340,12 +340,12 @@ class TestEditFileIntegration:
 
         assert result.success is False
 
-        # 验证原文件未被修改
+        # Verify the original file was not modified
         with open(self.temp_file.name, "r") as f:
             content = f.read()
         assert content == self.example_html
 
-        # 备份文件可能被创建（在操作开始时），但文件内容应该保持原样
+        # A backup file may exist (created at operation start), but its content stays unchanged
         backup_file = self.temp_file.name + ".backup"
         if os.path.exists(backup_file):
             with open(backup_file, "r") as f:
@@ -354,10 +354,10 @@ class TestEditFileIntegration:
 
 
 class TestEditFileWithCode:
-    """测试edit_file工具处理代码文件"""
+    """Test the edit_file tool on code files."""
 
     def setup_method(self):
-        """设置Python代码文件"""
+        """Set up a Python code file."""
         self.temp_file = tempfile.NamedTemporaryFile(
             mode="w", suffix=".py", delete=False
         )
@@ -383,7 +383,7 @@ if __name__ == "__main__":
         self.temp_file.close()
 
     def teardown_method(self):
-        """清理"""
+        """Clean up."""
         if os.path.exists(self.temp_file.name):
             os.remove(self.temp_file.name)
         backup_file = self.temp_file.name + ".backup"
@@ -391,7 +391,7 @@ if __name__ == "__main__":
             os.remove(backup_file)
 
     def test_python_function_modification(self):
-        """测试Python函数修改"""
+        """Test modifying a Python function."""
         operations = [
             EditOperation(
                 operation_type="replace",
@@ -411,7 +411,7 @@ if __name__ == "__main__":
         assert "def calculate_sum(a, b):" not in content
 
     def test_python_docstring_update(self):
-        """测试Python文档字符串更新"""
+        """Test updating a Python docstring."""
         operations = [
             EditOperation(
                 operation_type="replace",
@@ -430,7 +430,7 @@ if __name__ == "__main__":
         assert "optional third parameter" in content
 
     def test_python_import_addition(self):
-        """测试Python导入添加"""
+        """Test adding a Python import."""
         operations = [
             EditOperation(
                 operation_type="insert",
@@ -450,7 +450,7 @@ if __name__ == "__main__":
         assert "import sys" in content
 
     def test_python_error_handling_update(self):
-        """测试Python错误处理添加"""
+        """Test adding Python error handling."""
         operations = [
             EditOperation(
                 operation_type="replace",
@@ -472,7 +472,7 @@ if __name__ == "__main__":
 
         assert "try:" in content
         assert "except TypeError" in content
-        # 检查原来的简单返回语句是否被完全替换
+        # Check the original simple return statement was fully replaced
         lines = content.split("\n")
         simple_return_found = any(
             "return a + b" in line and "c" not in line for line in lines

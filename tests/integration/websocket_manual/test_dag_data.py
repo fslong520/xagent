@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-详细的WebSocket数据测试
-验证前端接收到的数据结构
+Detailed WebSocket data test.
+
+Verifies the data structures the frontend receives.
 """
 
 import asyncio
@@ -16,61 +17,61 @@ async def test_dag_data():
     uri = "ws://127.0.0.1:8000/ws/chat/1"
     try:
         async with websockets.connect(uri) as websocket:
-            print("=== WebSocket DAG数据测试 ===")
+            print("=== WebSocket DAG data test ===")
 
-            # 发送状态请求
+            # Send a status request
             await websocket.send(json.dumps({"type": "status_request"}))
 
-            # 接收历史数据
+            # Receive historical data
             response = await websocket.recv()
             data = json.loads(response)
 
-            print(f"数据类型: {data.get('type')}")
-            print(f"任务ID: {data.get('task_id')}")
+            print(f"Data type: {data.get('type')}")
+            print(f"Task ID: {data.get('task_id')}")
 
-            # 检查steps数据
+            # Inspect the steps data
             if "steps" in data:
-                print("\n=== 步骤数据 ===")
-                print(f"步骤数量: {len(data['steps'])}")
+                print("\n=== Step data ===")
+                print(f"Step count: {len(data['steps'])}")
                 for i, step in enumerate(data["steps"]):
                     print(
-                        f"步骤 {i + 1}: {step.get('name')} (状态: {step.get('status')})"
+                        f"Step {i + 1}: {step.get('name')} (status: {step.get('status')})"
                     )
 
-            # 检查step_details数据
+            # Inspect the step_details data
             if "step_details" in data:
-                print("\n=== 步骤详情数据 ===")
-                print(f"详情数量: {len(data['step_details'])}")
+                print("\n=== Step detail data ===")
+                print(f"Detail count: {len(data['step_details'])}")
                 for step_id, details in data["step_details"].items():
-                    print(f"步骤ID {step_id}:")
-                    print(f"  名称: {details['step_info']['name']}")
-                    print(f"  状态: {details['step_info']['status']}")
-                    print(f"  日志数量: {details['execution_stats']['log_count']}")
-                    print(f"  有错误: {details['execution_stats']['has_errors']}")
+                    print(f"Step ID {step_id}:")
+                    print(f"  Name: {details['step_info']['name']}")
+                    print(f"  Status: {details['step_info']['status']}")
+                    print(f"  Log count: {details['execution_stats']['log_count']}")
+                    print(f"  Has errors: {details['execution_stats']['has_errors']}")
 
-            # DAG可视化数据已移除，现在通过历史数据机制获取
+            # DAG visualization data was removed; historical data is used instead
 
-            # 检查日志数据
+            # Inspect the logs data
             if "logs" in data:
-                print("\n=== 日志数据 ===")
-                print(f"日志数量: {len(data['logs'])}")
+                print("\n=== Log data ===")
+                print(f"Log count: {len(data['logs'])}")
                 error_logs = [
                     log for log in data["logs"] if log.get("level") == "error"
                 ]
                 success_logs = [
                     log for log in data["logs"] if log.get("level") == "success"
                 ]
-                print(f"错误日志: {len(error_logs)}")
-                print(f"成功日志: {len(success_logs)}")
+                print(f"Error logs: {len(error_logs)}")
+                print(f"Success logs: {len(success_logs)}")
 
-            print("\n=== 数据结构验证完成 ===")
-            print("✅ WebSocket数据传输正常")
-            print("✅ DAG步骤数据完整")
-            print("✅ 步骤详情数据完整")
-            print("✅ 执行日志数据完整")
+            print("\n=== Data structure verification complete ===")
+            print("✅ WebSocket data transfer works")
+            print("✅ DAG step data is complete")
+            print("✅ Step detail data is complete")
+            print("✅ Execution log data is complete")
 
     except Exception as e:
-        print(f"❌ 测试失败: {e}")
+        print(f"❌ Test failed: {e}")
         import traceback
 
         traceback.print_exc()

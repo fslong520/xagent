@@ -25,6 +25,7 @@ from xagent.core.agent.context.memory_tool import (
 from xagent.core.memory.core import MemoryNote, MemoryResponse
 from xagent.core.memory.lancedb import LanceDBMemoryStore
 from xagent.core.memory.remote import (
+    NOT_FOUND_OR_DENIED_ERROR,
     RemoteMemoryStore,
     RemoteMemoryStoreAuthenticationError,
     RemoteMemoryStoreError,
@@ -105,6 +106,9 @@ async def test_store_memory_adds_note_with_metadata() -> None:
         "action": "create",
         "memory_id": "mem-1",
         "message": "Stored as a new memory (mem-1).",
+        # XN-1: every store receipt carries the space echo (null = personal).
+        "space_kind": None,
+        "space_id": None,
     }
     note = store.added[0]
     assert note.content == "User prefers reports in Chinese."
@@ -309,19 +313,19 @@ async def test_search_memory_carries_the_owner_of_each_result() -> None:
         {
             "mem-2": MemoryNote(
                 id="mem-2",
-                content="2 号的报销额度是 8800 元。",
+                content="2 \u53f7\u7684\u62a5\u9500\u989d\u5ea6\u662f 8800 \u5143。",
                 category="general",
                 metadata={"user_id": 2},
             ),
             "mem-3": MemoryNote(
                 id="mem-3",
-                content="3 号的车牌号是 京A9999。",
+                content="3 \u53f7\u7684\u8f66\u724c\u53f7\u662f \u4eacA9999。",
                 category="general",
                 metadata={"user_id": 3},
             ),
             "mem-old": MemoryNote(
                 id="mem-old",
-                content="没有归属的旧条目。",
+                content="\u6ca1\u6709\u5f52\u5c5e\u7684\u65e7\u6761\u76ee。",
                 category="general",
                 metadata={},
             ),
@@ -329,7 +333,7 @@ async def test_search_memory_carries_the_owner_of_each_result() -> None:
     )
     tool = SearchMemoryTool(memory_store=store)
 
-    result = await tool.execute(query="谁的报销额度和车牌号")
+    result = await tool.execute(query="\u8c01\u7684\u62a5\u9500\u989d\u5ea6\u548c\u8f66\u724c\u53f7")
 
     by_id = {item["id"]: item for item in result["memories"]}
     assert by_id["mem-2"]["owner_user_id"] == 2
@@ -344,13 +348,13 @@ async def test_search_memory_keeps_different_owners_apart_in_one_answer() -> Non
         {
             "mem-2": MemoryNote(
                 id="mem-2",
-                content="2 号的停车月卡登记用 京A8888。",
+                content="2 \u53f7\u7684\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528 \u4eacA8888。",
                 category="general",
                 metadata={"user_id": 2},
             ),
             "mem-3": MemoryNote(
                 id="mem-3",
-                content="3 号的停车月卡登记用 京B0001。",
+                content="3 \u53f7\u7684\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528 \u4eacB0001。",
                 category="general",
                 metadata={"user_id": 3},
             ),
@@ -358,15 +362,15 @@ async def test_search_memory_keeps_different_owners_apart_in_one_answer() -> Non
     )
     tool = SearchMemoryTool(memory_store=store)
 
-    result = await tool.execute(query="停车月卡登记的是哪个车牌")
+    result = await tool.execute(query="\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7684\u662f\u54ea\u4e2a\u8f66\u724c")
 
     assert result["count"] == 2
     owners_by_content = {
         item["content"]: item["owner_user_id"] for item in result["memories"]
     }
     assert owners_by_content == {
-        "2 号的停车月卡登记用 京A8888。": 2,
-        "3 号的停车月卡登记用 京B0001。": 3,
+        "2 \u53f7\u7684\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528 \u4eacA8888。": 2,
+        "3 \u53f7\u7684\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528 \u4eacB0001。": 3,
     }
 
 
@@ -528,16 +532,16 @@ async def test_update_memory_reports_note_without_content() -> None:
 def _plate_note() -> MemoryNote:
     return MemoryNote(
         id="mem-plate",
-        content="Y-C7-PLATE 我的车牌号是 京A8888，停车月卡登记用。",
+        content="Y-C7-PLATE \u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA8888，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。",
         category="react_memory",
-        keywords=["车牌号", "京A8888"],
-        tags=["车牌号", "京A8888"],
+        keywords=["\u8f66\u724c\u53f7", "\u4eacA8888"],
+        tags=["\u8f66\u724c\u53f7", "\u4eacA8888"],
     )
 
 
 @pytest.mark.asyncio
 async def test_update_memory_drops_tags_the_new_text_no_longer_supports() -> None:
-    """X-06: 京A8888 stayed in tags after the body said 京A9999.
+    """X-06: the old plate number stayed in tags after the body declared a new one.
 
     The service stores whichever tag list a PUT carries (probed 2026-10-29),
     so the client has to stop shipping the replaced value.
@@ -547,13 +551,13 @@ async def test_update_memory_drops_tags_the_new_text_no_longer_supports() -> Non
 
     result = await tool.execute(
         memory_id="mem-plate",
-        content="Y-C7-PLATE 我的车牌号是 京A9999，停车月卡登记用。",
+        content="Y-C7-PLATE \u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA9999，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。",
     )
 
     assert result["success"] is True
     written = store.updated[0]
-    assert written.tags == ["车牌号"]
-    assert "京A8888" not in written.tags
+    assert written.tags == ["\u8f66\u724c\u53f7"]
+    assert "\u4eacA8888" not in written.tags
 
 
 @pytest.mark.asyncio
@@ -562,19 +566,19 @@ async def test_update_memory_clears_a_stale_keyword_fallback_too() -> None:
 
     note = MemoryNote(
         id="mem-plate",
-        content="我的车牌号是 京A8888。",
+        content="\u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA8888。",
         category="react_memory",
-        keywords=["京A8888"],
-        tags=["京A8888"],
+        keywords=["\u4eacA8888"],
+        tags=["\u4eacA8888"],
     )
     store = CrudMemoryStore({"mem-plate": note})
     tool = UpdateMemoryTool(memory_store=store)
 
-    await tool.execute(memory_id="mem-plate", content="我的车牌号是 京A9999。")
+    await tool.execute(memory_id="mem-plate", content="\u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA9999。")
 
     written = store.updated[0]
     assert written.tags == []
-    assert "京A8888" not in written.keywords
+    assert "\u4eacA8888" not in written.keywords
 
 
 @pytest.mark.asyncio
@@ -602,7 +606,7 @@ async def test_update_memory_keeps_the_old_tags_when_the_body_is_unchanged() -> 
 
     await tool.execute(memory_id="mem-plate", content=_plate_note().content)
 
-    assert store.updated[0].tags == ["车牌号", "京A8888"]
+    assert store.updated[0].tags == ["\u8f66\u724c\u53f7", "\u4eacA8888"]
 
 
 def test_build_memory_tools_stamps_guidance_flag_on_context() -> None:
@@ -720,9 +724,7 @@ class JudgedMemoryStore(RecordingMemoryStore):
                 memory_id=note_id,
                 content=stored,
             )
-        return MemoryResponse(
-            success=False, error="Memory note not found or access denied"
-        )
+        return MemoryResponse(success=False, error=NOT_FOUND_OR_DENIED_ERROR)
 
     def add(self, note: MemoryNote) -> MemoryResponse:
         self.added.append(note)
@@ -1093,9 +1095,9 @@ async def test_store_memory_treats_a_receipt_without_id_as_unconfirmed() -> None
     assert result["success"] is True
     assert result["stored"] is True
     assert result["verified"] is False
-    assert "回执未带 memory id" in result["message"]
+    assert "carried no memory id" in result["message"]
     # The timeout/5xx wording would claim a read-back that never happened.
-    assert "写入已受理但未能确认落库" not in result["message"]
+    assert "could not be verified" not in result["message"]
     assert store.gets == []
     assert store.added == []
     assert tool.stored_count == 1
@@ -1111,8 +1113,8 @@ async def test_store_memory_does_not_rewrite_when_a_401_mentions_not_found() -> 
     wrong cause back (third review).
     """
     exc = RemoteMemoryStoreError(
-        "上游返回 HTTP 401（code=unauthorized） on /v1/memory/notes/mem-judged，"
-        "上游 message: identity not found or access denied",
+        "\u4e0a\u6e38\u8fd4\u56de HTTP 401（code=unauthorized） on /v1/memory/notes/mem-judged，"
+        "\u4e0a\u6e38 message: identity not found or access denied",
         status_code=401,
     )
     store = UnreadableReceiptStore(exc)
@@ -1124,7 +1126,7 @@ async def test_store_memory_does_not_rewrite_when_a_401_mentions_not_found() -> 
     assert result["verified"] is False
     assert result["action"] == "merge"
     assert result["message"] == READBACK_REJECTED_MESSAGE
-    for forbidden in ("timed out", "timeout", "5xx", "超时"):
+    for forbidden in ("timed out", "timeout", "5xx", "\u8d85\u65f6"):
         assert forbidden not in result["message"]
     assert "Merged" not in result["message"]
     assert store.added == []
@@ -1140,9 +1142,9 @@ async def test_store_memory_does_not_rewrite_when_the_readback_is_a_401() -> Non
     the rejection rather than a transport failure.
     """
     exc = RemoteMemoryStoreAuthenticationError(
-        "上游拒绝了服务凭据：HTTP 401（code=unauthorized） on "
-        "/v1/memory/notes/mem-judged。上游明示凭据类错误，请核对 "
-        "XAGENT_MEMORY_SERVICE_KEY（无效、已吊销或不属于该实例）。",
+        "\u4e0a\u6e38\u62d2\u7edd\u4e86\u670d\u52a1\u51ed\u636e：HTTP 401（code=unauthorized） on "
+        "/v1/memory/notes/mem-judged。\u4e0a\u6e38\u660e\u793a\u51ed\u636e\u7c7b\u9519\u8bef，\u8bf7\u6838\u5bf9 "
+        "XAGENT_MEMORY_SERVICE_KEY（\u65e0\u6548、\u5df2\u540a\u9500\u6216\u4e0d\u5c5e\u4e8e\u8be5\u5b9e\u4f8b）。",
         status_code=401,
     )
     store = UnreadableReceiptStore(exc)
@@ -1154,7 +1156,7 @@ async def test_store_memory_does_not_rewrite_when_the_readback_is_a_401() -> Non
     assert result["verified"] is False
     assert result["action"] == "merge"
     assert result["message"] == READBACK_REJECTED_MESSAGE
-    for forbidden in ("timed out", "timeout", "5xx", "超时"):
+    for forbidden in ("timed out", "timeout", "5xx", "\u8d85\u65f6"):
         assert forbidden not in result["message"]
     assert store.added == []
     assert store.gets == ["mem-judged"]
@@ -1180,7 +1182,7 @@ async def test_store_memory_does_not_rewrite_when_the_2xx_body_is_unparsable() -
     assert result["verified"] is False
     assert result["action"] == "merge"
     assert result["message"] == READBACK_REJECTED_MESSAGE
-    for forbidden in ("timed out", "timeout", "5xx", "超时"):
+    for forbidden in ("timed out", "timeout", "5xx", "\u8d85\u65f6"):
         assert forbidden not in result["message"]
     assert store.added == []
     assert store.gets == ["mem-judged"]
@@ -1201,7 +1203,7 @@ async def test_store_memory_claims_no_cause_when_the_readback_cannot_be_classifi
     assert result["success"] is True
     assert result["verified"] is False
     assert result["message"] == RECEIPT_FAILURE_UNKNOWN_MESSAGE
-    for forbidden in ("timed out", "timeout", "5xx", "超时"):
+    for forbidden in ("timed out", "timeout", "5xx", "\u8d85\u65f6"):
         assert forbidden not in result["message"]
     assert store.added == []
     assert store.gets == ["mem-judged"]
@@ -1236,8 +1238,8 @@ async def test_store_memory_reports_an_unconfirmed_replacement_body() -> None:
     assert result["success"] is True
     assert result["action"] == "create"
     assert result["verified"] is False
-    assert "已新建记忆但未能确认正文一致" in result["message"]
-    assert "写入已受理但未能确认落库" not in result["message"]
+    assert "A replacement memory was created" in result["message"]
+    assert "could not be verified" not in result["message"]
     assert "Merged" not in result["message"]
     assert len(store.added) == 1
     assert store.gets == ["mem-judged", "mem-1"]
@@ -1274,8 +1276,8 @@ async def test_store_memory_never_recreates_a_create_receipt_body() -> None:
     assert result["success"] is True
     assert result["action"] == "create"
     assert result["verified"] is False
-    assert "已写入但未能确认正文一致" in result["message"]
-    assert "写入已受理但未能确认落库" not in result["message"]
+    assert "could not be confirmed to contain the new text" in result["message"]
+    assert "could not be verified" not in result["message"]
     assert store.added == []
     assert store.gets == ["mem-judged"]
 
@@ -1307,23 +1309,23 @@ async def test_merge_existing_keeps_tags_the_merged_body_still_supports() -> Non
     """
     existing = MemoryNote(
         id="mem-1",
-        content="Y-C7 我的车牌号是 京A8888，停车月卡登记用。",
-        keywords=["车牌号", "京A8888"],
-        tags=["车牌号", "京A8888"],
+        content="Y-C7 \u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA8888，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。",
+        keywords=["\u8f66\u724c\u53f7", "\u4eacA8888"],
+        tags=["\u8f66\u724c\u53f7", "\u4eacA8888"],
     )
     store = LocalMergeStore(existing)
     tool = StoreMemoryTool(memory_store=store, task="task")
 
-    result = await tool.execute(content="Y-C7 我的车牌号已换成 京A9999。")
+    result = await tool.execute(content="Y-C7 \u6211\u7684\u8f66\u724c\u53f7\u5df2\u6362\u6210 \u4eacA9999。")
 
     assert result["success"] is True
     assert result["action"] == "update"
     written = store.updated[0]
     # The old statement is kept as history, so both values are in the body.
-    assert "京A9999" in str(written.content)
-    assert "京A8888" in str(written.content)
-    assert written.tags == ["车牌号", "京A8888"]
-    assert written.keywords == ["车牌号", "京A8888"]
+    assert "\u4eacA9999" in str(written.content)
+    assert "\u4eacA8888" in str(written.content)
+    assert written.tags == ["\u8f66\u724c\u53f7", "\u4eacA8888"]
+    assert written.keywords == ["\u8f66\u724c\u53f7", "\u4eacA8888"]
 
 
 @pytest.mark.asyncio
@@ -1331,14 +1333,14 @@ async def test_merge_existing_does_not_clear_a_classification_tag() -> None:
     """A classification tag the old body supported survives the merge."""
     existing = MemoryNote(
         id="mem-1",
-        content="部署脚本在 scripts/deploy.sh，execution 分类使用。",
+        content="\u90e8\u7f72\u811a\u672c\u5728 scripts/deploy.sh，execution \u5206\u7c7b\u4f7f\u7528。",
         keywords=["deploy"],
         tags=["execution", "deploy"],
     )
     store = LocalMergeStore(existing)
     tool = StoreMemoryTool(memory_store=store, task="task")
 
-    result = await tool.execute(content="今天改用 make release 发布。")
+    result = await tool.execute(content="\u4eca\u5929\u6539\u7528 make release \u53d1\u5e03。")
 
     assert result["success"] is True
     written = store.updated[0]
@@ -1352,7 +1354,7 @@ async def test_merge_existing_does_not_clear_a_classification_tag() -> None:
 
 APPEND_ONLY_409 = (
     "Remote memory service returned HTTP 409（code=conflict） on "
-    "/v1/memory/remember，上游 message: delivered notes are append-only: "
+    "/v1/memory/remember，\u4e0a\u6e38 message: delivered notes are append-only: "
     "send a follow-up delivery instead"
 )
 
@@ -1387,7 +1389,7 @@ async def test_store_memory_retries_an_append_only_conflict_as_a_create(
     tool = StoreMemoryTool(memory_store=store, task="task")
 
     result = await tool.execute(
-        content="团队规定：报销/出差申请必须提前三天提交申请。",
+        content="\u56e2\u961f\u89c4\u5b9a：\u62a5\u9500/\u51fa\u5dee\u7533\u8bf7\u5fc5\u987b\u63d0\u524d\u4e09\u5929\u63d0\u4ea4\u7533\u8bf7。",
         kind="domain_insight",
     )
 
@@ -1397,7 +1399,7 @@ async def test_store_memory_retries_an_append_only_conflict_as_a_create(
     assert result["memory_id"] == "mem-1"
     assert "Merged" not in result["message"]
     # The retry carries no merge target: it is a plain create of the same text.
-    assert store.added[0].content == "团队规定：报销/出差申请必须提前三天提交申请。"
+    assert store.added[0].content == "\u56e2\u961f\u89c4\u5b9a：\u62a5\u9500/\u51fa\u5dee\u7533\u8bf7\u5fc5\u987b\u63d0\u524d\u4e09\u5929\u63d0\u4ea4\u7533\u8bf7。"
     assert store.added[0].metadata == {
         "kind": "domain_insight",
         "source": "store_memory",
@@ -1762,7 +1764,7 @@ async def test_store_memory_surfaces_the_service_message_on_judged_write() -> No
         def remember(self, note: MemoryNote, *, force: bool = False) -> MemoryResponse:
             raise RemoteMemoryStoreError(
                 "Remote memory service returned HTTP 422（code=invalid） on "
-                "/v1/memory/remember，上游 message: content rejected",
+                "/v1/memory/remember，\u4e0a\u6e38 message: content rejected",
                 status_code=422,
             )
 
@@ -1846,3 +1848,61 @@ def test_search_memory_schema_advertises_space_and_category() -> None:
     for value in ("personal", "department", "company"):
         assert value in space_schema
     assert "category" in properties
+
+
+# ---------------------------------------------------------------------------
+# XN-2: a [share:…] write verifies against the marker-stripped body
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_store_memory_share_receipt_verifies_against_the_stripped_body() -> None:
+    """The service stores the body without the marker, so comparing the raw
+    content always missed and misreported a correct shared write as
+    unconfirmed (10-30 evidence x50)."""
+    body = "\u56e2\u961f\u516c\u544a：E2E1030 \u9a8c\u6536\u4f8b\u4f1a\u6539\u5230\u6bcf\u5468\u4e94 16:00 \u53ec\u5f00。"
+    store = JudgedMemoryStore(action="create", receipt_body=body)
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content=f"[share:company] {body}")
+
+    assert result["verified"] is True
+    assert "read-back body matches" in result["message"]
+    assert "do not save" not in result["message"].lower()
+    # XN-1: the receipt echoes the space the marker named.
+    assert result["space_kind"] == "company"
+    assert result["space_id"] is None
+    # The marker still travels on the write itself.
+    assert store.remembered[0].content.startswith("[share:company]")
+
+
+@pytest.mark.asyncio
+async def test_store_memory_share_receipt_mismatch_gives_guidance() -> None:
+    """A share write whose body cannot be confirmed must not scare the model
+    into re-saving: the note went to the shared space, a personal GET may not
+    read it back (the service routes by space), so the message says verify
+    instead of resend."""
+    store = JudgedMemoryStore(action="create", receipt_body="\u5b8c\u5168\u4e0d\u540c\u7684\u6b63\u6587")
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="[share:company] \u56e2\u961f\u516c\u544a：\u4f8b\u4f1a\u6539\u5230\u5468\u4e94。")
+
+    assert result["verified"] is False
+    assert "shared company space" in result["message"]
+    assert "personal GET" in result["message"]
+    assert "do not resend" in result["message"].lower()
+    assert "do not save" not in result["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_store_memory_personal_receipt_is_untouched() -> None:
+    """A plain write keeps its wording and reports no space."""
+    store = JudgedMemoryStore(action="create", receipt_body="A durable fact.")
+    tool = StoreMemoryTool(memory_store=store, task="task")
+
+    result = await tool.execute(content="A durable fact.")
+
+    assert result["verified"] is True
+    assert result["message"] == "Stored as a new memory (mem-judged)."
+    assert result["space_kind"] is None
+    assert result["space_id"] is None

@@ -66,7 +66,7 @@ def _stage_agent(
     result = state.stage_agent(
         {
             "name": name,
-            "description": f"何时使用{name}",
+            "description": f"When to use {name}",
             "instructions": instructions,
             "execution_mode": mode,
         }
@@ -93,25 +93,25 @@ def test_builder_state_requires_all_agents_before_finalization() -> None:
     state = WorkforcePromptBuilderState.from_agents([])
     manager_ref = _stage_agent(
         state,
-        name="研究经理",
-        instructions="拆解任务、委派并综合结果。",
+        name="Research Manager",
+        instructions="Break down the task, delegate and synthesise the results.",
         mode="think",
     )
     worker_ref = _stage_agent(
         state,
-        name="研究员",
-        instructions="检索并核验资料。",
+        name="Researcher",
+        instructions="Retrieve and verify sources.",
     )
 
     before_listing = state.finalize(
         {
-            "name": "研究工作组",
-            "description": "完成研究任务。",
+            "name": "Research Workforce",
+            "description": "Deliver research tasks.",
             "manager_agent_ref": manager_ref,
             "workers": [
                 {
                     "agent_ref": worker_ref,
-                    "assignment_instructions": "搜集并核验资料。",
+                    "assignment_instructions": "Collect and verify sources.",
                 }
             ],
         }
@@ -121,13 +121,13 @@ def test_builder_state_requires_all_agents_before_finalization() -> None:
     state.listed_existing_agents = True
     finalized = state.finalize(
         {
-            "name": "研究工作组",
-            "description": "完成研究任务。",
+            "name": "Research Workforce",
+            "description": "Deliver research tasks.",
             "manager_agent_ref": manager_ref,
             "workers": [
                 {
                     "agent_ref": worker_ref,
-                    "assignment_instructions": "搜集并核验资料。",
+                    "assignment_instructions": "Collect and verify sources.",
                 }
             ],
         }
@@ -144,34 +144,34 @@ def test_builder_state_requires_all_agents_before_finalization() -> None:
 def test_builder_state_rejects_unused_or_failed_staged_agents() -> None:
     state = WorkforcePromptBuilderState.from_agents([])
     failed = state.stage_agent(
-        {"name": "无效代理", "description": "说明", "instructions": ""}
+        {"name": "Invalid Agent", "description": "Description", "instructions": ""}
     )
     assert failed["status"] == "error"
     assert state.created_agents == {}
 
     manager_ref = _stage_agent(
         state,
-        name="经理",
-        instructions="协调工作。",
+        name="Manager",
+        instructions="Coordinate the work.",
         mode="think",
     )
     used_worker_ref = _stage_agent(
         state,
-        name="研究员",
-        instructions="执行研究。",
+        name="Researcher",
+        instructions="Carry out research.",
     )
-    _stage_agent(state, name="未使用代理", instructions="执行其他工作。")
+    _stage_agent(state, name="Unused Agent", instructions="Do other work.")
     state.listed_existing_agents = True
 
     result = state.finalize(
         {
-            "name": "工作组",
-            "description": "执行任务。",
+            "name": "Workforce",
+            "description": "Execute the task.",
             "manager_agent_ref": manager_ref,
             "workers": [
                 {
                     "agent_ref": used_worker_ref,
-                    "assignment_instructions": "执行研究。",
+                    "assignment_instructions": "Carry out research.",
                 }
             ],
         }
@@ -197,9 +197,9 @@ def test_builder_state_validates_tool_categories_like_create_agent() -> None:
     ):
         result = state.stage_agent(
             {
-                "name": "研究员",
-                "description": "检索资料时使用。",
-                "instructions": "检索并核验资料。",
+                "name": "Researcher",
+                "description": "Used when retrieving sources.",
+                "instructions": "Retrieve and verify sources.",
                 "tool_categories": categories,
             }
         )
@@ -209,9 +209,9 @@ def test_builder_state_validates_tool_categories_like_create_agent() -> None:
 
     staged = state.stage_agent(
         {
-            "name": "研究员",
-            "description": "检索资料时使用。",
-            "instructions": "检索并核验资料。",
+            "name": "Researcher",
+            "description": "Used when retrieving sources.",
+            "instructions": "Retrieve and verify sources.",
             "tool_categories": [" web_search", "web_search"],
         }
     )
@@ -246,7 +246,8 @@ def test_builder_state_enforces_staged_agent_limit() -> None:
 def test_builder_language_validation_rejects_wrong_script_before_persistence() -> None:
     with pytest.raises(WorkforcePromptBuilderError, match="workforce.name"):
         _validate_builder_plan_language(
-            prompt="创建一个用于分析市场数据的工作组。",
+            # The request is in Chinese, so an all-English plan must be rejected.
+            prompt="\u521b\u5efa\u4e00\u4e2a\u7528\u4e8e\u5206\u6790\u5e02\u573a\u6570\u636e\u7684\u5de5\u4f5c\u7ec4\u3002",
             plan={
                 "name": "Market Research Workforce",
                 "description": (
@@ -267,22 +268,22 @@ def test_builder_language_validation_allows_explicit_target_language() -> None:
             "the final response in Chinese."
         ),
         plan={
-            "name": "市场研究工作组",
-            "description": "研究市场数据并总结关键结论。",
+            "name": "Market Research Workforce",
+            "description": "Research market data and summarise the key findings.",
             "created_agents": [
                 {
-                    "name": "市场研究员",
-                    "description": "收集并核验市场证据。",
-                    "instructions": "检索可靠资料并用中文总结。",
+                    "name": "Market Researcher",
+                    "description": "Collect and verify market evidence.",
+                    "instructions": "Retrieve reliable sources and summarise them in Chinese.",
                 }
             ],
             "workers": [
                 {
-                    "alias": "市场研究",
-                    "assignment_instructions": "收集并核验市场证据。",
+                    "alias": "Market Research",
+                    "assignment_instructions": "Collect and verify market evidence.",
                 }
             ],
-            "builder_response": "工作组已完成配置。",
+            "builder_response": "The Workforce has been configured.",
         },
     )
 
@@ -296,9 +297,9 @@ async def test_react_builder_creates_multiple_agents_before_workforce() -> None:
                 "manager",
                 "create_agent",
                 {
-                    "name": "产品研究经理",
-                    "description": "协调产品研究工作。",
-                    "instructions": "拆解目标、委派任务、比较证据并综合结论。",
+                    "name": "Product Research Manager",
+                    "description": "Coordinate product research work.",
+                    "instructions": "Break down goals, delegate tasks, compare evidence and synthesise conclusions.",
                     "execution_mode": "think",
                 },
             ),
@@ -306,9 +307,9 @@ async def test_react_builder_creates_multiple_agents_before_workforce() -> None:
                 "researcher",
                 "create_agent",
                 {
-                    "name": "市场研究员",
-                    "description": "用于收集并核验市场资料。",
-                    "instructions": "检索可靠资料，交叉核验并记录来源。",
+                    "name": "Market Researcher",
+                    "description": "Used to collect and verify market material.",
+                    "instructions": "Retrieve reliable sources, cross-check them and record citations.",
                     "tool_categories": ["web_search"],
                 },
             ),
@@ -316,28 +317,28 @@ async def test_react_builder_creates_multiple_agents_before_workforce() -> None:
                 "analyst",
                 "create_agent",
                 {
-                    "name": "产品分析师",
-                    "description": "用于比较产品能力和差异。",
-                    "instructions": "建立比较维度，分析差异并指出风险。",
+                    "name": "Product Analyst",
+                    "description": "Used to compare product capabilities and differences.",
+                    "instructions": "Define comparison dimensions, analyse differences and flag risks.",
                 },
             ),
             _tool_call(
                 "workforce",
                 "create_workforce",
                 {
-                    "name": "产品研究工作组",
-                    "description": "研究市场并形成产品分析结论。",
+                    "name": "Product Research Workforce",
+                    "description": "Research the market and produce product analysis conclusions.",
                     "manager_agent_ref": "new:1",
                     "workers": [
                         {
                             "agent_ref": "new:2",
-                            "alias": "市场研究",
-                            "assignment_instructions": "收集并核验市场证据。",
+                            "alias": "Market Research",
+                            "assignment_instructions": "Collect and verify market evidence.",
                         },
                         {
                             "agent_ref": "new:3",
-                            "alias": "产品分析",
-                            "assignment_instructions": "比较产品并总结差异。",
+                            "alias": "Product Analysis",
+                            "assignment_instructions": "Compare the products and summarise the differences.",
                         },
                     ],
                 },
@@ -347,7 +348,7 @@ async def test_react_builder_creates_multiple_agents_before_workforce() -> None:
                 "final_answer",
                 {
                     "response_language": "Simplified Chinese",
-                    "answer": "工作组已完成配置。",
+                    "answer": "The Workforce has been configured.",
                     "outcome": "completed",
                 },
             ),
@@ -355,7 +356,7 @@ async def test_react_builder_creates_multiple_agents_before_workforce() -> None:
     )
 
     plan = await build_workforce_prompt_plan(
-        prompt="创建一个产品研究工作组，需要市场研究和产品分析。",
+        prompt="Create a product research Workforce that needs market research and product analysis.",
         llm=llm,
         available_agents=[],
     )
@@ -369,8 +370,8 @@ async def test_react_builder_creates_multiple_agents_before_workforce() -> None:
         "new:2",
         "new:3",
     ]
-    assert plan["name"] == "产品研究工作组"
-    assert plan["builder_response"] == "工作组已完成配置。"
+    assert plan["name"] == "Product Research Workforce"
+    assert plan["builder_response"] == "The Workforce has been configured."
     assert len(llm.calls) == 6
     first_tool_names = {schema["function"]["name"] for schema in llm.calls[0]["tools"]}
     assert first_tool_names == {
@@ -420,7 +421,7 @@ async def test_build_workforce_prompt_plan_applies_voice_to_system_prompt(
     monkeypatch.setattr(
         workforce_prompt_runtime,
         "extract_assistant_message",
-        lambda _result: "工作组已完成配置。",
+        lambda _result: "The Workforce has been configured.",
     )
 
     with pytest.raises(WorkforcePromptBuilderError):
@@ -428,7 +429,7 @@ async def test_build_workforce_prompt_plan_applies_voice_to_system_prompt(
         # assertion below only needs the AgentService construction to have
         # already happened, which it has by this point.
         await build_workforce_prompt_plan(
-            prompt="创建一个产品研究工作组。",
+            prompt="Create a product research Workforce.",
             llm=FakeLLM([]),
             available_agents=[],
             voice="warm",
@@ -465,7 +466,7 @@ async def test_build_workforce_prompt_plan_without_voice_leaves_prompt_unchanged
 
     with pytest.raises(WorkforcePromptBuilderError):
         await build_workforce_prompt_plan(
-            prompt="创建一个产品研究工作组。",
+            prompt="Create a product research Workforce.",
             llm=FakeLLM([]),
             available_agents=[],
             budget_policy_provider=budget_provider,
@@ -580,7 +581,7 @@ async def test_generation_fails_clearly_when_no_model_is_configured(
         await generate_workforce_creation_plan(
             object(),
             type("User", (), {"id": 7})(),
-            "创建一个研究工作组",
+            "Create a research Workforce",
         )
 
     assert exc_info.value.status_code == 503
@@ -781,7 +782,9 @@ async def test_generation_maps_runtime_boundary_failure_to_stable_503(
 
 
 def test_get_localized_description_prefers_english() -> None:
-    template = {"descriptions": {"en": "English description", "zh": "中文描述"}}
+    template = {
+        "descriptions": {"en": "English description", "zh": "Chinese description"}
+    }
 
     assert get_localized_description(template) == "English description"
 
@@ -791,9 +794,9 @@ def test_get_localized_description_falls_back_to_another_locale() -> None:
     non-empty value, so a template can carry an empty English description
     alongside a populated one in another locale - the Workforce's
     description shouldn't end up empty just because English is blank."""
-    template = {"descriptions": {"en": "", "zh": "中文描述"}}
+    template = {"descriptions": {"en": "", "zh": "Chinese description"}}
 
-    assert get_localized_description(template) == "中文描述"
+    assert get_localized_description(template) == "Chinese description"
 
 
 def test_get_localized_description_returns_none_when_nothing_is_populated() -> None:

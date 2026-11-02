@@ -179,7 +179,7 @@ class TestFileUpload:
     """Test file upload functionality"""
 
     def test_content_disposition_header_escapes_filename_and_adds_utf8_parameter(self):
-        assert _content_disposition_header("attachment", 'quo"te\\文\r\n.txt') == (
+        assert _content_disposition_header("attachment", 'quo"te\\\u6587\r\n.txt') == (
             'attachment; filename="quo\\"te\\\\___.txt"; '
             "filename*=UTF-8''quo%22te%5C%E6%96%87%0D%0A.txt"
         )
@@ -1178,14 +1178,15 @@ class TestFileUpload:
     ):
         """Non-ASCII filenames (e.g. Chinese) must be percent-encoded as
         ``filename*=utf-8''<encoded>`` in the Content-Disposition header.
-        A manually composed ``filename="报告.pptx"`` would be encoded as
+        A manually composed ``filename=`` header for a non-ASCII name would
+        be encoded as
         latin-1 by the ASGI layer, raising UnicodeEncodeError.  Delegating
         header generation to Starlette's FileResponse avoids this."""
         upload = client.post(
             "/api/files/upload",
             files={
                 "file": (
-                    "报告.pptx",
+                    "\u62a5\u544a.pptx",
                     b"slide bytes",
                     "application/octet-stream",
                 )
@@ -1205,7 +1206,7 @@ class TestFileUpload:
         # ``filename*=utf-8''<encoded>`` form.  The raw multi-byte string
         # must NOT appear literally in the header value.
         assert "filename*=" in disposition, disposition
-        assert "报告" not in disposition, disposition  # '报告'
+        assert "\u62a5\u544a" not in disposition, disposition  # the CJK stem
 
     def test_public_download_returns_404_for_unknown_id(self, client):
         download = client.get(

@@ -388,7 +388,10 @@ def test_workforce_status_and_tool_name_normalization() -> None:
     assert build_worker_tool_name(98, "Duplicate Name") != build_worker_tool_name(
         99, "Duplicate Name"
     )
-    assert build_worker_tool_name(42, "重复名字") == "worker_chong_fu_ming_zi__a42"
+    assert (
+        build_worker_tool_name(42, "\u91cd\u590d\u540d\u5b57")
+        == "worker_chong_fu_ming_zi__a42"
+    )
 
     with pytest.raises(HTTPException) as status_error:
         normalize_workforce_status("unknown")

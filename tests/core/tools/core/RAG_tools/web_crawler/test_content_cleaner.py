@@ -418,7 +418,7 @@ class TestContentCleaner:
                 <p>Go to <a href="/j">the <b>Job Board</b></a> today.</p>
                 <p>See <a href="/d">docs</a>, then stop.</p>
                 <p>go (<b>see <a href="/d">docs</a></b>) now.</p>
-                <p>点击 <b>保存 <a href="/x">按钮</a></b>，然后继续。</p>
+                <p>\u70b9\u51fb <b>\u4fdd\u5b58 <a href="/x">\u6309\u94ae</a></b>，\u7136\u540e\u7ee7\u7eed。</p>
             </body>
         </html>
         """
@@ -435,4 +435,4 @@ class TestContentCleaner:
         assert "Go to the **Job Board** today." in content
         assert "See docs, then stop." in content
         assert "go (**see docs**) now." in content
-        assert "**保存 按钮**，然后继续。" in content
+        assert "**\u4fdd\u5b58 \u6309\u94ae**，\u7136\u540e\u7ee7\u7eed。" in content

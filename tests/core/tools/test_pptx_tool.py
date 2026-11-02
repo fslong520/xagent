@@ -121,8 +121,8 @@ class TestPresentationGeneratorRuntime:
 
     def test_build_js_script_adds_cjk_lang_and_fontface(self):
         generator = PresentationGenerator()
-        generator.create("中文演示")
-        generator.add_slide("title", title="中文标题")
+        generator.create("\u4e2d\u6587\u6f14\u793a")
+        generator.add_slide("title", title="\u4e2d\u6587\u6807\u9898")
 
         script = generator._build_js_script(
             "deck.pptx",
@@ -192,15 +192,15 @@ const assert = (cond, msg) => {
 assert(opts('Hello').fontFace === typographyConfig.bodyFont, 'ascii body font');
 assert(opts('Hello', {}, 'title').fontFace === typographyConfig.titleFont, 'title role font');
 assert(opts('Hello').lang === undefined, 'ascii no lang');
-assert(opts('中文').lang === 'zh-CN', 'zh lang');
-assert(opts('中文').fontFace === typographyConfig.cjkFonts.zh, 'zh font');
+assert(opts('\u4e2d\u6587').lang === 'zh-CN', 'zh lang');
+assert(opts('\u4e2d\u6587').fontFace === typographyConfig.cjkFonts.zh, 'zh font');
 assert(opts('ひらがな').lang === 'ja-JP', 'ja lang');
 assert(opts('ひらがな').fontFace === typographyConfig.cjkFonts.ja, 'ja font');
 assert(opts('한글').lang === 'ko-KR', 'ko lang');
 assert(opts('한글').fontFace === typographyConfig.cjkFonts.ko, 'ko font');
-assert(opts('今日は中文テスト').lang === 'ja-JP', 'mixed cjk ja lang');
+assert(opts('\u4eca\u65e5は\u4e2d\u6587テスト').lang === 'ja-JP', 'mixed cjk ja lang');
 assert(
-  opts('今日は中文テスト').fontFace === typographyConfig.cjkFonts.ja,
+  opts('\u4eca\u65e5は\u4e2d\u6587テスト').fontFace === typographyConfig.cjkFonts.ja,
   'mixed cjk ja font'
 );
 assert(opts('\uff71\uff72\uff73').lang === 'ja-JP', 'halfwidth katakana lang');
@@ -208,12 +208,12 @@ assert(
   opts('\uff71\uff72\uff73').fontFace === typographyConfig.cjkFonts.ja,
   'halfwidth katakana font'
 );
-assert(opts('日本').lang === 'zh-CN', 'pure han japanese heuristic');
+assert(opts('\u65e5\u672c').lang === 'zh-CN', 'pure han japanese heuristic');
 assert(opts('。').lang === 'zh-CN', 'cjk punctuation');
 assert(opts('Ａ').lang === 'zh-CN', 'fullwidth forms');
-assert(getTextOptions('中文', null).lang === 'zh-CN', 'null options');
+assert(getTextOptions('\u4e2d\u6587', null).lang === 'zh-CN', 'null options');
 assert(
-  getTextOptions('中文', { fontFace: 'Custom Font' }).fontFace === 'Custom Font',
+  getTextOptions('\u4e2d\u6587', { fontFace: 'Custom Font' }).fontFace === 'Custom Font',
   'preserve fontFace'
 );
 console.log('ok');
@@ -831,17 +831,17 @@ class TestRealPptxGeneration:
             output_path = Path(temp_dir) / "test_chinese.pptx"
 
             slides = [
-                {"type": "title", "title": "中文测试", "subtitle": "测试副标题"},
+                {"type": "title", "title": "\u4e2d\u6587\u6d4b\u8bd5", "subtitle": "\u6d4b\u8bd5\u526f\u6807\u9898"},
                 {
                     "type": "content",
-                    "title": "内容大纲",
-                    "bullets": ["第一点", "第二点", "第三点"],
+                    "title": "\u5185\u5bb9\u5927\u7eb2",
+                    "bullets": ["\u7b2c\u4e00\u70b9", "\u7b2c\u4e8c\u70b9", "\u7b2c\u4e09\u70b9"],
                 },
             ]
 
             result = generate_pptx(
                 output_path=str(output_path),
-                title="中文演示文稿",
+                title="\u4e2d\u6587\u6f14\u793a\u6587\u7a3f",
                 theme="executive",
                 slide_contents=slides,
             )
@@ -856,9 +856,9 @@ class TestRealPptxGeneration:
             assert len(extracted_text) > 0, "Should have extracted Chinese text"
             # Check for Chinese content
             assert (
-                "中文" in extracted_text
-                or "测试" in extracted_text
-                or "内容" in extracted_text
+                "\u4e2d\u6587" in extracted_text
+                or "\u6d4b\u8bd5" in extracted_text
+                or "\u5185\u5bb9" in extracted_text
             ), "Should find Chinese characters in extracted text"
 
     def test_generate_pptx_all_presets(self):

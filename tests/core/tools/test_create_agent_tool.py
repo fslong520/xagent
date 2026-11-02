@@ -3007,7 +3007,7 @@ class TestAgentToolNameGeneration:
         lazy_pinyin.assert_not_called()
 
     def test_gen_agent_tool_name_romanizes_non_ascii_names(self) -> None:
-        name = gen_agent_tool_name(42, "视频生成 Agent")
+        name = gen_agent_tool_name(42, "\u89c6\u9891\u751f\u6210 Agent")
 
         assert name == "agent_shi_pin_sheng_cheng_agent__a42"
         assert name.isascii()

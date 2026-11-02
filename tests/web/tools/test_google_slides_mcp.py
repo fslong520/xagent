@@ -766,14 +766,14 @@ def test_add_slide_returns_error_payload_without_ascii_escaping(monkeypatch):
     \\uXXXX escapes instead of staying human-readable."""
     presentations = Mock()
     presentations.batchUpdate.return_value.execute.side_effect = RuntimeError(
-        "读取失败 — 😀"
+        "\u8bfb\u53d6\u5931\u8d25 — 😀"
     )
     _mock_slides_service(monkeypatch, presentations)
 
     raw = google_slides.google_slides_add_slide("pres1", title="T", body="detail")
 
     assert "\\u" not in raw
-    assert "读取失败" in raw
+    assert "\u8bfb\u53d6\u5931\u8d25" in raw
     assert json.loads(raw)["status"] == "error"
 
 

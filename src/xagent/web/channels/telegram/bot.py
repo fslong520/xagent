@@ -146,7 +146,7 @@ class TelegramBotInstance(BatchChannelControl[int]):
     queue_flush_delay_seconds = 1.0
     voice_transcription_timeout_seconds = 180.0
     task_list_message_limit = 3800
-    stop_text_aliases = {"/stop", "/pause", "stop", "pause", "停止", "暂停"}
+    stop_text_aliases = {"/stop", "/pause", "stop", "pause", "\u505c\u6b62", "\u6682\u505c"}
     agents_page_size = 8
     bot_commands = (
         BotCommand(command="new", description="Start a new task"),

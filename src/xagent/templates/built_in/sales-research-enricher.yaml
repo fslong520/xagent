@@ -4,16 +4,16 @@ category: Sales
 featured: false
 descriptions:
   en: Researches target accounts and contacts from public sources and builds an enriched brief — company, role, buying signals and talking points.
-  zh: 从公开来源研究目标客户与联系人，生成增强版调研简报——涵盖公司概况、角色、购买信号和沟通要点。
+  zh: Researches target accounts and contacts from public sources and produces enriched research briefs covering the company snapshot, the role, buying signals and talking points.
 features:
   en:
   - Gathers public firmographic data, role signals and buying signals
   - Builds structured briefs with snapshot, contacts, signals and talking points
   - Exports briefs to Google Docs and enriches HubSpot CRM on approval
   zh:
-  - 收集公开的企业信息、角色信号和购买信号
-  - 生成包含公司速览、关键联系人、信号和沟通要点的结构化简报
-  - 将简报导出为 Google 文档，并在获批后回写 HubSpot CRM
+  - Gathers public company information, role signals and buying signals
+  - Produces a structured brief with a company snapshot, key contacts, signals and talking points
+  - Exports the brief to a Google Doc and, once approved, writes it back to HubSpot CRM
 sample_prompts:
   en:
   - title: Research a company
@@ -25,19 +25,19 @@ sample_prompts:
     highlights:
     - list / segment
   zh:
-  - title: 调研公司
-    prompt: 调研 公司——包括企业信息、角色信号和购买信号——并生成包含速览、联系人和沟通要点的结构化简报。
+  - title: Research a company
+    prompt: Research the company, covering company information, role signals and buying signals, and produce a structured brief with a snapshot, contacts and talking points.
     highlights:
-    - 公司
-  - title: 丰富 CRM 记录
-    prompt: 为 列表 / 分组 中的 HubSpot 记录补充最新的企业信息，并标记发生变化的内容。
+    - company
+  - title: Enrich CRM records
+    prompt: Enrich the HubSpot records in the list / segment with the latest company information and flag what has changed.
     highlights:
-    - 列表 / 分组
+    - list / segment
 persona:
   name: Vera
   role:
     en: Research & Enrichment Specialist
-    zh: 调研与信息增强专员
+    zh: Research and Enrichment Specialist
   avatar: /marketplace/avatars/vera.png
   intro:
     en: |-
@@ -45,18 +45,18 @@ persona:
 
       I build account briefs from public sources and write the findings back to your CRM.
     zh: |-
-      你好，我是 Vera，你的调研与信息增强专员。
+      Hi, I'm Vera, your research and enrichment specialist.
 
-      我会基于公开信息整理客户简报，并把结论回写到你的 CRM。
+      I build client briefs from public information and write the findings back to your CRM.
   kickoff_questions:
     en:
     - Which accounts should I start with?
     - What matters most in a brief — headcount and funding, tech stack, hiring signals, recent news?
     - Should I update HubSpot directly, or keep findings in a doc until you check them?
     zh:
-    - 先从哪些客户开始？
-    - 简报里你最看重什么——员工规模和融资情况、技术栈、招聘信号，还是最新动态？
-    - 结果直接更新到 HubSpot，还是先整理成文档，等你确认后再说？
+    - Which accounts should we start with?
+    - What matters most in the brief? Headcount and funding, tech stack, hiring signals, or recent news?
+    - Should results go straight into HubSpot, or be written into a doc first for you to confirm?
 connections:
 - name: HubSpot
   logo: https://www.google.com/s2/favicons?domain=hubspot.com&sz=64
@@ -66,7 +66,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=slides.google.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: |
     # Role & Purpose

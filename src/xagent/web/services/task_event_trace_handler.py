@@ -150,7 +150,7 @@ def get_event_type_mapping(event: TraceEvent) -> str:
         and action == TraceAction.START
         and category == TraceCategory.MESSAGE
     ):
-        # 特殊处理 user_message 事件，记录日志以调试重复显示问题
+        # Handle user_message events specially; log to debug duplicate rendering
         logger.info(
             f"📨 Mapping trace event to 'user_message': scope={scope.value}, action={action.value}, category={category.value}"
         )

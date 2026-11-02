@@ -29,6 +29,7 @@ import {
   X,
   Globe,
   User,
+  Users,
   Wrench,
   Layers,
   FileText,
@@ -47,6 +48,14 @@ interface MemoryItem {
   timestamp: string
   mime_type: string
   metadata: Record<string, any>
+  /**
+   * Shared-layer placement reported by GET /api/memory/list. Null (or an
+   * absent field on builds that predate the contract) means a personal
+   * memory; anything the front end does not recognise is also rendered as
+   * personal rather than mislabelled.
+   */
+  space_kind?: string | null
+  space_id?: number | null
 }
 
 interface MemoryStats {
@@ -74,6 +83,8 @@ interface MemoryFilters {
   date_from?: string
   date_to?: string
   search?: string
+  /** Shared-space view: the value rides as `space=` on the list request. */
+  space?: SharedSpaceKind
 }
 
 /**
@@ -97,9 +108,10 @@ const DEFAULT_SIMILARITY_THRESHOLD = 0.40
 // The store reports a cosine *distance* ceiling (smaller = stricter) while each
 // note carries a similarity score (larger = closer), so 0.40 means
 // "similarity >= 0.60". Measured 2026-10-29 against ext2: the relevant notes
-// scored 0.7585 ("年度报销额度", distance 0.2415) and 0.7510 ("供应商对账口径",
-// 0.2490); unrelated ones sat at 0.42-0.52 similarity (0.48-0.58 distance) and
-// "zzz不存在的词" topped out at 0.4576 (0.5424). The store still reports the
+// scored 0.7585 ("annual reimbursement limit", distance 0.2415) and 0.7510
+// ("supplier reconciliation basis", 0.2490); unrelated ones sat at 0.42-0.52
+// similarity (0.48-0.58 distance) and a nonsense query ("zzz-missing-term")
+// topped out at 0.4576 (0.5424). The store still reports the
 // legacy 1.5, which filters nothing, so anything above the ceiling is clamped
 // down; the slider can still be loosened by hand up to 0.60.
 const MAX_SIMILARITY_THRESHOLD = 0.40
@@ -107,6 +119,15 @@ const MIN_SIMILARITY_THRESHOLD = 0.25
 const MAX_ADJUSTABLE_SIMILARITY_THRESHOLD = 0.60
 const SIMILARITY_STEP = 0.01
 const DEFAULT_MEMORY_CATEGORY = "general"
+
+// Two shared views offered beside the personal one. With no space selected the
+// request carries no `space` parameter and the list stays what the caller sees
+// by default (personal memory); the two entries ask the list API for the
+// company / department layer explicitly. A backend that predates the contract
+// ignores the parameter, so the views degrade to the unfiltered list instead
+// of breaking.
+type SharedSpaceKind = "company" | "department"
+const SHARED_SPACE_KINDS: SharedSpaceKind[] = ["company", "department"]
 
 // The legacy store report (1.5) lets an unrelated query return the whole store,
 // so the front end clamps it to the ceiling measured above and falls back to
@@ -137,7 +158,7 @@ function resolveStoreStatusKind(state?: string | null): StoreStatusKind {
   return "unavailable"
 }
 
-// "上游最近一次调用成功（HTTP 200）：/v1/memory/stats，15:54:46" -> "15:54:46"
+// "Upstream last call succeeded (HTTP 200): /v1/memory/stats, 15:54:46" -> "15:54:46"
 function extractLastCallTime(detail?: string | null): string | null {
   if (!detail) return null
   const match = detail.match(/\d{1,2}:\d{2}(?::\d{2})?/)
@@ -145,7 +166,7 @@ function extractLastCallTime(detail?: string | null): string | null {
 }
 
 export function MemoryPage() {
-  const { t, tDynamic, locale } = useI18n()
+  const { t, tDynamic } = useI18n()
   const [memories, setMemories] = useState<MemoryItem[]>([])
   const [stats, setStats] = useState<MemoryStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -267,6 +288,7 @@ export function MemoryPage() {
 
       const params = new URLSearchParams()
       if (filters.category) params.append("category", filters.category)
+      if (filters.space) params.append("space", filters.space)
       if (filters.tags?.length) params.append("tags", filters.tags.join(","))
       if (filters.keywords?.length) params.append("keywords", filters.keywords.join(","))
       if (filters.date_from) params.append("date_from", filters.date_from)
@@ -420,8 +442,7 @@ export function MemoryPage() {
   }
 
   const formatDate = (dateString: string) => {
-    const lang = locale === "zh" ? "zh-CN" : "en-US"
-    return new Date(dateString).toLocaleString(lang)
+    return new Date(dateString).toLocaleString("en-US")
   }
 
   // Helper to determine icon based on category
@@ -591,9 +612,9 @@ export function MemoryPage() {
               </h3>
               <div className="flex md:block space-x-2 md:space-x-0 md:space-y-1">
                 <Button
-                  variant={!filters.category ? "secondary" : "ghost"}
-                  className={cn("whitespace-nowrap justify-start", !filters.category && "font-medium")}
-                  onClick={() => setFilters(prev => ({ ...prev, category: undefined }))}
+                  variant={!filters.category && !filters.space ? "secondary" : "ghost"}
+                  className={cn("whitespace-nowrap justify-start", !filters.category && !filters.space && "font-medium")}
+                  onClick={() => setFilters(prev => ({ ...prev, category: undefined, space: undefined }))}
                 >
                   <Database className="h-4 w-4 mr-2" />
                   {t("memory.sidebar.allMemories")}
@@ -634,6 +655,35 @@ export function MemoryPage() {
               </div>
             </div>
 
+            <div className="space-y-1 md:space-y-3 shrink-0 flex items-center md:items-start md:flex-col">
+              <h3 className="hidden md:block text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">
+                {t("memory.sidebar.sharedSpaces")}
+              </h3>
+              <div className="flex md:block space-x-2 md:space-x-0 md:space-y-1">
+                {SHARED_SPACE_KINDS.map(space => (
+                  <Button
+                    key={space}
+                    variant={filters.space === space ? "secondary" : "ghost"}
+                    className={cn("whitespace-nowrap justify-start", filters.space === space && "font-medium")}
+                    onClick={() =>
+                      setFilters(prev => ({
+                        ...prev,
+                        // Clicking the active entry returns to the personal list.
+                        space: prev.space === space ? undefined : space,
+                      }))
+                    }
+                  >
+                    {space === "company" ? (
+                      <Globe className="h-4 w-4 mr-2" />
+                    ) : (
+                      <Users className="h-4 w-4 mr-2" />
+                    )}
+                    {t(`memory.sidebar.space.${space}`)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
             {tagOptions.length > 0 && (
               <div className="space-y-1 md:space-y-3 shrink-0 flex items-center md:items-start md:flex-col">
                 <h3 className="hidden md:block text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">
@@ -667,12 +717,14 @@ export function MemoryPage() {
                 onChange={handleSelectAll}
               />
               <h2 className="text-base sm:text-lg font-semibold truncate">
-                {filters.category
-                  ? tDynamic(
-                      `memory.filters.categoryOptions.${filters.category}`,
-                      filters.category.replace(/_/g, " "),
-                    )
-                  : t("memory.sidebar.allMemories")}
+                {filters.space
+                  ? t(`memory.sidebar.space.${filters.space}`)
+                  : filters.category
+                    ? tDynamic(
+                        `memory.filters.categoryOptions.${filters.category}`,
+                        filters.category.replace(/_/g, " "),
+                      )
+                    : t("memory.sidebar.allMemories")}
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -686,12 +738,12 @@ export function MemoryPage() {
                   {t("memory.actions.deleteSelected", { count: selectedIds.size })}
                 </Button>
               ) : (
-                filters.category && (
-                  <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground hover:text-foreground" onClick={() => setFilters(prev => ({ ...prev, category: undefined }))}>
+                filters.category || filters.space ? (
+                  <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground hover:text-foreground" onClick={() => setFilters(prev => ({ ...prev, category: undefined, space: undefined }))}>
                     <X className="h-3.5 w-3.5 mr-2" />
                     {t("memory.actions.clearFilter")}
                   </Button>
-                )
+                ) : false
               )}
             </div>
           </div>
@@ -796,6 +848,17 @@ export function MemoryPage() {
                                   className="w-fit rounded-md border-0 bg-muted px-1.5 py-0 text-[10px] font-normal text-muted-foreground"
                                 >
                                   {t("memory.item.owner", { id: String(memory.metadata.user_id) })}
+                                </Badge>
+                              ) : null}
+                              {/* Shared-layer badge. space_kind null/absent
+                                  (older upstream) renders nothing: a personal
+                                  memory must never be shown as shared. */}
+                              {memory.space_kind === "company" || memory.space_kind === "department" ? (
+                                <Badge
+                                  variant="outline"
+                                  className="w-fit rounded-md border-0 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                >
+                                  {t(`memory.item.shared.${memory.space_kind}`)}
                                 </Badge>
                               ) : null}
                             </div>

@@ -27,8 +27,29 @@ class MemoryResponse(BaseModel):
     memory_id: Optional[str] = None
     content: Optional[Any] = None
     error: Optional[str] = None
+    # XN-1: which shared space the write landed in. The remote adapter fills
+    # it from the service's answer first and falls back to the request's own
+    # ``[share:…]`` marker, so a store receipt can echo the space even when
+    # the service omits the field.
+    space_kind: Optional[str] = None
+    space_id: Optional[int] = None
     metadata: Optional[dict[str, Any]] = Field(default_factory=lambda: {})
     search_results: Optional[list[Any]] = None
+
+
+def note_in_space(note: MemoryNote, space: str) -> bool:
+    """Whether ``note`` belongs to the ``space`` view (XN-1).
+
+    ``personal`` selects notes with no shared-layer provenance, ``department``
+    and ``company`` select the matching ``space_kind``. The local stores keep
+    no shared layers (they never persist ``space_kind``), so they answer a
+    shared view with their — empty — set instead of silently returning
+    everything.
+    """
+    kind = note.space_kind
+    if space == "personal":
+        return kind is None
+    return kind == space
 
 
 def _normalized_body_text(value: Any) -> str:
@@ -44,7 +65,7 @@ def drop_replaced_tags(note: "MemoryNote", previous_content: Any) -> list[str]:
     """Remove tags and keywords that only the old text supported.
 
     Rewriting a note's body used to leave the old values in ``tags``: a plate
-    number changed from 京A8888 to 京A9999 kept ``["车牌号", "京A8888"]``
+    number changed from ABC-1234 to ABC-5678 kept ``["plate_number", "ABC-1234"]``
     (X-06, evidence ``y06b-C7-update.txt``). Two memsrv behaviours make the
     client responsible for the cleanup (probed 2026-10-29, see
     ``~/Documents/xagent-memory-saas/.probe-x06-tags-20261029/``): a PUT keeps
@@ -55,7 +76,7 @@ def drop_replaced_tags(note: "MemoryNote", previous_content: Any) -> list[str]:
 
     ``keywords`` are cleaned whenever the body changed, not only when every
     tag was removed (X-06 rework): a note whose ``tags`` were already empty
-    returned early and kept ``keywords: ["京A8888"]``, which the service then
+    returned early and kept ``keywords: ["ABC-1234"]``, which the service then
     used to refill the tag list
     (``~/Documents/xagent-memory-saas/.probe-x06-tags-20261029/probe_x06_tags3.out``).
 

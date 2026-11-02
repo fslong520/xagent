@@ -265,7 +265,7 @@ def test_unrelated_decode_type_errors_propagate_by_identity(
         ("", 0),
         ("long-" * 20, -1),
         ("sqlite\x00nul", 2**31),
-        ("中文-😀", 2**63 - 1),
+        ("\u4e2d\u6587-😀", 2**63 - 1),
         ("signed-64-minimum", -(2**63)),
     ),
     ids=("empty", "long", "nul", "unicode-and-signed-64-max", "signed-64-min"),

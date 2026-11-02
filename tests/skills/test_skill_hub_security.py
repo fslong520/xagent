@@ -1186,7 +1186,7 @@ class TestArchiveResourceBounds:
         encoding is three times the limit still passes when its character
         count does not. Counting bytes here would reject it and put the two
         write paths back out of step."""
-        body = "汉" * (_MAX_SKILL_MD_CHARS - 100)
+        body = "\u6c49" * (_MAX_SKILL_MD_CHARS - 100)
         content = f"# S\n\n## Description\n{body}\n".encode()
         assert len(content) > _MAX_SKILL_MD_CHARS * 2, "test premise: bytes >> chars"
         files = _normalize_skill_files({"SKILL.md": content})
@@ -1864,7 +1864,7 @@ class TestSkillMdContentBounds:
         "label,body",
         [
             ("ascii", "# Hi\n\n## Description\nd\n"),
-            ("cjk", "# 技能\n\n## Description\nd\n"),
+            ("cjk", "# \u6280\u80fd\n\n## Description\nd\n"),
             ("content behind a BOM", "\ufeff# Hi\n\n## Description\nd\n"),
             ("emoji", "😀"),
         ],

@@ -769,14 +769,14 @@ def test_get_file_content_accepts_multibyte_text_over_byte_count_limit(monkeypat
     # char) -- a byte-count-based early rejection would wrongly reject this
     # file even though the actual JSON response comfortably fits.
     monkeypatch.setattr(sharepoint, "get_tool_max_output_length", lambda: 500)
-    content = ("中" * 200).encode("utf-8")  # 600 raw bytes, 200 chars
+    content = ("\u4e2d" * 200).encode("utf-8")  # 600 raw bytes, 200 chars
     mock_request = Mock(return_value=MockResponse(content=content))
     monkeypatch.setattr(sharepoint.requests, "request", mock_request)
 
     result = json.loads(sharepoint.sharepoint_get_file_content("root", "notes_zh.txt"))
 
     assert result["status"] == "success"
-    assert result["text_content"] == "中" * 200
+    assert result["text_content"] == "\u4e2d" * 200
 
 
 def test_get_file_content_rejects_compressed_content_encoding(monkeypatch):

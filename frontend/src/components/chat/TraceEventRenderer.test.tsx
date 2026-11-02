@@ -1144,6 +1144,202 @@ describe("TraceEventRenderer", () => {
     ).toBeInTheDocument()
   })
 
+  it("keeps a search_memory retrieval count off the strip so the store step is not labelled as retrieval", () => {
+    // The explicit search tool emits its own retrieve events (source=
+    // "search_memory") between its tool start and end. Rendering their count
+    // as a strip line placed that line directly above the next tool row, so a
+    // store step displayed "Memory retrieved: 1" (XN-7, 2026-10-30 probe x76/x77).
+    // The search row already carries the query and the hits; the strip keeps
+    // only the automatic recall line and the store line.
+    render(
+      <TraceEventRenderer
+        events={[
+          {
+            event_id: "run-start",
+            event_type: "react_task_start",
+            step_id: "step-1",
+            timestamp: 900,
+            data: {},
+          },
+          {
+            event_id: "search-start",
+            event_type: "tool_execution_start",
+            step_id: "step-1",
+            timestamp: 1000,
+            data: {
+              tool_name: "search_memory",
+              tool_params: { query: "GESP exam length" },
+              tool_call_id: "call-1",
+            },
+          },
+          {
+            event_id: "search-mem-end",
+            event_type: "task_end_memory_retrieve",
+            step_id: "step-1",
+            timestamp: 1100,
+            data: {
+              query: "GESP exam length",
+              memories_count: 1,
+              found: true,
+              success: true,
+              source: "search_memory",
+            },
+          },
+          {
+            event_id: "search-end",
+            event_type: "tool_execution_end",
+            step_id: "step-1",
+            timestamp: 1200,
+            data: {
+              tool_call_id: "call-1",
+              result: { success: true, count: 1 },
+            },
+          },
+          {
+            event_id: "store-start",
+            event_type: "tool_execution_start",
+            step_id: "step-1",
+            timestamp: 2000,
+            data: {
+              tool_name: "store_memory",
+              tool_params: { content: "RECHECK marker" },
+              tool_call_id: "call-2",
+            },
+          },
+          {
+            event_id: "store-mem-end",
+            event_type: "task_end_memory_store",
+            step_id: "step-1",
+            timestamp: 2100,
+            data: {
+              storage_success: true,
+              storage_action: "create",
+              memory_id: "m-1",
+            },
+          },
+          {
+            event_id: "store-end",
+            event_type: "tool_execution_end",
+            step_id: "step-1",
+            timestamp: 2200,
+            data: {
+              tool_call_id: "call-2",
+              result: { success: true, action: "create" },
+            },
+          },
+        ]}
+      />,
+    )
+
+    const stepToggles = screen.getAllByRole("button", {
+      name: /traceEventRenderer\.taskExecution/,
+    })
+    expect(stepToggles).toHaveLength(1)
+
+    fireEvent.click(stepToggles[0])
+
+    // The search tool row stays, its own retrieval line disappears, and the
+    // store step is labelled by the store action only.
+    expect(
+      screen.getByText("traceEventRenderer.executeTool:Search Memory"),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/traceEventRenderer\.memoryRetrieved/)).toBeNull()
+    expect(screen.queryByText(/traceEventRenderer\.memoryRetrievalFailed/)).toBeNull()
+    expect(screen.getByText("traceEventRenderer.memoryStored")).toBeInTheDocument()
+  })
+
+  it("renders update and delete write status lines, and skips them for failed writes", () => {
+    // update_memory / delete_memory emit no write trace event, so the strip
+    // only shows their tool rows. A successful write gets its own line; a
+    // failed one must not claim a write that never happened.
+    render(
+      <TraceEventRenderer
+        events={[
+          {
+            event_id: "run-start",
+            event_type: "react_task_start",
+            step_id: "step-1",
+            timestamp: 900,
+            data: {},
+          },
+          {
+            event_id: "update-start",
+            event_type: "tool_execution_start",
+            step_id: "step-1",
+            timestamp: 1000,
+            data: {
+              tool_name: "update_memory",
+              tool_params: { memory_id: "m-1", content: "new value" },
+              tool_call_id: "call-1",
+            },
+          },
+          {
+            event_id: "update-end",
+            event_type: "tool_execution_end",
+            step_id: "step-1",
+            timestamp: 1100,
+            data: {
+              tool_call_id: "call-1",
+              result: { success: true },
+            },
+          },
+          {
+            event_id: "delete-start",
+            event_type: "tool_execution_start",
+            step_id: "step-1",
+            timestamp: 2000,
+            data: {
+              tool_name: "delete_memory",
+              tool_params: { memory_id: "m-2" },
+              tool_call_id: "call-2",
+            },
+          },
+          {
+            event_id: "delete-end",
+            event_type: "tool_execution_end",
+            step_id: "step-1",
+            timestamp: 2100,
+            data: {
+              tool_call_id: "call-2",
+              result: { success: true },
+            },
+          },
+          {
+            event_id: "failed-update-start",
+            event_type: "tool_execution_start",
+            step_id: "step-1",
+            timestamp: 3000,
+            data: {
+              tool_name: "update_memory",
+              tool_params: { memory_id: "ghost", content: "nope" },
+              tool_call_id: "call-3",
+            },
+          },
+          {
+            event_id: "failed-update-end",
+            event_type: "tool_execution_end",
+            step_id: "step-1",
+            timestamp: 3100,
+            data: {
+              tool_call_id: "call-3",
+              result: { success: false, error: "Memory not found" },
+            },
+          },
+        ]}
+      />,
+    )
+
+    const stepToggles = screen.getAllByRole("button", {
+      name: /traceEventRenderer\.taskExecution/,
+    })
+    fireEvent.click(stepToggles[0])
+
+    expect(screen.getByText("traceEventRenderer.memoryUpdated")).toBeInTheDocument()
+    expect(screen.getByText("traceEventRenderer.memoryDeleted")).toBeInTheDocument()
+    // The failed update must not add a second "updated" line.
+    expect(screen.getAllByText("traceEventRenderer.memoryUpdated")).toHaveLength(1)
+  })
+
   it("keeps trace event ordering stable when timestamps are invalid", () => {
     render(
       <TraceEventRenderer

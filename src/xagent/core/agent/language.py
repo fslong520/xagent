@@ -106,9 +106,9 @@ _LANGUAGE_LABEL_ALIASES = {
     "zh_hans": "Simplified Chinese",
     "zh-hant": "Traditional Chinese",
     "zh_hant": "Traditional Chinese",
-    "中文": "Chinese",
-    "简体中文": "Simplified Chinese",
-    "繁體中文": "Traditional Chinese",
+    "\u4e2d\u6587": "Chinese",
+    "\u7b80\u4f53\u4e2d\u6587": "Simplified Chinese",
+    "\u7e41\u9ad4\u4e2d\u6587": "Traditional Chinese",
 }
 
 _LATIN_SCRIPT_RESPONSE_LANGUAGES = frozenset(
@@ -345,9 +345,9 @@ def _prose_mentions_language_from_group(
         if canonical in languages
     )
     if languages is _HAN_SCRIPT_RESPONSE_LANGUAGES:
-        labels.update({"chinese", "中文", "简体中文", "繁體中文", "繁体中文"})
+        labels.update({"chinese", "\u4e2d\u6587", "\u7b80\u4f53\u4e2d\u6587", "\u7e41\u9ad4\u4e2d\u6587", "\u7e41\u4f53\u4e2d\u6587"})
     if languages is _LATIN_SCRIPT_RESPONSE_LANGUAGES:
-        labels.update({"english", "英文", "英语", "英語"})
+        labels.update({"english", "\u82f1\u6587", "\u82f1\u8bed", "\u82f1\u8a9e"})
     for label in labels:
         candidate = label.casefold()
         if candidate.isascii():

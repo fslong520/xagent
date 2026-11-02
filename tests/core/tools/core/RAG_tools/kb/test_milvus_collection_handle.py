@@ -716,7 +716,7 @@ def test_milvus_collection_names_follow_the_model_id() -> None:
     [
         "bge-m3",
         "BAAI/bge-m3",
-        "智谱/glm 4.5-embedding",
+        "\u667a\u8c31/glm 4.5-embedding",
         "vendor/" + "long-model-name-" * 40,
         "",
         "///",

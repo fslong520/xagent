@@ -1599,7 +1599,7 @@ async def get_agent_api_key(
             active key. Both shapes use the same status code so the
             caller cannot distinguish "agent doesn't exist" from "no key
             generated yet". The ``detail`` differentiates so the UI can
-            render "未生成" instead of "agent not found".
+            render "not generated yet" instead of "agent not found".
     """
     try:
         _get_owned_agent_or_404(agent_id, current_user, db)

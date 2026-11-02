@@ -1139,7 +1139,7 @@ def test_oversized_multi_byte_question_truncates_on_a_character_boundary() -> No
     than raising, but nothing pinned that the result stays valid UTF-8 with
     no stray replacement character -- this test is that pin."""
 
-    long_question = "你" * (10 * 1024)  # ~30 KiB, over the 16 KiB limit
+    long_question = "\u4f60" * (10 * 1024)  # ~30 KiB, over the 16 KiB limit
     draft = _draft(message=long_question)
     payload = build_clarification_payload(draft)
 
@@ -1376,7 +1376,7 @@ def test_option_edge_whitespace_is_left_untouched() -> None:
                 "type": "select_one",
                 "field": "seat",
                 "label": "Seat",
-                "options": [{"label": "  靠窗  ", "value": "  靠窗  "}],
+                "options": [{"label": "  window seat  ", "value": "  window seat  "}],
             },
         ),
     )
@@ -1384,8 +1384,8 @@ def test_option_edge_whitespace_is_left_untouched() -> None:
     payload = build_clarification_payload(draft)
 
     option = payload["interactions"][0]["options"][0]
-    assert option["label"] == "  靠窗  "
-    assert option["value"] == "  靠窗  "
+    assert option["label"] == "  window seat  "
+    assert option["value"] == "  window seat  "
 
 
 def test_payload_still_too_large_after_truncation_is_not_applicable(

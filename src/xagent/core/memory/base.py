@@ -125,12 +125,21 @@ class MemoryStore(ABC):
         pass
 
     @abstractmethod
-    def list_all(self, filters: Optional[dict[str, Any]] = None) -> List["MemoryNote"]:
+    def list_all(
+        self,
+        filters: Optional[dict[str, Any]] = None,
+        *,
+        space: Optional[str] = None,
+    ) -> List["MemoryNote"]:
         """
         List all memory notes with optional filtering.
 
         Args:
             filters (Dict[str, Any], optional): Filter criteria like category, date range, etc.
+            space (str, optional): Shared-space view (XN-1) — one of
+                ``personal`` / ``department`` / ``company``. ``None`` keeps the
+                unfiltered surface. The remote adapter forwards it to the
+                service; local stores select on ``MemoryNote.space_kind``.
 
         Returns:
             List[MemoryNote]: List of memory notes matching the filters.

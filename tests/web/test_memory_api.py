@@ -346,6 +346,64 @@ class TestMemoryListEndpoint:
         assert response.json()["detail"] == "Memory storage is temporarily unavailable."
         assert "internal-host" not in response.text
 
+    # -- XN-1: space view on the list port ---------------------------------
+
+    def test_list_memories_expose_the_space_fields(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """The panel labels a team-visible note from the serialized note."""
+        shared = MemoryNote(id="shared_1", content="Team notice", space_kind="company")
+        mock_memory_store.list_all.return_value = [shared]
+
+        data = client.get("/api/memory/list", headers=auth_headers).json()
+
+        memory = data["memories"][0]
+        assert memory["space_kind"] == "company"
+        assert memory["space_id"] is None
+
+    def test_list_memories_forwards_the_space_view(
+        self, client, mock_memory_store, auth_headers
+    ):
+        mock_memory_store.list_all.return_value = []
+
+        response = client.get("/api/memory/list?space=company", headers=auth_headers)
+
+        assert response.status_code == 200
+        assert mock_memory_store.list_all.call_args.kwargs["space"] == "company"
+        assert response.json()["filters_used"]["space"] == "company"
+
+    def test_list_memories_passes_no_space_kwarg_when_unset(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """Plain calls stay byte-identical for stores without the view."""
+        mock_memory_store.list_all.return_value = []
+
+        client.get("/api/memory/list", headers=auth_headers)
+
+        assert "space" not in mock_memory_store.list_all.call_args.kwargs
+
+    def test_list_memories_rejects_an_unknown_space(
+        self, client, mock_memory_store, auth_headers
+    ):
+        response = client.get("/api/memory/list?space=galaxy", headers=auth_headers)
+
+        assert response.status_code == 422
+
+    def test_search_memories_forwards_the_space_view(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """The search path serializes the view into the filters body — the
+        same ``filters.space`` key ``search_memory`` sends upstream."""
+        mock_memory_store.search.return_value = []
+
+        response = client.get(
+            "/api/memory/list?search=notice&space=department", headers=auth_headers
+        )
+
+        assert response.status_code == 200
+        filters = mock_memory_store.search.call_args.kwargs["filters"]
+        assert filters["space"] == "department"
+
 
 class TestMemoryGetEndpoint:
     """Test cases for memory get endpoint."""
@@ -365,6 +423,25 @@ class TestMemoryGetEndpoint:
         assert data["id"] == "memory_1"
         assert data["content"] == "Test memory 1"
         assert "context" not in data  # Ensure context field is not present
+
+    def test_get_memory_exposes_the_space_fields(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """XN-1: the detail view carries the same provenance as the list."""
+        note = MemoryNote(
+            id="shared_1",
+            content="Team notice",
+            space_kind="department",
+            space_id=5,
+        )
+        mock_memory_store.get.return_value = Mock(
+            success=True, memory_id="shared_1", content=note
+        )
+
+        data = client.get("/api/memory/shared_1", headers=auth_headers).json()
+
+        assert data["space_kind"] == "department"
+        assert data["space_id"] == 5
 
     def test_get_memory_not_found(self, client, mock_memory_store, auth_headers):
         """Test memory retrieval for non-existent ID."""
@@ -395,7 +472,7 @@ class TestMemoryCreateEndpoint:
         """Test successful memory creation."""
         # Setup mock response
         mock_memory_store.add.return_value = Mock(
-            success=True, memory_id="new_memory_123"
+            success=True, memory_id="new_memory_123", space_kind=None, space_id=None
         )
 
         memory_data = {
@@ -424,10 +501,37 @@ class TestMemoryCreateEndpoint:
         assert call_args.content == "New test memory"
         assert call_args.category == "general"
 
+    def test_create_memory_echoes_the_shared_space(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """XN-1: a ``[share:…]`` write names its space in the create receipt.
+
+        The panel labels the card from this response; without the field it had
+        to wait for a list refresh, and an upstream that omits ``space_kind``
+        would leave the badge empty forever (2026-10-30 x50/x51).
+        """
+        mock_memory_store.add.return_value = Mock(
+            success=True,
+            memory_id="shared_memory_1",
+            space_kind="company",
+            space_id=None,
+        )
+
+        response = client.post(
+            "/api/memory/",
+            json={"content": "[share:company] Team notice"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["space_kind"] == "company"
+        assert data["space_id"] is None
+
     def test_create_memory_with_defaults(self, client, mock_memory_store, auth_headers):
         """Test memory creation with default values."""
         mock_memory_store.add.return_value = Mock(
-            success=True, memory_id="default_memory"
+            success=True, memory_id="default_memory", space_kind=None, space_id=None
         )
 
         # Minimal memory data
@@ -580,96 +684,18 @@ class TestMemoryUpdateEndpoint:
         """X-06: a content-only PUT must not keep the old plate in `tags`.
 
         The store keeps whichever tags a request carries (probed 2026-10-29),
-        so a body rewritten from 京A8888 to 京A9999 left the old value in tags.
+        so a body rewritten from an old plate value to a new one left the old
+        value in tags.
         """
         mock_memory_store.get.return_value = Mock(
             success=True,
             content=MemoryNote(
                 id="memory_1",
-                content="Y-C7-PLATE 我的车牌号是 京A8888，停车月卡登记用。",
-                keywords=["车牌号", "京A8888"],
-                tags=["车牌号", "京A8888"],
-                category="general",
-            ),
-        )
-        mock_memory_store.update.return_value = Mock(success=True)
-
-        response = client.put(
-            "/api/memory/memory_1",
-            json={"content": "Y-C7-PLATE 我的车牌号是 京A9999，停车月卡登记用。"},
-            headers=auth_headers,
-        )
-
-        assert response.status_code == 200
-        written = mock_memory_store.update.call_args[0][0]
-        assert written.content.endswith("京A9999，停车月卡登记用。")
-        assert written.tags == ["车牌号"]
-
-    def test_update_memory_honours_tags_the_caller_supplies(self, client, mock_memory_store, auth_headers):
-        """An explicit tag list is the caller's decision, not the client's."""
-        mock_memory_store.get.return_value = Mock(
-            success=True,
-            content=MemoryNote(
-                id="memory_1", content="车牌 京A8888", tags=["京A8888"]
-            ),
-        )
-        mock_memory_store.update.return_value = Mock(success=True)
-
-        response = client.put(
-            "/api/memory/memory_1",
-            json={"content": "车牌 京A9999", "tags": ["2026-10-29校正"]},
-            headers=auth_headers,
-        )
-
-        assert response.status_code == 200
-        assert mock_memory_store.update.call_args[0][0].tags == ["2026-10-29校正"]
-
-    def test_update_memory_clears_stale_keywords_without_tags(self, client, mock_memory_store, auth_headers):
-        """X-06: an empty tag list must not be refilled from old keywords.
-
-        memsrv treats an empty ``tags`` list as "use keywords", so a PUT whose
-        tags are already empty kept ``京A8888`` alive through ``keywords``
-        (evidence ``probe_x06_tags3.out``).
-        """
-        mock_memory_store.get.return_value = Mock(
-            success=True,
-            content=MemoryNote(
-                id="memory_1",
-                content="Y-C7-PLATE 我的车牌号是 京A8888，停车月卡登记用。",
-                keywords=["车牌号", "京A8888"],
-                tags=[],
-                category="general",
-            ),
-        )
-        mock_memory_store.update.return_value = Mock(success=True)
-
-        response = client.put(
-            "/api/memory/memory_1",
-            json={"content": "Y-C7-PLATE 我的车牌号是 京A9999，停车月卡登记用。"},
-            headers=auth_headers,
-        )
-
-        assert response.status_code == 200
-        written = mock_memory_store.update.call_args[0][0]
-        assert written.tags == []
-        assert written.keywords == ["车牌号"]
-
-    def test_update_memory_drops_echoed_old_tags_but_keeps_classification(
-        self, client, mock_memory_store, auth_headers
-    ):
-        """The UI prefills the old tags; echoing them is not a decision.
-
-        A value only the old body supported (京A8888) is dropped, a value the
-        new body still supports (车牌号) stays, and a classification tag that
-        never appeared in the body (高频) is untouched.
-        """
-        mock_memory_store.get.return_value = Mock(
-            success=True,
-            content=MemoryNote(
-                id="memory_1",
-                content="Y-C7-PLATE 我的车牌号是 京A8888，停车月卡登记用。",
-                tags=["车牌号", "京A8888", "高频"],
-                keywords=["车牌号", "京A8888"],
+                content=(
+                    "Y-C7-PLATE \u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA8888，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。"
+                ),
+                keywords=["\u8f66\u724c\u53f7", "\u4eacA8888"],
+                tags=["\u8f66\u724c\u53f7", "\u4eacA8888"],
                 category="general",
             ),
         )
@@ -678,16 +704,112 @@ class TestMemoryUpdateEndpoint:
         response = client.put(
             "/api/memory/memory_1",
             json={
-                "content": "Y-C7-PLATE 我的车牌号是 京A9999，停车月卡登记用。",
-                "tags": ["车牌号", "京A8888", "高频"],
+                "content": "Y-C7-PLATE \u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA9999，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。"
             },
             headers=auth_headers,
         )
 
         assert response.status_code == 200
         written = mock_memory_store.update.call_args[0][0]
-        assert written.tags == ["车牌号", "高频"]
-        assert "京A8888" not in written.keywords
+        assert written.content.endswith(
+            "\u4eacA9999，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。"
+        )
+        assert written.tags == ["\u8f66\u724c\u53f7"]
+
+    def test_update_memory_honours_tags_the_caller_supplies(self, client, mock_memory_store, auth_headers):
+        """An explicit tag list is the caller's decision, not the client's."""
+        mock_memory_store.get.return_value = Mock(
+            success=True,
+            content=MemoryNote(
+                id="memory_1", content="\u8f66\u724c \u4eacA8888", tags=["\u4eacA8888"]
+            ),
+        )
+        mock_memory_store.update.return_value = Mock(success=True)
+
+        response = client.put(
+            "/api/memory/memory_1",
+            json={
+                "content": "\u8f66\u724c \u4eacA9999",
+                "tags": ["2026-10-29\u6821\u6b63"],
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        assert mock_memory_store.update.call_args[0][0].tags == [
+            "2026-10-29\u6821\u6b63"
+        ]
+
+    def test_update_memory_clears_stale_keywords_without_tags(self, client, mock_memory_store, auth_headers):
+        """X-06: an empty tag list must not be refilled from old keywords.
+
+        memsrv treats an empty ``tags`` list as "use keywords", so a PUT whose
+        tags are already empty kept the dropped plate alive through ``keywords``
+        (evidence ``probe_x06_tags3.out``).
+        """
+        mock_memory_store.get.return_value = Mock(
+            success=True,
+            content=MemoryNote(
+                id="memory_1",
+                content=(
+                    "Y-C7-PLATE \u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA8888，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。"
+                ),
+                keywords=["\u8f66\u724c\u53f7", "\u4eacA8888"],
+                tags=[],
+                category="general",
+            ),
+        )
+        mock_memory_store.update.return_value = Mock(success=True)
+
+        response = client.put(
+            "/api/memory/memory_1",
+            json={
+                "content": "Y-C7-PLATE \u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA9999，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。"
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        written = mock_memory_store.update.call_args[0][0]
+        assert written.tags == []
+        assert written.keywords == ["\u8f66\u724c\u53f7"]
+
+    def test_update_memory_drops_echoed_old_tags_but_keeps_classification(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """The UI prefills the old tags; echoing them is not a decision.
+
+        A value only the old body supported is dropped, a value the new body
+        still supports stays, and a classification tag that never appeared in
+        the body is untouched.
+        """
+        mock_memory_store.get.return_value = Mock(
+            success=True,
+            content=MemoryNote(
+                id="memory_1",
+                content=(
+                    "Y-C7-PLATE \u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA8888，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。"
+                ),
+                tags=["\u8f66\u724c\u53f7", "\u4eacA8888", "\u9ad8\u9891"],
+                keywords=["\u8f66\u724c\u53f7", "\u4eacA8888"],
+                category="general",
+            ),
+        )
+        mock_memory_store.update.return_value = Mock(success=True)
+
+        response = client.put(
+            "/api/memory/memory_1",
+            json={
+                "content": "Y-C7-PLATE \u6211\u7684\u8f66\u724c\u53f7\u662f \u4eacA9999，\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528。",
+                "tags": ["\u8f66\u724c\u53f7", "\u4eacA8888", "\u9ad8\u9891"],
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        written = mock_memory_store.update.call_args[0][0]
+        assert written.tags == ["\u8f66\u724c\u53f7", "\u9ad8\u9891"]
+        assert "\u4eacA8888" not in written.keywords
 
     def test_update_memory_error_handling(
         self, client, mock_memory_store, auth_headers
@@ -815,6 +937,48 @@ class TestMemoryDeleteEndpoint:
         assert response.json()["detail"] == "Failed to delete memory: upstream exploded"
 
 
+class TestGhostIdNotFoundWording:
+    """XN-4: one sentence for every ghost-id 404, on all three routes."""
+
+    @staticmethod
+    def _ghost_calls(client, mock_memory_store, auth_headers):
+        mock_memory_store.get.return_value = Mock(success=False, error=None)
+        mock_memory_store.delete.return_value = Mock(success=False, error=None)
+        put = client.put(
+            "/api/memory/ghost", json={"content": "x"}, headers=auth_headers
+        )
+        get = client.get("/api/memory/ghost", headers=auth_headers)
+        delete = client.delete("/api/memory/ghost", headers=auth_headers)
+        return put, get, delete
+
+    def test_put_get_delete_share_the_fallback_detail(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """With no store-side error the three routes answer byte-identically."""
+        responses = self._ghost_calls(client, mock_memory_store, auth_headers)
+
+        assert [r.status_code for r in responses] == [404, 404, 404]
+        details = [r.json()["detail"] for r in responses]
+        assert details == ["not found or not accessible"] * 3
+
+    def test_put_get_delete_keep_one_upstream_detail(
+        self, client, mock_memory_store, auth_headers
+    ):
+        """An upstream error is preserved verbatim — and by all three routes,
+        so PUT no longer answers its own hard-coded sentence."""
+        upstream = "Memory note vanished upstream"
+        mock_memory_store.get.return_value = Mock(success=False, error=upstream)
+        mock_memory_store.delete.return_value = Mock(success=False, error=upstream)
+        put = client.put(
+            "/api/memory/ghost", json={"content": "x"}, headers=auth_headers
+        )
+        get = client.get("/api/memory/ghost", headers=auth_headers)
+        delete = client.delete("/api/memory/ghost", headers=auth_headers)
+
+        assert [r.status_code for r in (put, get, delete)] == [404, 404, 404]
+        assert [r.json()["detail"] for r in (put, get, delete)] == [upstream] * 3
+
+
 class TestMemoryStatsEndpoint:
     """Test cases for memory stats endpoint."""
 
@@ -884,21 +1048,23 @@ class TestMemoryStatsEndpoint:
         org_notes = [
             MemoryNote(
                 id="mem-1",
-                content="2 号的报销额度是 8800 元。",
-                tags=["报销额度"],
+                content="2 \u53f7\u7684\u62a5\u9500\u989d\u5ea6\u662f 8800 \u5143。",
+                tags=["\u62a5\u9500\u989d\u5ea6"],
                 category="general",
                 metadata={"user_id": 2},
             ),
             MemoryNote(
                 id="mem-2",
-                content="2 号的停车月卡登记用 京A8888。",
+                content=(
+                    "2 \u53f7\u7684\u505c\u8f66\u6708\u5361\u767b\u8bb0\u7528 \u4eacA8888。"
+                ),
                 tags=["e2e"],
                 category="react_memory",
                 metadata={"user_id": 2},
             ),
             MemoryNote(
                 id="mem-3",
-                content="3 号的车牌号是 京A9999。",
+                content="3 \u53f7\u7684\u8f66\u724c\u53f7\u662f \u4eacA9999。",
                 tags=["e2e"],
                 category="general",
                 metadata={"user_id": 3},
@@ -922,7 +1088,7 @@ class TestMemoryStatsEndpoint:
         assert stats["total_count"] == listing["total_count"] == 3
         assert sum(stats["category_counts"].values()) == stats["total_count"]
         assert stats["category_counts"] == {"general": 2, "react_memory": 1}
-        assert stats["tag_counts"] == {"报销额度": 1, "e2e": 2}
+        assert stats["tag_counts"] == {"\u62a5\u9500\u989d\u5ea6": 1, "e2e": 2}
         assert stats["scope"] == listing["scope"] == "org"
         assert stats["memory_store_type"] == "remote"
 
@@ -933,14 +1099,16 @@ class TestMemoryStatsEndpoint:
         own_notes = [
             MemoryNote(
                 id="own-1",
-                content="我的报销额度是 8800 元。",
-                tags=["报销额度"],
+                content="\u6211\u7684\u62a5\u9500\u989d\u5ea6\u662f 8800 \u5143。",
+                tags=["\u62a5\u9500\u989d\u5ea6"],
                 category="general",
                 metadata={"user_id": regular_user.id},
             ),
             MemoryNote(
                 id="own-2",
-                content="我的停车月卡登记车牌 京A8888。",
+                content=(
+                    "\u6211\u7684\u505c\u8f66\u6708\u5361\u767b\u8bb0\u8f66\u724c \u4eacA8888。"
+                ),
                 tags=["e2e"],
                 category="react_memory",
                 metadata={"user_id": regular_user.id},
@@ -950,7 +1118,7 @@ class TestMemoryStatsEndpoint:
         mock_memory_store.get_stats.return_value = {
             "total_count": 2,
             "category_counts": {"general": 1, "react_memory": 1},
-            "tag_counts": {"报销额度": 1, "e2e": 1},
+            "tag_counts": {"\u62a5\u9500\u989d\u5ea6": 1, "e2e": 1},
             "memory_store_type": "remote",
         }
 
@@ -975,7 +1143,12 @@ class TestMemoryApiIntegration:
         # Setup mock responses
         def mock_add_side_effect(note):
             # Return the memory with the provided content
-            return Mock(success=True, memory_id="test_memory_123")
+            return Mock(
+                success=True,
+                memory_id="test_memory_123",
+                space_kind=None,
+                space_id=None,
+            )
 
         def mock_get_side_effect(memory_id):
             if memory_id == "test_memory_123":
@@ -1053,7 +1226,9 @@ class TestMemoryApiIntegration:
     def test_content_type_validation(self, client, mock_memory_store, auth_headers):
         """Test content type validation for POST/PUT requests."""
         # Setup mock to return valid response for successful creation
-        mock_memory_store.add.return_value = Mock(success=True, memory_id="test_123")
+        mock_memory_store.add.return_value = Mock(
+            success=True, memory_id="test_123", space_kind=None, space_id=None
+        )
 
         # Test with invalid content type
         response = client.post(

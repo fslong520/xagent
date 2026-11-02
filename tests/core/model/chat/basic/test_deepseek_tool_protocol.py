@@ -505,7 +505,7 @@ def test_unavailable_tool_call_violation_keeps_the_argument_diagnostics() -> Non
 @pytest.mark.parametrize(
     ("name", "expected"),
     [
-        ("获取网页内容", "获取网页内容"),
+        ("\u83b7\u53d6\u7f51\u9875\u5185\u5bb9", "\u83b7\u53d6\u7f51\u9875\u5185\u5bb9"),
         ("x" * 5000, "x" * 4096),
     ],
     ids=["non_ascii", "longer_than_the_preview_limit"],

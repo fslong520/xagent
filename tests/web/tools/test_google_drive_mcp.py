@@ -2549,7 +2549,7 @@ def test_list_permissions_pagination_check_matches_the_real_encoding(monkeypatch
             "type": "user",
             "role": "reader",
             "emailAddress": f"user{i}@example.com",
-            "displayName": "中文姓名" * 5,
+            "displayName": "\u4e2d\u6587\u59d3\u540d" * 5,
         }
         for i in range(15)
     ]
@@ -3447,7 +3447,7 @@ def test_download_file_preserves_extension_for_non_ascii_drive_name(
     files = Mock()
     files.get.return_value.execute.return_value = {
         "id": "f1",
-        "name": "季度报告.pdf",
+        "name": "\u5b63\u5ea6\u62a5\u544a.pdf",
         "mimeType": "application/pdf",
     }
     _mock_drive_service_with_files(monkeypatch, files)

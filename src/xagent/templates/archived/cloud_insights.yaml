@@ -8,26 +8,26 @@ tags:
   - optimization
   - infrastructure
   zh:
-  - 云服务
-  - 成本
-  - 优化
-  - 基础设施
+  - Cloud
+  - Cost
+  - Optimisation
+  - Infrastructure
 descriptions:
   en: Connect your cloud provider to get real-time infrastructure insights and cost
     optimization suggestions
-  zh: 获取云资源洞察与成本优化建议，发现性能与费用问题。
+  zh: Surfaces cloud insights and cost-optimisation advice, flagging performance and spend issues.
 features:
   en:
   - Connects to your cloud provider in real time
   - Identifies cost optimization opportunities instantly
   - Flags infrastructure anomalies before they escalate
   zh:
-  - 实时连接到您的云提供商
-  - 瞬间发现成本优化机会
-  - 在基础设施异常升级前进行标记预警
+  - Connects to your cloud provider in real time
+  - Spots cost-saving opportunities instantly
+  - Flags infrastructure anomalies before they escalate
 setup_time:
   en: 10 min setup
-  zh: 10分钟配置
+  zh: 10 min setup
 featured: true
 author: Xagent
 version: '1.0'

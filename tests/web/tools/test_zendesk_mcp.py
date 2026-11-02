@@ -1761,7 +1761,7 @@ def test_add_comment_rejects_multibyte_body_over_the_byte_limit(monkeypatch):
     # character-count check would wrongly accept this.
     mock_request = Mock()
     monkeypatch.setattr(zendesk._session, "request", mock_request)
-    multibyte_body = "你" * 25000
+    multibyte_body = "\u4f60" * 25000
     assert len(multibyte_body) < zendesk._MAX_COMMENT_BODY_BYTES
     assert len(multibyte_body.encode("utf-8")) > zendesk._MAX_COMMENT_BODY_BYTES
 

@@ -30,11 +30,12 @@ You will generate one `.pdf` file via a two-step pipeline:
 
 ## ⚠️ Hard rules — NO exceptions
 
-0. **MATCH THE USER'S LANGUAGE.** If the prompt is Chinese (中文), ALL report
-   content (kickers, H1/H2, body, captions, table headers, figure callouts)
-   must be in Chinese. NEVER copy English template phrases like
-   `EXECUTIVE BRIEF` / `RESEARCH BRIEF` / `THE BOTTOM LINE` into a Chinese
-   report — translate them. Person/company names should match the locale.
+0. **MATCH THE USER'S LANGUAGE.** If the user prompts in a non-English
+   language, ALL report content (kickers, H1/H2, body, captions, table
+   headers, figure callouts) must be in that language. NEVER copy English
+   template phrases like `EXECUTIVE BRIEF` / `RESEARCH BRIEF` /
+   `THE BOTTOM LINE` into a non-English report — translate them.
+   Person/company names should match the locale.
 
 1. **One palette only.** Pick one of the 5 palettes below; never invent hex.
 2. **Two fonts only.** Display = `'Playfair Display', Georgia, serif`.

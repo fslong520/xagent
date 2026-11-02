@@ -333,15 +333,19 @@ async def test_async_candidates_materialize_only_after_metadata_filtering(
     source, runtime, handler, task_id = storage
     monkeypatch.setenv("XAGENT_CHECKPOINT_ENCODING_V2", str(use_v2).lower())
     first = checkpoint(task_id)
-    first.data["snapshot"]["context"]["metadata"] = {"value": "元数据" * 1000}
-    first.data["snapshot"]["context"]["system_prompt"] = "系统提示" * 1000
+    first.data["snapshot"]["context"]["metadata"] = {
+        "value": "\u5143\u6570\u636e" * 1000
+    }
+    first.data["snapshot"]["context"]["system_prompt"] = (
+        "\u7cfb\u7edf\u63d0\u793a" * 1000
+    )
     first.data["snapshot"]["pattern_state"]["tool_ledger"] = {
         "old": {"result": "old result" * 1000}
     }
     second = checkpoint(task_id, 1)
     second.data["snapshot"] = copy.deepcopy(first.data["snapshot"])
     second.data["snapshot"]["context"]["messages"].append(
-        {"role": "assistant", "content": "新消息" * 1000}
+        {"role": "assistant", "content": "\u65b0\u6d88\u606f" * 1000}
     )
     second.data["snapshot"]["pattern_state"]["tool_ledger"]["new"] = {
         "result": "new result" * 1000

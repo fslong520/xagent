@@ -72,7 +72,7 @@ def translate_adapter(mock_llm, temp_workspace):
 async def test_adapter_with_file_id(translate_adapter, temp_workspace):
     """Test adapter's file_id parameter handling"""
     # Create a test JSON file in workspace
-    test_data = {"title": "人工智能", "content": "AI技术"}
+    test_data = {"title": "\u4eba\u5de5\u667a\u80fd", "content": "AI\u6280\u672f"}
     test_file = temp_workspace.output_dir / "test_input.json"
 
     with open(test_file, "w", encoding="utf-8") as f:

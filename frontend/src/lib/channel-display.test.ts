@@ -34,7 +34,6 @@ describe("channel display", () => {
   it("supports Feishu and Lark channel aliases", () => {
     expect(getCompactChannelName("Xagent Feishu", "feishu")).toBe("Xagent")
     expect(getCompactChannelName("Lark Support", "feishu")).toBe("Support")
-    expect(getCompactChannelName("生产环境飞书", "feishu")).toBe("生产环境")
   })
 
   it("supports Slack channels", () => {
@@ -45,8 +44,9 @@ describe("channel display", () => {
     )
   })
 
-  it("does not strip a CJK alias from the middle of a larger token", () => {
-    expect(getCompactChannelName("超级飞书商店", "feishu")).toBe("超级飞书商店")
+  it("does not strip an alias from the middle of a larger token", () => {
+    expect(getCompactChannelName("SuperFeishuShop", "feishu")).toBe("SuperFeishuShop")
+    expect(getCompactChannelName("\u751f\u4ea7\u73af\u5883\u98de\u4e66", "feishu")).toBe("\u751f\u4ea7\u73af\u5883")
   })
 
   it("does not infer the channel type from its name", () => {

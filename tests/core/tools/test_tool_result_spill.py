@@ -1160,7 +1160,7 @@ def test_non_container_spill_point_is_stored_as_one_opaque_item(
 
 
 def test_spill_file_is_written_verbatim_unicode_and_newlines(tmp_path):
-    value = [{"note": "第" * 5 + "\nline two"} for _ in range(30)]
+    value = [{"note": "\u7b2c" * 5 + "\nline two"} for _ in range(30)]
     result = {"rows": value}
     target = _target(tmp_path)
     spilled, records = spill_oversized_values(
@@ -1183,7 +1183,7 @@ def test_spill_file_bytes_match_ensure_ascii_false_exactly(tmp_path):
     The fixture holds no bytes, so the hook renders it exactly as a bare
     str() would.
     """
-    value = [{"note": "第" * 5 + "🎉", "id": i} for i in range(60)]
+    value = [{"note": "\u7b2c" * 5 + "🎉", "id": i} for i in range(60)]
     result = {"rows": value}
     target = _target(tmp_path)
     spilled, records = spill_oversized_values(
@@ -1196,7 +1196,7 @@ def test_spill_file_bytes_match_ensure_ascii_false_exactly(tmp_path):
     ).encode("utf-8")
     assert written == expected
     assert b"\\u" not in written
-    assert "第🎉".encode() in written
+    assert "\u7b2c🎉".encode() in written
 
 
 def test_spill_file_is_written_verbatim_plain_text(tmp_path):
@@ -2469,7 +2469,7 @@ def test_spill_text_truncated_ends_at_last_newline(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     "text",
-    ["第" * 200, "a" * 200],  # no newlines anywhere, multi-byte and ASCII
+    ["\u7b2c" * 200, "a" * 200],  # no newlines anywhere, multi-byte and ASCII
     ids=["multi-byte", "ascii"],
 )
 def test_spill_text_without_a_newline_is_not_spilled(
@@ -3210,7 +3210,7 @@ def test_render_spill_notice_truncates_long_relative_path_in_both_styles(style):
         ),
         (
             "unicode_field_names",
-            {"record_fields": ["客户列表", "状态"]},
+            {"record_fields": ["\u5ba2\u6237\u5217\u8868", "\u72b6\u6001"]},
             "unicode",
             None,
         ),
@@ -3270,7 +3270,7 @@ def test_spill_notice_renders_untrusted_names_as_json_data(
         assert len(notice.splitlines()) == 2
         assert escaped_literal in notice
     elif checks == "unicode":
-        assert "客户列表" in notice
+        assert "\u5ba2\u6237\u5217\u8868" in notice
     elif checks == "overlong_field":
         assert "z" * 120 in notice
         assert "z" * 121 not in notice
@@ -3316,7 +3316,7 @@ def test_format_value_path_keeps_dict_keys_verbatim_and_elides_long_paths():
 def test_record_fields_keep_empty_and_unicode_keys():
     from xagent.core.tools.tool_result_spill import _record_fields_for
 
-    assert _record_fields_for("array", [{"": 1, "名": 2}]) == ["", "名"]
+    assert _record_fields_for("array", [{"": 1, "\u540d": 2}]) == ["", "\u540d"]
 
 
 def test_render_spill_notice_dedupes_by_relative_path():

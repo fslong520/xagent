@@ -39,7 +39,6 @@ import {
 import { resolveDynamicTranslation, type Locale } from "@/i18n/translations"
 import type { TranslateDynamic } from "@/contexts/i18n-context"
 import en from "@/i18n/locales/en"
-import zh from "@/i18n/locales/zh"
 
 const t = (key: string, vars?: Record<string, string | number>) =>
   vars?.tool ? `${key}:${vars.tool}` : key
@@ -586,22 +585,18 @@ describe("getFriendlyToolName", () => {
 // The mocked useI18n() above (t: key => key) means every other test in this
 // file exercises processTraceEvents' own logic, not what the toolNames map
 // actually resolves to — deleting the whole map would leave them green. Use
-// the real resolver here so a regression in en.ts/zh.ts's toolNames entries,
+// the real resolver here so a regression in en.ts's toolNames entries,
 // or in getFriendlyToolName's lookup path, actually fails a test.
 describe("getFriendlyToolName against the real translation trees", () => {
   const realTDynamic = (locale: Locale): TranslateDynamic => (key, fallback) =>
     resolveDynamicTranslation(locale, key, fallback)
 
-  it("resolves a mapped tool name to its curated phrase in both locales", () => {
+  it("resolves a mapped tool name to its curated phrase", () => {
     expect(getFriendlyToolName("web_search", realTDynamic("en"))).toBe("Searching the web")
-    expect(getFriendlyToolName("web_search", realTDynamic("zh"))).toBe("正在搜索网络")
   })
 
   it("falls back to the prettified raw name for a tool absent from the map", () => {
     expect(getFriendlyToolName("some_future_tool", realTDynamic("en"))).toBe(
-      "Some Future Tool",
-    )
-    expect(getFriendlyToolName("some_future_tool", realTDynamic("zh"))).toBe(
       "Some Future Tool",
     )
   })
@@ -671,7 +666,6 @@ describe("every toolNames entry resolves through getFriendlyToolName", () => {
   // a Locale at all.
   const toolNames = {
     en: en.traceEventRenderer.toolNames,
-    zh: zh.traceEventRenderer.toolNames,
   } satisfies Partial<Record<Locale, Record<string, string>>>
 
   for (const locale of Object.keys(toolNames) as (keyof typeof toolNames)[]) {
@@ -684,15 +678,12 @@ describe("every toolNames entry resolves through getFriendlyToolName", () => {
     })
   }
 
-  it("keeps the same set of tool names mapped in both locales", () => {
-    expect(Object.keys(toolNames.en).sort()).toEqual(Object.keys(toolNames.zh).sort())
-  })
-
   it("keeps the fixture's Locale boundary a Partial", () => {
     // Everything above iterates only the keys the fixture actually has, so it
     // would all still pass if the annotation regressed to an exhaustive
-    // `Record<Locale, …>`: while Locale is exactly en | zh the two types are
-    // interchangeable here, and no runtime assertion can tell them apart. The
+    // `Record<Locale, …>`: while this repo ships a single Locale the two
+    // types are interchangeable here, and no runtime assertion can tell
+    // them apart. The
     // difference only surfaces in a build that widens Locale, which this repo
     // never runs -- so pin the boundary in the source text, the way
     // src/lib/time-utils.test.ts pins displayDateLocales' Partial.

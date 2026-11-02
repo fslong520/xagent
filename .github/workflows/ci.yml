@@ -286,7 +286,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          # 使用 python3 -m uv 确保 uv 命令可用
+          # Use python3 -m uv so the uv command is available
           _UV="python3 -m uv"
           $_UV --version
           # Use Python 3.12 for onnxruntime-gpu compatibility
@@ -381,7 +381,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          # 使用 python3 -m uv 确保 uv 命令可用
+          # Use python3 -m uv so the uv command is available
           _UV="python3 -m uv"
           $_UV --version
           # Use Python 3.12 for onnxruntime-gpu compatibility
@@ -480,7 +480,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          # 使用 python3 -m uv 确保 uv 命令可用
+          # Use python3 -m uv so the uv command is available
           _UV="python3 -m uv"
           $_UV --version
           # Use Python 3.12 for onnxruntime-gpu compatibility
@@ -629,7 +629,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          # 使用 python3 -m uv 确保 uv 命令可用
+          # Use python3 -m uv so the uv command is available
           _UV="python3 -m uv"
           $_UV --version
           # Use Python 3.12 for onnxruntime-gpu compatibility

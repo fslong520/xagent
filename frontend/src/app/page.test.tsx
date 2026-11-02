@@ -11,7 +11,7 @@ const setPendingMessageMock = vi.hoisted(() => vi.fn())
 const setTaskIdMock = vi.hoisted(() => vi.fn())
 const routerPushMock = vi.hoisted(() => vi.fn())
 const toastErrorMock = vi.hoisted(() => vi.fn())
-const localeMock = vi.hoisted(() => ({ value: "en" as "en" | "zh" }))
+const localeMock = vi.hoisted(() => ({ value: "en" as "en" }))
 const resolveAgentLogoUrlMock = vi.hoisted(() => vi.fn())
 const formatDisplayDateMock = vi.hoisted(() => vi.fn())
 const homeGetStartedDestinationOverridesMock = vi.hoisted(() => (
@@ -52,7 +52,7 @@ vi.mock("@/lib/utils", async () => {
 })
 
 vi.mock("@/lib/time-utils", () => ({
-  formatDisplayDate: (...args: [unknown, "en" | "zh", Intl.DateTimeFormatOptions]) => {
+  formatDisplayDate: (...args: [unknown, "en", Intl.DateTimeFormatOptions]) => {
     formatDisplayDateMock(...args)
     return typeof args[0] === "string" && args[0].startsWith("2024-")
       ? `formatted:${args[0]}`
@@ -1294,14 +1294,10 @@ describe("Home", () => {
       await waitFor(() => expect(consoleErrorMock).toHaveBeenCalledWith("Failed to fetch recent tasks:", expect.any(Error)))
     })
 
-    it("rejects non-OK loader responses before body parsing and clears only old templates", async () => {
-      const oldTemplate = deferred<Response>()
+    it("rejects non-OK loader responses before body parsing", async () => {
       const currentBody = vi.fn(() => Promise.resolve(JSON.stringify([templateCard("bad")])) )
-      let templateRequest = 0
       apiRequestMock.mockImplementation((url: string) => {
         if (url.startsWith("http://api.local/api/templates/")) {
-          templateRequest += 1
-          if (templateRequest === 1) return oldTemplate.promise
           const response = new Response("valid but unavailable", { status: 503 })
           Object.defineProperty(response, "text", { value: currentBody })
           return Promise.resolve(response)
@@ -1309,15 +1305,10 @@ describe("Home", () => {
         if (url === recentTasksUrl) return Promise.resolve(jsonResponse({ tasks: [recentTask(4)] }))
         throw new Error(`Unexpected apiRequest: ${url}`)
       })
-      const view = render(<Home />)
-      await act(async () => oldTemplate.resolve(jsonResponse([templateCard("old")])))
-      expect(await screen.findByText("Template old")).toBeInTheDocument()
-
-      localeMock.value = "zh"
-      view.rerender(<Home />)
+      render(<Home />)
 
       await waitFor(() => expect(consoleErrorMock).toHaveBeenCalledWith("Failed to fetch templates:", expect.any(Error)))
-      expect(screen.queryByText("Template old")).not.toBeInTheDocument()
+      expect(screen.queryByText("Template bad")).not.toBeInTheDocument()
       expect(screen.getByText("Task 4")).toBeInTheDocument()
       expect(currentBody).not.toHaveBeenCalled()
     })
@@ -1653,50 +1644,6 @@ describe("Home", () => {
       })
     })
 
-    it("does not refetch recents on locale change and suppresses an old locale completion", async () => {
-      const en = deferred<Response>()
-      const zh = deferred<Response>()
-      apiRequestMock.mockImplementation((url: string) => {
-        if (url === templateUrl("en")) return en.promise
-        if (url === templateUrl("zh")) return zh.promise
-        if (url === recentTasksUrl) return Promise.resolve(jsonResponse({ tasks: [recentTask(8)] }))
-        throw new Error(`Unexpected apiRequest: ${url}`)
-      })
-      const view = render(<Home />)
-      await waitFor(() => expect(apiRequestMock).toHaveBeenCalledWith(recentTasksUrl))
-      const recentCalls = apiRequestMock.mock.calls.filter(([url]) => url === recentTasksUrl).length
-      localeMock.value = "zh"
-      view.rerender(<Home />)
-      await act(async () => en.resolve(jsonResponse([templateCard("old")])))
-      expect(screen.queryByText("Template old")).not.toBeInTheDocument()
-      await act(async () => zh.resolve(jsonResponse([templateCard("new")])))
-      expect(await screen.findByText("Template new")).toBeInTheDocument()
-      expect(apiRequestMock.mock.calls.filter(([url]) => url === recentTasksUrl)).toHaveLength(recentCalls)
-    })
-
-    it("keeps current-locale templates when an old valid body finishes parsing last", async () => {
-      const oldBody = deferred<string>()
-      const oldResponse = new Response("old")
-      const oldText = vi.fn(() => oldBody.promise)
-      Object.defineProperty(oldResponse, "text", { value: oldText })
-      apiRequestMock.mockImplementation((url: string) => {
-        if (url === templateUrl("en")) return Promise.resolve(oldResponse)
-        if (url === templateUrl("zh")) return Promise.resolve(jsonResponse([templateCard("current-zh")]))
-        if (url === recentTasksUrl) return Promise.resolve(jsonResponse({ tasks: [] }))
-        throw new Error(`Unexpected apiRequest: ${url}`)
-      })
-      const view = render(<Home />)
-      await waitFor(() => expect(oldText).toHaveBeenCalledTimes(1))
-
-      localeMock.value = "zh"
-      view.rerender(<Home />)
-      expect(await screen.findByText("Template current-zh")).toBeInTheDocument()
-
-      await act(async () => oldBody.resolve(JSON.stringify([templateCard("obsolete-en")])))
-      expect(screen.getByText("Template current-zh")).toBeInTheDocument()
-      expect(screen.queryByText("Template obsolete-en")).not.toBeInTheDocument()
-      expect(consoleErrorMock).not.toHaveBeenCalled()
-    })
 
     it("does not parse or diagnose either source after unmount, including parser fallback", async () => {
       const templates = deferred<Response>()

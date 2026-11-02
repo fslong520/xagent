@@ -37,7 +37,7 @@ def _marked_message(answer: str, marker: Any) -> Any:
 
 
 def test_pending_response_serializer_exposes_only_allowlisted_exact_fields() -> None:
-    answer = "ANSWER_BEGIN_" + "答" * 8_000 + "_ANSWER_END"
+    answer = "ANSWER_BEGIN_" + "\u7b54" * 8_000 + "_ANSWER_END"
     question = "Which output language? " + "Q" * 8_000
     message = _marked_message(
         answer,
@@ -206,7 +206,7 @@ def test_city_question_and_language_name_are_not_a_language_override() -> None:
 
 
 def test_harness_preserves_large_request_and_answer_exactly_once() -> None:
-    request = "REQUEST_BEGIN_" + "請" * 8_000 + "_REQUEST_END"
+    request = "REQUEST_BEGIN_" + "\u8acb" * 8_000 + "_REQUEST_END"
     answer = "Continue in Spanish. " + "A" * 8_000
     response = PendingUserResponse(answer, "Which language?", "question")
 

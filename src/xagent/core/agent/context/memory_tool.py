@@ -26,6 +26,7 @@ from ...memory.core import MemoryNote, drop_replaced_tags
 from ...memory.remote import (
     NOT_FOUND_OR_DENIED_ERROR,
     RemoteMemoryStoreError,
+    _parse_share_marker,
     _unwrap_remote_store,
 )
 from ..trace import (
@@ -69,49 +70,62 @@ MAX_SEARCH_LIMIT = 20
 # gets READBACK_REJECTED_MESSAGE below: the shared wording reported a rejected
 # credential as a timeout and the model repeated that cause verbatim.
 UNVERIFIED_RECEIPT_MESSAGE = (
-    "写入已受理但未能确认落库，请勿重复保存 (the write was accepted but could "
-    "not be verified -- a read-back timed out, failed to connect or answered "
-    "5xx; the memory service may have stored it, so do not save it again)."
+    "The write was accepted but could not be verified: a read-back timed out, "
+    "failed to connect or answered 5xx. The memory service may have stored it, "
+    "so do not save it again."
 )
 #: A read-back the service refused (401, or any 4xx outside the 403/404 absence
 #: pair) or answered with a body that cannot be read as a note. The write's fate
 #: is unknown, and the cause is neither a timeout nor a 5xx.
 READBACK_REJECTED_MESSAGE = (
-    "读取回执被服务端拒绝或无法解析，写入是否落库未知，请勿重复保存 (the "
-    "read-back was refused by the memory service or its answer could not be "
-    "parsed; whether the write landed is unknown, so do not save the same fact "
-    "again)."
+    "The read-back was refused by the memory service or its answer could not "
+    "be parsed. Whether the write landed is unknown, so do not save the same "
+    "fact again."
 )
 #: An unconfirmed read-back whose failure cannot be placed in either class. The
 #: honest answer states no cause rather than inventing one.
 RECEIPT_FAILURE_UNKNOWN_MESSAGE = (
-    "读取回执失败，无法确认写入是否落库，请勿重复保存 (the read-back failed and "
-    "its cause could not be determined; whether the write landed is unknown, so "
-    "do not save the same fact again)."
+    "The read-back failed and its cause could not be determined. Whether the "
+    "write landed is unknown, so do not save the same fact again."
 )
 # X-04 rework: a receipt that arrives without an id is not a not-found answer.
 # The write may have landed and simply not been reported back, so it gets its
 # own wording instead of being folded into the timeout/5xx message.
 MISSING_RECEIPT_ID_MESSAGE = (
-    "回执未带 memory id，无法确认是否落库，请勿重复保存 (the service's receipt "
-    "carried no memory id, so the write cannot be read back; the memory service "
-    "may have stored it, so do not save it again)."
+    "The service's receipt carried no memory id, so the write cannot be read "
+    "back. The memory service may have stored it, so do not save it again."
 )
 # X-04 rework: the recovery created a replacement note, but that note's body
 # could not be confirmed to carry the new text. This is not the timeout/5xx
 # case above (the create did answer) and must not claim one.
 RECOVERED_CONTENT_UNCONFIRMED_MESSAGE = (
-    "已新建记忆但未能确认正文一致，请勿重复保存 (a replacement memory was "
-    "created because the receipt note did not carry the new text, but the new "
-    "note's body could not be confirmed; do not save the same fact again)."
+    "A replacement memory was created because the receipt note did not carry "
+    "the new text, but the new note's body could not be confirmed. Do not save "
+    "the same fact again."
 )
 # X-04 rework: a create receipt names a live note whose body does not carry the
 # text. The write answered, so this is not a timeout either; the note is left
 # alone rather than duplicated.
 CONTENT_UNCONFIRMED_MESSAGE = (
-    "已写入但未能确认正文一致，请勿重复保存 (the note behind the create receipt "
-    "exists but its body could not be confirmed to contain the new text; do not "
-    "save the same fact again)."
+    "The note behind the create receipt exists but its body could not be "
+    "confirmed to contain the new text. Do not save the same fact again."
+)
+# XN-2: a ``[share:…]`` write is verified against the marker-stripped body the
+# service stores, so a match gets a positive confirmation — never the "do not
+# save again" scare, which made a correct shared write read like a failure.
+# ``{layer}`` is the marker's own space (company / department).
+SHARED_STORED_MESSAGE = (
+    "Written to the shared {layer} space; the read-back body matches."
+)
+# XN-2: the share variant of a body mismatch. The body was written under the
+# share marker; a shared note may not come back through a personal GET (the
+# service routes reads by space), so the model must verify instead of
+# resending the fact into its own memory.
+SHARED_CONTENT_UNCONFIRMED_MESSAGE = (
+    "The body was written to the shared {layer} space but the read-back body "
+    "could not be confirmed. A shared note may not be readable through a "
+    "personal GET (the upstream routes by space), so verify before deciding and "
+    "do not resend it right away."
 )
 
 MemoryKind = Literal[
@@ -177,6 +191,11 @@ class StoreMemoryTool:
         if kind not in _MEMORY_KINDS:
             kind = "domain_insight"
 
+        # XN-1/XN-2: the marker the service consumes on write. The receipt
+        # verifies against the stripped body, and the result echoes which
+        # space the note was written to.
+        share = _parse_share_marker(content)
+
         async with self._store_lock:
             if self.stored_count >= self.max_stores:
                 return {
@@ -227,6 +246,16 @@ class StoreMemoryTool:
                 )
             action = str(outcome.get("action") or "create")
             memory_id = outcome.get("memory_id")
+            # XN-1: echo the space on the receipt — the store's own answer
+            # first (the adapter prefers the service's field), the request's
+            # marker as the fallback, so both keys are present (null for a
+            # plain personal write) the way search results carry them.
+            space_kind = outcome.get("space_kind") or (
+                share[0] if share is not None else None
+            )
+            space_id = outcome.get("space_id")
+            if space_id is None and share is not None:
+                space_id = share[1]
             if outcome.get("stored"):
                 # Account for the created resource before any further await so
                 # trace delivery cannot reopen capacity after a cancellation.
@@ -269,7 +298,11 @@ class StoreMemoryTool:
                     failed_receipt=outcome.get("failed_receipt"),
                     unverified_reason=outcome.get("unverified_reason"),
                     unverified_kind=outcome.get("unverified_kind"),
+                    space_kind=space_kind,
                 ),
+                # XN-1: the shared-space echo rides on every store receipt.
+                "space_kind": space_kind,
+                "space_id": space_id,
             }
             if outcome.get("verified") is not None:
                 # X-04: report whether a read-back confirmed this write; a
@@ -295,6 +328,7 @@ class StoreMemoryTool:
         failed_receipt: Any = None,
         unverified_reason: str | None = None,
         unverified_kind: str | None = None,
+        space_kind: str | None = None,
     ) -> dict[str, Any]:
         """Tell the model which branch the judgement took (§10.4).
 
@@ -306,11 +340,25 @@ class StoreMemoryTool:
         receipt that could not be read back is only ever reported as the create
         that actually landed, never as "merged". A receipt whose note exists
         but does not carry the new text is not a merge either.
+
+        ``space_kind`` (XN-2) is the ``[share:…]`` layer the write carried:
+        a verified share write gets the positive confirmation, and a share
+        write whose body mismatched gets the actionable guidance instead of
+        the "do not save again" scare.
         """
         if verified is False:
             # The write may well have landed, so this is reported as
             # accepted-but-unconfirmed rather than failed, and the model is
             # told not to write it again (X-04).
+            if space_kind and unverified_reason == _CONTENT_MISMATCH_REASON:
+                # XN-2: the share case first — the body was written under the
+                # marker, and a shared note may not come back through a
+                # personal GET, so "do not resend" is the wrong instruction.
+                return {
+                    "message": SHARED_CONTENT_UNCONFIRMED_MESSAGE.format(
+                        layer=space_kind
+                    )
+                }
             if unverified_reason == _NO_RECEIPT_ID_REASON:
                 # No id means no read-back at all: say that, not "timed out".
                 return {"message": MISSING_RECEIPT_ID_MESSAGE}
@@ -399,6 +447,10 @@ class StoreMemoryTool:
                     f"Updated an existing similar memory in place ({memory_id})."
                 )
             }
+        if space_kind and verified is True:
+            # XN-2: the marker-stripped body matched on the read-back — say so
+            # positively; the generic wording below would hide the space.
+            return {"message": SHARED_STORED_MESSAGE.format(layer=space_kind)}
         return {
             "message": f"Stored as a new memory ({memory_id}).",
         }
@@ -455,6 +507,11 @@ class StoreMemoryTool:
             "memory_id": getattr(response, "memory_id", None),
             "parent_id": response_metadata.get("parent_id"),
             "error": None,
+            # XN-1: the adapter's space answer (the service's own field first,
+            # the request's [share:…] marker as its fallback) reaches the
+            # receipt instead of being dropped here.
+            "space_kind": getattr(response, "space_kind", None),
+            "space_id": getattr(response, "space_id", None),
         }
         if "degraded" in response_metadata:
             # Pass the upstream flag through untouched (True/False/None) so the
@@ -525,6 +582,13 @@ class StoreMemoryTool:
         get = getattr(self.memory_store, "get", None)
         if not callable(get):
             return {**outcome, "verified": None}
+        # XN-2: verify against the body the service actually stored. A
+        # ``[share:…]`` marker is consumed on write, so comparing the raw
+        # content would always miss and misreport a correct shared write as
+        # unconfirmed. The adapter's own parser is reused (not a second
+        # regex) so the write side and the check can never drift apart.
+        share = _parse_share_marker(content)
+        expected = share[2] if share is not None else content
         memory_id = outcome.get("memory_id")
         state, detail, note, unconfirmed_kind = _receipt_state(get, memory_id)
 
@@ -552,7 +616,7 @@ class StoreMemoryTool:
                     # unreadable, not slow (third review).
                     "unverified_kind": "refused",
                 }
-            if _body_contains(body, content):
+            if _body_contains(body, expected):
                 return {**outcome, "verified": True}
             if str(outcome.get("action") or "create") not in ("merge", "parent"):
                 # A create receipt is not a promise of a merge: the note it
@@ -603,7 +667,7 @@ class StoreMemoryTool:
         mismatch = False
         if new_state == "present":
             new_body = _receipt_body(new_note)
-            verified = new_body is not None and _body_contains(new_body, content)
+            verified = new_body is not None and _body_contains(new_body, expected)
             mismatch = not verified
         result: dict[str, Any] = {
             "stored": True,
@@ -921,16 +985,14 @@ def _body_contains(body: str, content: str) -> bool:
     return wanted in _normalized_receipt_text(body)
 
 
-#: Accepted values of the optional ``space`` search filter (方案 §4.7): the
+#: Accepted values of the optional ``space`` search filter (design §4.7): the
 #: personal notes, the department layer, or the whole organisation. The server
 #: resolves the caller's readable layers itself, so ``space`` only narrows.
 SearchSpace = Literal["personal", "department", "company"]
 _SEARCH_SPACE_VALUES = ("personal", "department", "company")
 
 
-def _search_filters(
-    space: Any, category: Any
-) -> tuple[dict[str, Any], str | None]:
+def _search_filters(space: Any, category: Any) -> tuple[dict[str, Any], str | None]:
     """Build the optional ``space``/``category`` filter keys (§4.7).
 
     Returns ``(filters, None)`` for valid input and ``({}, message)`` for an
@@ -1149,8 +1211,8 @@ class UpdateMemoryTool:
             note.content = content
             # X-06: the update tool never sets tags, and the adapter sends the
             # note's tag list verbatim, so a tag that only the replaced text
-            # supported would survive the rewrite (京A8888 kept under the new
-            # 京A9999). Drop those before writing; a classification tag that
+            # supported would survive the rewrite (license ABC-1234 kept under the new
+            # ABC-5678). Drop those before writing; a classification tag that
             # never appeared in the body is left alone.
             if previous_content != content:
                 drop_replaced_tags(note, previous_content)

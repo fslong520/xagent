@@ -1159,13 +1159,13 @@ describe('MarkdownRenderer', () => {
       blob: async () => new Blob(['video-bytes'], { type: 'video/mp4' }),
     })
     const content =
-      '[下载视频（MP4）](file:550e8400-e29b-41d4-a716-446655440000 "puppy_drinking.mp4")'
+      '[Download video (MP4)](file:550e8400-e29b-41d4-a716-446655440000 "puppy_drinking.mp4")'
     render(<MarkdownRenderer content={content} />)
 
-    const video = await screen.findByLabelText('下载视频（MP4）')
+    const video = await screen.findByLabelText('Download video (MP4)')
     expect(video.tagName.toLowerCase()).toBe('video')
     expect(screen.queryByLabelText('puppy_drinking.mp4')).not.toBeInTheDocument()
-    expect(screen.getByText('下载视频（MP4）')).toBeInTheDocument()
+    expect(screen.getByText('Download video (MP4)')).toBeInTheDocument()
   })
 
   it('falls back to the label for detection when a pre-existing title does not reveal the type', async () => {
@@ -1195,10 +1195,10 @@ describe('MarkdownRenderer', () => {
       blob: async () => new Blob(['video-bytes'], { type: 'video/mp4' }),
     })
     const content =
-      '![预览视频](file:550e8400-e29b-41d4-a716-446655440000 "puppy_drinking.mp4")'
+      '![Preview video](file:550e8400-e29b-41d4-a716-446655440000 "puppy_drinking.mp4")'
     render(<MarkdownRenderer content={content} />)
 
-    const video = await screen.findByLabelText('预览视频')
+    const video = await screen.findByLabelText('Preview video')
     expect(video.tagName.toLowerCase()).toBe('video')
   })
 
@@ -1220,11 +1220,11 @@ describe('MarkdownRenderer', () => {
     render(
       <MarkdownRenderer
         filesDisabled
-        content='![预览视频](file:550e8400-e29b-41d4-a716-446655440000 "generated_video.mp4")'
+        content='![Preview video](file:550e8400-e29b-41d4-a716-446655440000 "generated_video.mp4")'
       />,
     )
 
-    expect(screen.getByText('预览视频')).toBeInTheDocument()
+    expect(screen.getByText('Preview video')).toBeInTheDocument()
     expect(screen.queryByText('generated_video.mp4')).not.toBeInTheDocument()
   })
 
@@ -1243,11 +1243,11 @@ describe('MarkdownRenderer', () => {
       ok: true,
       arrayBuffer: async () => new Uint8Array([65, 66]).buffer,
     })
-    const content = '[下载报告](file:doc-file-id "annual_report_2024.docx")'
+    const content = '[Download report](file:doc-file-id "annual_report_2024.docx")'
     render(<MarkdownRenderer content={content} />)
 
     expect(await screen.findByTestId('docx-preview')).toBeInTheDocument()
-    expect(screen.getByText('下载报告')).toBeInTheDocument()
+    expect(screen.getByText('Download report')).toBeInTheDocument()
     expect(screen.queryByText('annual_report_2024.docx')).not.toBeInTheDocument()
   })
 

@@ -123,7 +123,7 @@ tags:
   - customer
 descriptions:
   en: Professional customer support assistant
-  zh: 专业的客服助手
+  zh: \u4e13\u4e1a\u7684\u5ba2\u670d\u52a9\u624b
 author: Xagent
 version: "1.0"
 
@@ -148,7 +148,7 @@ tags:
   - marketing
 descriptions:
   en: Professional sales assistant
-  zh: 专业的销售助手
+  zh: \u4e13\u4e1a\u7684\u9500\u552e\u52a9\u624b
 sample_prompts:
   en:
   - title: Draft an outreach email
@@ -159,12 +159,12 @@ sample_prompts:
     prompt: Summarise our last call and suggest next steps.
     highlights: []
   zh:
-  - title: 起草外联邮件
-    prompt: 为 联系人 起草一封外联邮件。
+  - title: \u8d77\u8349\u5916\u8054\u90ae\u4ef6
+    prompt: \u4e3a \u8054\u7cfb\u4eba \u8d77\u8349\u4e00\u5c01\u5916\u8054\u90ae\u4ef6。
     highlights:
-    - 联系人
-  - title: 总结通话
-    prompt: 总结我们上次的通话并给出下一步建议。
+    - \u8054\u7cfb\u4eba
+  - title: \u603b\u7ed3\u901a\u8bdd
+    prompt: \u603b\u7ed3\u6211\u4eec\u4e0a\u6b21\u7684\u901a\u8bdd\u5e76\u7ed9\u51fa\u4e0b\u4e00\u6b65\u5efa\u8bae。
     highlights: []
 author: Xagent
 version: "1.0"
@@ -257,7 +257,7 @@ category: Marketing
 type: workforce
 descriptions:
   en: Orchestrates GA Analyzer and Ads Recommendation.
-  zh: 编排 GA Analyzer 和 Ads Recommendation。
+  zh: \u7f16\u6392 GA Analyzer \u548c Ads Recommendation。
 author: Xagent
 version: "1.0"
 
@@ -318,23 +318,23 @@ name: Social Media Content Manager
 category: Marketing
 descriptions:
   en: Turns a brief into platform-native posts.
-  zh: 将简报转化为平台原生帖子。
+  zh: \u5c06\u7b80\u62a5\u8f6c\u5316\u4e3a\u5e73\u53f0\u539f\u751f\u5e16\u5b50。
 persona:
   name: Maya
   role:
     en: Social Media Content Manager
-    zh: 社媒内容经理
+    zh: \u793e\u5a92\u5185\u5bb9\u7ecf\u7406
   avatar: /marketplace/avatars/maya.png
   intro:
     en: "Hi there — I'm Maya, your Social Media Content Manager."
-    zh: 你好，我是 Maya，你的社媒内容经理。
+    zh: \u4f60\u597d，\u6211\u662f Maya，\u4f60\u7684\u793e\u5a92\u5185\u5bb9\u7ecf\u7406。
   kickoff_questions:
     en:
     - Which platforms are in scope?
     - Do you have brand guidelines?
     zh:
-    - 涉及哪些平台？
-    - 有品牌规范吗？
+    - \u6d89\u53ca\u54ea\u4e9b\u5e73\u53f0？
+    - \u6709\u54c1\u724c\u89c4\u8303\u5417？
 author: Xagent
 version: "1.0"
 
@@ -435,10 +435,10 @@ def admin_headers(admin_user):
 
 
 class TestTemplatesAPI:
-    """测试 Templates API"""
+    """Templates API tests."""
 
     def test_list_templates_success(self, mock_app_state, admin_headers):
-        """测试成功获取模板列表"""
+        """Successfully listing templates."""
         with patch.object(client.app, "state", mock_app_state):
             response = client.get("/api/templates/", headers=admin_headers)
 
@@ -452,14 +452,14 @@ class TestTemplatesAPI:
             assert "sales_assistant" in template_ids
 
     def test_list_templates_with_stats(self, mock_app_state, admin_headers):
-        """测试模板列表包含统计数据"""
+        """The template list carries statistics."""
         with patch.object(client.app, "state", mock_app_state):
             response = client.get("/api/templates/", headers=admin_headers)
 
             assert response.status_code == 200
             templates = response.json()
 
-            # 检查统计数据字段
+            # Check the statistics fields
             template = templates[0]
             assert "views" in template
             assert "likes" in template
@@ -486,7 +486,7 @@ class TestTemplatesAPI:
                 db.close()
 
     def test_get_template_detail(self, mock_app_state, admin_headers):
-        """测试获取模板详情"""
+        """Fetching template details."""
         with patch.object(client.app, "state", mock_app_state):
             response = client.get(
                 "/api/templates/customer_support", headers=admin_headers
@@ -500,7 +500,7 @@ class TestTemplatesAPI:
             assert template["category"] == "Support"
             assert "agent_config" in template
 
-            # 检查 agent_config
+            # Check agent_config
             agent_config = template["agent_config"]
             assert "instructions" in agent_config
             assert "customer support assistant" in agent_config["instructions"].lower()
@@ -614,7 +614,7 @@ class TestTemplatesAPI:
     def test_sample_prompts_localization_and_default(
         self, mock_app_state, admin_headers
     ):
-        """测试 sample_prompts 按语言解析，且未定义时默认为空列表"""
+        """sample_prompts resolve per language and default to an empty list."""
         with patch.object(client.app, "state", mock_app_state):
             # Template without sample_prompts defaults to an empty list.
             response = client.get(
@@ -638,7 +638,7 @@ class TestTemplatesAPI:
             )
             assert response.status_code == 200
             zh_prompts = response.json()["sample_prompts"]
-            assert zh_prompts[0]["title"] == "起草外联邮件"
+            assert zh_prompts[0]["title"] == "\u8d77\u8349\u5916\u8054\u90ae\u4ef6"
 
             # The list endpoint carries the same field.
             response = client.get("/api/templates/?lang=en", headers=admin_headers)
@@ -657,16 +657,16 @@ class TestTemplatesAPI:
             assert fr_prompts == en_prompts
 
     def test_get_template_not_found(self, mock_app_state, admin_headers):
-        """测试获取不存在的模板"""
+        """Fetching a nonexistent template."""
         with patch.object(client.app, "state", mock_app_state):
             response = client.get("/api/templates/nonexistent", headers=admin_headers)
 
             assert response.status_code == 404
 
     def test_like_template(self, mock_app_state, admin_headers):
-        """测试同一用户重复点赞只计数一次"""
+        """A repeated like from one user counts once."""
         with patch.object(client.app, "state", mock_app_state):
-            # 第一次点赞
+            # First like
             response = client.post(
                 "/api/templates/customer_support/like", headers=admin_headers
             )
@@ -676,7 +676,7 @@ class TestTemplatesAPI:
             assert result["liked"] is True
             assert result["likes"] == 1
 
-            # 同一用户重复点赞应幂等，不重复增加
+            # A repeated like from the same user is idempotent and must not increment
             response = client.post(
                 "/api/templates/customer_support/like", headers=admin_headers
             )
@@ -686,7 +686,7 @@ class TestTemplatesAPI:
             assert result["liked"] is True
             assert result["likes"] == 1
 
-            # 获取模板详情验证点赞数
+            # Fetch template details to verify the like count
             response = client.get(
                 "/api/templates/customer_support", headers=admin_headers
             )
@@ -694,7 +694,7 @@ class TestTemplatesAPI:
             assert detail["likes"] == 1
             assert detail["is_liked"] is True
 
-            # 获取模板列表验证当前用户点赞状态
+            # Fetch the template list to verify the current user's like state
             response = client.get("/api/templates/", headers=admin_headers)
             assert response.status_code == 200
             templates = response.json()
@@ -709,7 +709,7 @@ class TestTemplatesAPI:
     def test_like_template_from_different_users_counts_separately(
         self, mock_app_state, admin_headers
     ):
-        """测试不同用户点赞同一模板分别计数"""
+        """Different users liking the same template are counted separately."""
         user_headers = create_user_headers("template_like_user")
 
         with patch.object(client.app, "state", mock_app_state):
@@ -726,7 +726,7 @@ class TestTemplatesAPI:
             assert response.json()["likes"] == 2
 
     def test_like_template_not_found(self, mock_app_state, admin_headers):
-        """测试点赞不存在模板仍返回 404"""
+        """Liking a nonexistent template still returns 404."""
         with patch.object(client.app, "state", mock_app_state):
             response = client.post(
                 "/api/templates/nonexistent/like", headers=admin_headers
@@ -734,7 +734,7 @@ class TestTemplatesAPI:
             assert response.status_code == 404
 
     def test_user_template_relation_unique_constraint(self, admin_user):
-        """测试同一用户同一模板同一关系类型只能有一条数据"""
+        """One user, one template and one relation type yield a single row."""
         db = next(get_db())
         try:
             relation = UserTemplateRelation(
@@ -762,7 +762,7 @@ class TestTemplatesAPI:
     def test_inactive_like_relation_reactivates(
         self, mock_app_state, admin_headers, admin_user
     ):
-        """测试 inactive 的点赞关系再次 like 会重新激活并增加计数"""
+        """Liking an inactive relation reactivates it and increments the count."""
         db = next(get_db())
         try:
             db.add(TemplateStats(template_id="customer_support", likes=0))
@@ -801,7 +801,7 @@ class TestTemplatesAPI:
             db.close()
 
     def test_increment_template_likes_uses_database_atomic_update(self, test_db):
-        """测试点赞计数不会被 stale session 覆盖"""
+        """The like count is not overwritten by a stale session."""
         db = next(get_db())
         try:
             db.add(TemplateStats(template_id="customer_support", likes=0))
@@ -847,7 +847,7 @@ class TestTemplatesAPI:
             db.close()
 
     def test_use_template(self, mock_app_state, admin_headers):
-        """测试使用模板"""
+        """Using a template."""
         with patch.object(client.app, "state", mock_app_state):
             response = client.post(
                 "/api/templates/customer_support/use", headers=admin_headers
@@ -859,7 +859,7 @@ class TestTemplatesAPI:
             assert result["used_count"] == 1
             assert "message" in result
 
-            # 获取模板详情验证使用次数
+            # Fetch template details to verify the usage count
             response = client.get(
                 "/api/templates/customer_support", headers=admin_headers
             )
@@ -924,16 +924,16 @@ class TestTemplatesAPI:
                 db.close()
 
     def test_get_template_increments_views(self, mock_app_state, admin_headers):
-        """测试获取模板详情增加访问次数"""
+        """Fetching template details increments the view count."""
         with patch.object(client.app, "state", mock_app_state):
-            # 第一次访问
+            # First view
             response = client.get(
                 "/api/templates/customer_support", headers=admin_headers
             )
             assert response.status_code == 200
             assert response.json()["views"] == 1
 
-            # 第二次访问
+            # Second view
             response = client.get(
                 "/api/templates/customer_support", headers=admin_headers
             )
@@ -959,7 +959,7 @@ class TestTemplatesAPI:
             assert response.status_code in (401, 403)
 
     def test_template_data_structure(self, mock_app_state, admin_headers):
-        """测试模板数据结构完整性"""
+        """Template data structure completeness."""
         with patch.object(client.app, "state", mock_app_state):
             response = client.get("/api/templates/", headers=admin_headers)
 
@@ -968,7 +968,7 @@ class TestTemplatesAPI:
 
             template = templates[0]
 
-            # 检查必需字段
+            # Check the required fields
             required_fields = [
                 "id",
                 "name",
@@ -991,7 +991,7 @@ class TestTemplatesAPI:
 
 
 class TestTemplatePersona:
-    """测试 marketplace persona 字段的解析与本地化"""
+    """Parsing and localization of the marketplace persona field."""
 
     def test_persona_included_and_localized(
         self, persona_mock_app_state, admin_headers
@@ -1011,7 +1011,10 @@ class TestTemplatePersona:
             response_zh = client.get(
                 "/api/templates/with_persona?lang=zh", headers=admin_headers
             )
-            assert response_zh.json()["persona"]["role"] == "社媒内容经理"
+            assert (
+                response_zh.json()["persona"]["role"]
+                == "\u793e\u5a92\u5185\u5bb9\u7ecf\u7406"
+            )
 
             # The list endpoint carries the same field.
             response = client.get("/api/templates/?lang=en", headers=admin_headers)
@@ -1068,7 +1071,7 @@ class TestTemplatePersona:
 
 
 class TestTemplateHiredFlag:
-    """测试 hired / hired_agent_id 是否正确反映当前用户的 quick-access agent"""
+    """hired / hired_agent_id reflect the current user's quick-access agent."""
 
     def test_false_when_no_quick_access_agent_exists(
         self, mock_app_state, admin_headers
@@ -1258,7 +1261,7 @@ class TestTemplateHiredFlag:
 
 
 class TestUseTemplateAsWorkforce:
-    """测试 POST /api/templates/{id}/use-as-workforce"""
+    """Tests for POST /api/templates/{id}/use-as-workforce."""
 
     def test_rejects_non_workforce_template(self, mock_app_state, admin_headers):
         with patch.object(client.app, "state", mock_app_state):
@@ -1358,7 +1361,8 @@ class TestUseTemplateAsWorkforce:
             try:
                 workforce = db.get(Workforce, workforce_id)
                 assert (
-                    workforce.description == "编排 GA Analyzer 和 Ads Recommendation。"
+                    workforce.description
+                    == "\u7f16\u6392 GA Analyzer \u548c Ads Recommendation。"
                 )
             finally:
                 db.close()

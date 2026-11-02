@@ -4,7 +4,7 @@ category: Sales
 featured: true
 descriptions:
   en: Turns a meeting — from Zoom, your Granola notes, or a transcript you paste or upload — into a summary, decisions, action items and a follow-up email draft, grounded in the transcript, nothing invented.
-  zh: 将会议——来自 Zoom、您的 Granola 笔记，或您粘贴/上传的会议记录——转化为摘要、决策、行动项和跟进邮件草稿，完全基于记录内容，不臆造。
+  zh: Turns meetings, whether from Zoom, your Granola notes, or notes you paste or upload, into summaries, decisions, action items and follow-up email drafts, grounded strictly in the record and never invented.
 features:
   en:
   - Looks up a Zoom meeting by its meeting id and reads its cloud-recording transcript directly, once Zoom is connected
@@ -13,11 +13,11 @@ features:
   - Extracts decisions, owners and due dates from the transcript on request
   - Drafts a follow-up email in Gmail and can log a CRM note to HubSpot after your approval
   zh:
-  - 连接 Zoom 后，可通过会议 ID 查找会议，直接读取其云录制转录文本
-  - 或连接 Granola 后，可按主题或日期在您的 Granola 笔记中查找会议，直接读取其笔记与转录文本
-  - 若两者均未连接，或该会议在其中不可用，也可接受您粘贴/上传的会议记录（.txt、.docx 或 .pdf）
-  - 按需从记录中提取决策、负责人和截止日期
-  - 在 Gmail 中起草跟进邮件，并在您批准后于 HubSpot 中记录 CRM 备注
+  - With Zoom connected, looks up a meeting by meeting ID and reads its cloud recording transcript directly
+  - With Granola connected, finds the meeting in your Granola notes by title or date and reads its notes and transcript directly
+  - If neither is connected, or the meeting is unavailable there, also accepts meeting notes you paste or upload (.txt, .docx or .pdf)
+  - Extracts decisions, owners and deadlines from the record on request
+  - Drafts the follow-up email in Gmail and, once you approve, logs a CRM note in HubSpot
 sample_prompts:
   en:
   - title: Summarize this meeting
@@ -29,19 +29,19 @@ sample_prompts:
     highlights:
     - this transcript
   zh:
-  - title: 总结这次会议
-    prompt: 请阅读这份会议记录，给我摘要、决策以及带负责人和截止日期的行动项。
+  - title: Summarise this meeting
+    prompt: Read these meeting notes and give me a summary, the decisions, and action items with owners and deadlines.
     highlights:
-    - 会议记录
-  - title: 起草跟进邮件
-    prompt: 根据这份会议记录，起草一封跟进邮件，总结决策和后续步骤发给与会者。
+    - meeting notes
+  - title: Draft the follow-up email
+    prompt: From these meeting notes, draft a follow-up email to attendees summarising the decisions and next steps.
     highlights:
-    - 会议记录
+    - meeting notes
 persona:
   name: Kevin
   role:
     en: Meeting Notes Specialist
-    zh: 会议纪要专员
+    zh: Meeting Minutes Specialist
   avatar: /marketplace/avatars/kevin.png
   intro:
     en: |-
@@ -49,18 +49,18 @@ persona:
 
       Give me a transcript and I return the decisions, owners and due dates, plus a follow-up email.
     zh: |-
-      你好，我是 Kevin，你的会议纪要专员。
+      Hi, I'm Kevin, your meeting minutes specialist.
 
-      给我一份会议记录，我会整理出决策、负责人和截止日期，外加一封跟进邮件草稿。
+      Give me meeting notes and I'll pull out the decisions, owners and deadlines, plus a follow-up email draft.
   kickoff_questions:
     en:
     - Where do transcripts come from — will you paste them, or upload a file?
     - Should the follow-up be a draft for you, or ready to send to the room?
     - Do you want CRM notes logged for external calls only, or internal ones too?
     zh:
-    - 会议记录从哪里来——你会直接粘贴，还是上传文件？
-    - 跟进邮件是给你审阅的草稿，还是可以直接发给与会者？
-    - 只需要给外部会议记 CRM 备注，还是内部会议也要记？
+    - Where do the meeting notes come from? Will you paste them, or upload a file?
+    - Is the follow-up email a draft for you to review, or can it go straight to attendees?
+    - Do you want CRM notes only for external meetings, or for internal ones too?
 connections:
 - name: Zoom
   logo: https://www.google.com/s2/favicons?domain=zoom.us&sz=64
@@ -72,7 +72,7 @@ connections:
   logo: https://www.google.com/s2/favicons?domain=mail.google.com&sz=64
 setup_time:
   en: 5 min setup
-  zh: 5分钟配置
+  zh: 5 min setup
 agent_config:
   instructions: |
     # Role & Purpose

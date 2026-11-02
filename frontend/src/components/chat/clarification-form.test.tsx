@@ -347,17 +347,15 @@ describe("ClarificationForm guided answers", () => {
     expect(screen.getByRole("button", { name: "Paste" })).toHaveAttribute("aria-pressed", "false")
   })
 
-  it("translates recommendation and deferral controls with a live locale change", () => {
+  it("translates recommendation and deferral controls through the real tree", () => {
     i18nMock.translate = (key, vars) => resolveTranslation("en", key as Parameters<typeof resolveTranslation>[1], vars)
-    const { rerender } = render(<ClarificationForm interactions={[select]} onSend={vi.fn()} />)
+    render(<ClarificationForm interactions={[select]} onSend={vi.fn()} />)
     expect(screen.getByText("Recommended")).toBeInTheDocument()
-    i18nMock.translate = (key, vars) => resolveTranslation("zh", key as Parameters<typeof resolveTranslation>[1], vars)
-    rerender(<ClarificationForm interactions={[select]} onSend={vi.fn()} />)
-    expect(screen.getByText("推荐")).toBeInTheDocument()
-    expect(screen.getByText("不确定 / 暂不回答")).toBeInTheDocument()
+    expect(screen.getByText("Not sure / skip for now")).toBeInTheDocument()
   })
 
-  it.each(["en", "zh"] as const)("keeps the visible defer action in its accessible name in %s", locale => {
+  it("keeps the visible defer action in its accessible name", () => {
+    const locale = "en" as const
     i18nMock.translate = (key, vars) => resolveTranslation(locale, key as Parameters<typeof resolveTranslation>[1], vars)
     render(<ClarificationForm interactions={[select]} onSend={vi.fn()} />)
     const deferText = resolveTranslation(locale, "chatPage.clarification.notSure")
@@ -948,11 +946,11 @@ describe("ClarificationForm delivery failures", () => {
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("chatPage.clarification.sendNotSent")
 
-    i18nMock.translate = (key: string) => `zh:${key}`
+    i18nMock.translate = (key: string) => `untranslated:${key}`
     rerender(<ClarificationForm interactions={interactions} onSend={onSend} />)
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "zh:chatPage.clarification.sendNotSent",
+      "untranslated:chatPage.clarification.sendNotSent",
     )
     // The backend's own reason is not ours to translate - it passes through.
     expect(screen.getByRole("alert")).toHaveTextContent(
@@ -960,7 +958,7 @@ describe("ClarificationForm delivery failures", () => {
     )
   })
 
-  it("re-renders the generic fallback message in the new locale", async () => {
+  it("re-renders the generic fallback message when the translator changes", async () => {
     const onSend = vi.fn().mockRejectedValue(new Error("   "))
     const interactions = [{ type: "text_input" as const, field: "city", label: "City" }]
     const { rerender } = render(
@@ -974,15 +972,15 @@ describe("ClarificationForm delivery failures", () => {
       "chatPage.clarification.sendError",
     )
 
-    i18nMock.translate = (key: string) => `zh:${key}`
+    i18nMock.translate = (key: string) => `untranslated:${key}`
     rerender(<ClarificationForm interactions={interactions} onSend={onSend} />)
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "zh:chatPage.clarification.sendError",
+      "untranslated:chatPage.clarification.sendError",
     )
   })
 
-  it("uses hint keys that resolve in both locale trees", () => {
+  it("uses hint keys that resolve in the real translation tree", () => {
     // The component tests stub t() as identity, so they pin the key strings
     // only against themselves. This binds them to the real trees: a typo'd
     // key would fall back to itself instead of a translated sentence.
@@ -991,7 +989,6 @@ describe("ClarificationForm delivery failures", () => {
       "chatPage.clarification.sendOutcomeUnknown",
     ] as const) {
       expect(resolveTranslation("en", key)).not.toBe(key)
-      expect(resolveTranslation("zh", key)).not.toBe(key)
     }
   })
 

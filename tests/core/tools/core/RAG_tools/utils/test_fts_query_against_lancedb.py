@@ -17,7 +17,7 @@ DOCS = [
     {"id": 0, "text": "To print an incident report, open Incidents then Tickets."},
     {"id": 1, "text": "Timesheets are approved by the manager every Friday."},
     {"id": 2, "text": "Ticks and mites are common in rural areas."},
-    {"id": 3, "text": "事故报告可以在工单页面下载 PDF 文件并打印。"},
+    {"id": 3, "text": "\u4e8b\u6545\u62a5\u544a\u53ef\u4ee5\u5728\u5de5\u5355\u9875\u9762\u4e0b\u8f7d PDF \u6587\u4ef6\u5e76\u6253\u5370。"},
     {"id": 4, "text": "Save the draft, then publish."},
     {"id": 5, "text": "Commas, only, here, nothing, else,"},
 ]
@@ -97,7 +97,7 @@ def test_terms_are_combined_with_or(jieba_table: Any):
 
 @pytest.mark.integration
 def test_cjk_query_matches_the_chinese_row(jieba_table: Any):
-    assert _hits(jieba_table, build_fts_query("工单")) == [3]
+    assert _hits(jieba_table, build_fts_query("\u5de5\u5355")) == [3]
 
 
 @pytest.mark.integration

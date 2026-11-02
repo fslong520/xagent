@@ -471,9 +471,9 @@ def test_large_content_handling(memory_store):
 
 def test_unicode_content(memory_store):
     """Test handling of unicode content."""
-    unicode_content = "测试中文内容 🚀 Python & AI"
+    unicode_content = "\u6d4b\u8bd5\u4e2d\u6587\u5185\u5bb9 🚀 Python & AI"
 
-    note = MemoryNote(content=unicode_content, keywords=["中文", "test"])
+    note = MemoryNote(content=unicode_content, keywords=["\u4e2d\u6587", "test"])
     response = memory_store.add(note)
     assert response.success
 
@@ -481,7 +481,7 @@ def test_unicode_content(memory_store):
     get_response = memory_store.get(response.memory_id)
     assert get_response.success
     assert get_response.content.content == unicode_content
-    assert get_response.content.keywords == ["中文", "test"]
+    assert get_response.content.keywords == ["\u4e2d\u6587", "test"]
 
 
 def test_invalid_memory_id(memory_store):

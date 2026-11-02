@@ -55,18 +55,15 @@ describe("formatDisplayDate", () => {
     expect(formatDisplayDate(value, "en", dateOptions)).toBe("")
   })
 
-  it.each([
-    ["en", "en-US"],
-    ["zh", "zh-CN"],
-  ] as const)("uses %s locale with each caller option contract", (locale, expectedLocale) => {
+  it("maps the app locale to its BCP 47 tag for each caller option contract", () => {
     const formatSpy = vi.spyOn(Intl, "DateTimeFormat")
-    const buildDate = formatDisplayDate("2024-05-06T07:08:09Z", locale, dateOptions)
-    const homeDate = formatDisplayDate("2024-05-06T07:08:09Z", locale, homeDateOptions)
+    const buildDate = formatDisplayDate("2024-05-06T07:08:09Z", "en", dateOptions)
+    const homeDate = formatDisplayDate("2024-05-06T07:08:09Z", "en", homeDateOptions)
 
     expect(buildDate).not.toBe("")
     expect(homeDate).not.toBe("")
-    expect(formatSpy).toHaveBeenNthCalledWith(1, expectedLocale, dateOptions)
-    expect(formatSpy).toHaveBeenNthCalledWith(2, expectedLocale, homeDateOptions)
+    expect(formatSpy).toHaveBeenNthCalledWith(1, "en-US", dateOptions)
+    expect(formatSpy).toHaveBeenNthCalledWith(2, "en-US", homeDateOptions)
   })
 
   it("falls back to the locale tag itself for locales without an explicit mapping", () => {

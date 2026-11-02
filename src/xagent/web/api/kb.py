@@ -2632,7 +2632,7 @@ def handle_kb_exceptions(func: T) -> T:
             logger.exception("Unexpected error in %s: %s", func.__name__, e)
             raise HTTPException(
                 status_code=500,
-                detail=f"服务器内部错误: {str(e)}",
+                detail=f"Internal server error: {str(e)}",
             )
 
     return cast(T, wrapper)
